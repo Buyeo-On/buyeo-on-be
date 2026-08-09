@@ -42,14 +42,17 @@ iOS Flutter
 - 고아 사진 삭제와 포인트 만료 같은 내부 정기 작업은 멱등한 Spring Scheduler 작업으로 실행한다.
 - 관광공사 데이터는 사용자 요청 전에 내부 DB로 동기화한다. 주기·실행 주체·재시도·갱신 정책은 **TBD**다.
 - 지도 렌더링·마커·현재 위치는 Flutter의 Kakao Map SDK가 담당한다. 서버용 지오코딩이 필요할 때만 Spring이 Kakao REST API를 호출한다.
+- 부여 행정구역은 애플리케이션 리소스의 버전 관리되는 GeoJSON Polygon으로 고정하고, 군민증 생성과 여행 시작 위치를 서버에서 point-in-polygon 방식으로 검증한다.
 - Redis, 별도 비동기 워커와 API Gateway·Lambda 기반 배지 판정은 보류한다.
 ## 인증
 - 소셜 계정 연결은 로그인된 회원이 별도 API로 명시적으로 수행한다.
 - 액세스 토큰은 수명 1시간의 JWT다.
+- 액세스 JWT의 `sub`에는 회원 ID, `sid`에는 인증 세션 ID를 넣는다. 인증이 필요한 요청은 `sid`의 세션이 만료·폐기되지 않았는지 확인한다.
 - 리프레시 토큰은 `sessionId.randomSecret` 형태의 opaque token이며 DB에는 secret 해시만 저장한다.
 - 리프레시 토큰 수명은 30일이고 갱신할 때마다 교체한다.
 - 이전 토큰의 재사용은 `401`로 거절하되 MVP에서는 이를 탈취로 단정해 전체 세션을 폐기하지 않는다.
 - 로그아웃·탈퇴 시 세션을 즉시 폐기한다.
+- FCM 등록 토큰은 현재 인증 세션과 1:1로 관리한다. 로그아웃·탈퇴 시 발송 대상에서 제외하고 FCM이 무효로 응답한 토큰은 삭제한다.
 - JWT 키와 OAuth 시크릿은 Parameter Store `SecureString`에서 읽는다.
 ## 데이터베이스
 - AWS RDS PostgreSQL과 PostGIS를 사용한다.

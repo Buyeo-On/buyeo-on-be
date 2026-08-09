@@ -12,6 +12,7 @@
 - **Base URL:** `https://api.buyeoon.example.com/v1`
 - **데이터 형식:** 별도 표기가 없으면 `application/json`
 - **인증:** 기본적으로 `Authorization: Bearer {accessToken}` 헤더 사용
+- **인증 세션:** 액세스 JWT의 `sub`는 회원 ID, `sid`는 현재 인증 세션 ID이며 서버는 세션의 만료·폐기 여부를 확인
 - **공개 API:** 소셜 로그인, 토큰 갱신, 현재 약관 목록 조회
 - **시간:** ISO 8601 date-time
 - **식별자:** UUID
@@ -68,9 +69,10 @@ Content-Type: image/jpeg
 Idempotency-Key: 7f5c6c12-3ee8-4aa5-8f32-682ef0ec35ad
 ```
 
-- 같은 회원이 같은 키와 같은 요청 본문으로 다시 요청하면 최초 성공 응답과 같은 상태 코드 및 응답 본문을 반환한다.
+- 같은 회원이 같은 작업에 같은 키와 같은 요청 본문으로 다시 요청하면 최초 성공 응답과 같은 상태 코드 및 응답 본문을 반환한다.
 - 중복 요청은 새로운 회원, 여행, 미션 완료, 방문 기록, 포인트 내역 또는 정산 결과를 만들지 않는다.
-- 같은 키를 다른 요청 본문에 재사용하면 `409 IDEMPOTENCY_KEY_REUSED`를 반환한다.
+- 같은 키를 다른 요청 본문이나 작업에 재사용하면 `409 IDEMPOTENCY_KEY_REUSED`를 반환한다.
+- 이미 완료된 행동을 다른 키로 다시 요청해 허용되지 않은 상태 전이가 발생하면 상태별 오류 코드와 함께 `409`를 반환한다.
 - 허용되지 않은 상태 전이도 `409`를 반환하며, 단순 재시도와 구분할 수 있도록 오류 코드를 제공한다.
 
 ### 커서 페이지네이션
@@ -164,6 +166,8 @@ Idempotency-Key: 7f5c6c12-3ee8-4aa5-8f32-682ef0ec35ad
 | --- | --- | --- |
 | GET | `/members/me/notifications` | 알림 목록 조회 |
 | PATCH | `/members/me/notifications/{notificationId}` | 알림 읽음 처리 |
+| PUT | `/members/me/push-token` | 현재 인증 세션의 푸시 토큰 등록 또는 갱신 |
+| DELETE | `/members/me/push-token` | 현재 인증 세션의 푸시 토큰 삭제 |
 
 ## 3. API 상세
 
@@ -207,7 +211,6 @@ Content-Type: application/json
     "member": {
       "memberId": "550e8400-e29b-41d4-a716-446655440000",
       "status": "ACTIVE",
-      "provider": "KAKAO",
       "displayName": null,
       "characterId": null,
       "requiredTermsAgreed": false,
@@ -258,7 +261,6 @@ Content-Type: application/json
     "member": {
       "memberId": "550e8400-e29b-41d4-a716-446655440000",
       "status": "ACTIVE",
-      "provider": "KAKAO",
       "displayName": "부여여행자",
       "characterId": "550e8400-e29b-41d4-a716-446655440001",
       "requiredTermsAgreed": true,
@@ -322,7 +324,6 @@ Authorization: Bearer {accessToken}
   "data": {
     "memberId": "550e8400-e29b-41d4-a716-446655440000",
     "status": "ACTIVE",
-    "provider": "KAKAO",
     "displayName": "부여여행자",
     "characterId": "550e8400-e29b-41d4-a716-446655440000",
     "requiredTermsAgreed": true,
@@ -440,7 +441,6 @@ Content-Type: application/json
   "data": {
     "memberId": "550e8400-e29b-41d4-a716-446655440000",
     "status": "ACTIVE",
-    "provider": "KAKAO",
     "displayName": "부여여행자",
     "characterId": "550e8400-e29b-41d4-a716-446655440000",
     "requiredTermsAgreed": true,
@@ -1365,6 +1365,7 @@ Authorization: Bearer {accessToken}
 
 ### GET `/missions/{missionId}` — 미션 상세 조회
 
+지정한 여행에서의 도전 가능 상태, 완료 여부와 남은 도전 횟수를 반환한다.
 - **Operation ID:** `getMission`
 - **인증:** Bearer JWT 필요
 
@@ -1373,13 +1374,14 @@ Authorization: Bearer {accessToken}
 | 위치 | 이름 | 필수 | 타입 | 제약 |
 | --- | --- | --- | --- | --- |
 | path | `missionId` | 필수 | string (uuid) | - |
+| query | `tripId` | 필수 | string (uuid) | 상태를 조회할 여행 ID |
 | query | `latitude` | 필수 | number (double) | 최솟값 -90; 최댓값 90 |
 | query | `longitude` | 필수 | number (double) | 최솟값 -180; 최댓값 180 |
 
 #### 요청 예시
 
 ```javascript
-GET /v1/missions/550e8400-e29b-41d4-a716-446655440000?latitude=36.2754&longitude=126.9098 HTTP/1.1
+GET /v1/missions/550e8400-e29b-41d4-a716-446655440000?tripId=550e8400-e29b-41d4-a716-446655440001&latitude=36.2754&longitude=126.9098 HTTP/1.1
 Host: api.buyeoon.example.com
 Authorization: Bearer {accessToken}
 ```
@@ -1451,7 +1453,7 @@ Authorization: Bearer {accessToken}
 }
 ```
 
-**응답 코드:** `200` 미션 상세 · `401` 인증 필요 또는 인증 실패 · `404` 대상을 찾을 수 없음
+**응답 코드:** `200` 미션 상세 · `401` 인증 필요 또는 인증 실패 · `404` 대상을 찾을 수 없음 · `409` 진행 중인 여행이 아닌 등 허용되지 않은 상태
 
 ---
 
@@ -1883,6 +1885,70 @@ Content-Type: application/json
 
 ---
 
+### PUT `/members/me/push-token` — 현재 인증 세션의 푸시 토큰 등록 또는 갱신
+
+액세스 JWT의 `sid`가 가리키는 현재 인증 세션과 FCM 등록 토큰을 1:1로 연결한다. 같은 토큰이 다른 세션에 연결되어 있으면 현재 세션으로 옮긴다.
+- **Operation ID:** `upsertMyPushToken`
+- **인증:** Bearer JWT 필요
+
+#### 요청 본문 (application/json)
+
+| 필드 | 타입 | 필수 | 제약·설명 |
+| --- | --- | --- | --- |
+| `token` | string | 필수 | 길이 1~4096, 현재 기기에 FCM이 발급한 등록 토큰 |
+
+#### 요청 예시
+
+```javascript
+PUT /v1/members/me/push-token HTTP/1.1
+Host: api.buyeoon.example.com
+Authorization: Bearer {accessToken}
+Content-Type: application/json
+
+{
+  "token": "fcm-registration-token"
+}
+```
+
+#### 성공 응답 예시 — `200` 처리 성공
+
+```json
+{
+  "success": true,
+  "data": {}
+}
+```
+
+**응답 코드:** `200` 처리 성공 · `400` 잘못된 요청 · `401` 인증 필요 또는 인증 실패
+
+---
+
+### DELETE `/members/me/push-token` — 현재 인증 세션의 푸시 토큰 삭제
+
+- **Operation ID:** `deleteMyPushToken`
+- **인증:** Bearer JWT 필요
+
+#### 요청 예시
+
+```javascript
+DELETE /v1/members/me/push-token HTTP/1.1
+Host: api.buyeoon.example.com
+Authorization: Bearer {accessToken}
+```
+
+#### 성공 응답 예시 — `200` 처리 성공
+
+```json
+{
+  "success": true,
+  "data": {}
+}
+```
+
+**응답 코드:** `200` 처리 성공 · `401` 인증 필요 또는 인증 실패
+
+---
+
 ## 4. 데이터 모델
 
 엔드포인트에서 참조하는 주요 스키마와 enum 정의다.
@@ -1955,7 +2021,6 @@ Content-Type: application/json
 | --- | --- | --- | --- |
 | `memberId` | string (uuid) | 필수 | - |
 | `status` | MemberStatus | 필수 | - |
-| `provider` | SocialProvider | 필수 | - |
 | `displayName` | string 또는 null | 선택 | 길이 0~8 |
 | `characterId` | string 또는 null | 선택 | - |
 | `requiredTermsAgreed` | boolean | 필수 | - |
@@ -2301,6 +2366,12 @@ Content-Type: application/json
 | `targetType` | string 또는 null | 선택 |
 | `targetId` | string 또는 null | 선택 |
 
+### `PushTokenUpdateRequest`
+
+| 필드 | 타입 | 필수 | 제약·설명 |
+| --- | --- | --- | --- |
+| `token` | string | 필수 | 길이 1~4096, 현재 기기에 FCM이 발급한 등록 토큰 |
+
 ### `TravelStatisticsData`
 
 | 필드 | 타입 | 필수 | 제약·설명 |
@@ -2330,7 +2401,7 @@ Content-Type: application/json
 | `statistics` | TravelStatisticsData | 필수 | - |
 | `visits` | VisitRecord[] | 필수 | - |
 | `points` | PointSummaryData | 필수 | - |
-| `badges` | Badge[] | 필수 | - |
+| `badges` | Badge[] | 필수 | 해당 여행에서 처음 획득한 배지 |
 | `photos` | MissionPhotoData[] | 필수 | - |
 
 ### `TermListData`

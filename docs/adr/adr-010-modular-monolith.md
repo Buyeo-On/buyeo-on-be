@@ -7,7 +7,7 @@
 ## 결정
 - Spring Boot 하나를 배포 단위로 하고 도메인별 패키지를 분리한다.
 - 도메인 간 협력은 서비스와 도메인 사건을 사용한다.
-- FCM은 Firebase Admin SDK로 Spring이 직접 발송하며 실패는 본 업무를 롤백하지 않는다.
+- FCM은 Firebase Admin SDK로 Spring이 직접 발송한다. 등록 토큰은 인증 세션과 연결하며 발송 실패는 본 업무를 롤백하지 않는다.
 - 내부 유지보수 작업은 멱등한 Spring Scheduler로 실행한다.
 - 관광공사 데이터는 내부 DB에 동기화해 조회하되 구체적인 동기화 정책은 TBD다.
 - 지도 렌더링은 Flutter Kakao Map SDK가 담당하고 서버용 기능만 Kakao REST API를 사용한다.

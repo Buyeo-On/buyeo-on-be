@@ -48,6 +48,14 @@ CREATE TABLE auth_sessions (
     created_at timestamptz NOT NULL DEFAULT now() -- 세션 생성 시각
 );
 
+-- 현재 인증 세션의 기기로 FCM 알림을 보내기 위한 등록 토큰이다.
+CREATE TABLE push_tokens (
+    auth_session_id uuid PRIMARY KEY REFERENCES auth_sessions(id) ON DELETE CASCADE, -- 인증 세션 ID
+    registration_token text NOT NULL UNIQUE, -- FCM 등록 토큰
+    created_at timestamptz NOT NULL DEFAULT now(), -- 최초 등록 시각
+    updated_at timestamptz NOT NULL DEFAULT now() -- 마지막 갱신 시각
+);
+
 -- 버전별 서비스 약관 원문을 관리한다.
 CREATE TABLE terms (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(), -- 약관 ID
@@ -138,6 +146,7 @@ CREATE TABLE trips (
     started_at timestamptz NOT NULL DEFAULT now(), -- 여행 시작 시각
     ended_at timestamptz, -- 여행 종료 시각
     settled_at timestamptz, -- 포인트 정산 완료 시각
+    UNIQUE (member_id, id),
     CHECK (
         (status = 'IN_PROGRESS' AND ended_at IS NULL AND settled_at IS NULL)
         OR (status = 'ENDED' AND ended_at IS NOT NULL AND settled_at IS NULL)
@@ -285,8 +294,10 @@ CREATE TABLE badge_conditions (
 CREATE TABLE member_badges (
     member_id uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE, -- 회원 ID
     badge_id uuid NOT NULL REFERENCES badges(id), -- 배지 ID
+    trip_id uuid NOT NULL, -- 배지를 처음 획득한 여행 ID
     earned_at timestamptz NOT NULL DEFAULT now(), -- 획득 시각
-    PRIMARY KEY (member_id, badge_id)
+    PRIMARY KEY (member_id, badge_id),
+    FOREIGN KEY (member_id, trip_id) REFERENCES trips(member_id, id)
 );
 
 -- 회원에게 표시할 서비스 알림이다.
@@ -302,7 +313,7 @@ CREATE TABLE notifications (
     occurred_at timestamptz NOT NULL DEFAULT now() -- 알림 발생 시각
 );
 
--- 같은 회원과 키에 다른 request_hash가 들어오면 애플리케이션에서 409를 반환한다.
+-- 같은 회원과 키에 다른 operation 또는 request_hash가 들어오면 애플리케이션에서 409를 반환한다.
 CREATE TABLE idempotency_requests (
     member_id uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE, -- 요청 회원 ID
     idempotency_key varchar(128) NOT NULL, -- 클라이언트가 보낸 멱등성 키
@@ -324,6 +335,7 @@ CREATE INDEX mission_participations_trip_idx ON mission_participations (trip_id,
 CREATE INDEX visit_records_trip_idx ON visit_records (trip_id, visited_at);
 CREATE INDEX point_transactions_member_idx ON point_transactions (member_id, occurred_at DESC);
 CREATE INDEX badge_conditions_metric_idx ON badge_conditions (metric_key);
+CREATE INDEX member_badges_trip_idx ON member_badges (trip_id, earned_at);
 CREATE INDEX notifications_member_idx ON notifications (member_id, occurred_at DESC);
 
 COMMIT;

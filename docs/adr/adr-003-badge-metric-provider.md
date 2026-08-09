@@ -11,7 +11,7 @@
 - 지원 메트릭은 `MISSION_COMPLETED_COUNT`, `HERITAGE_VISITED_COUNT`, `POINT_DONATION_COUNT`다.
 - 기존 메트릭을 사용하는 배지는 데이터만 추가·수정한다.
 - 새로운 메트릭은 Provider와 관련 도메인 사건 연결 코드를 추가한다.
-- `member_badges`는 획득 이력만 저장하며 진행도와 상태는 원본 데이터 및 획득 이력에서 계산한다.
+- `member_badges`는 획득 이력과 획득을 유발한 여행 ID만 저장하며 진행도와 상태는 원본 데이터 및 획득 이력에서 계산한다.
 - 배지 지급은 `(member_id, badge_id)` 유일성으로 중복을 방지한다.
 ## 구현 예시
 다음 코드는 구조를 설명하기 위한 예시이며 실제 패키지와 타입 이름은 구현 시 조정한다.
@@ -77,7 +77,7 @@ public class BadgeEvaluationService {
     private final MemberBadgeRepository memberBadgeRepository;
 
     @Transactional
-    public void evaluate(UUID memberId, BadgeMetric affectedMetric) {
+    public void evaluate(UUID memberId, UUID tripId, BadgeMetric affectedMetric) {
         Map<BadgeMetric, Long> values = new EnumMap<>(BadgeMetric.class);
 
         for (var badge : badgeRepository.findNotEarnedByMetric(
@@ -93,7 +93,7 @@ public class BadgeEvaluationService {
             });
 
             if (achieved) {
-                memberBadgeRepository.awardIfAbsent(memberId, badge.id());
+                memberBadgeRepository.awardIfAbsent(memberId, badge.id(), tripId);
             }
         }
     }
@@ -110,6 +110,7 @@ public class BadgeEventListener {
     public void on(MissionCompleted event) {
         badgeEvaluationService.evaluate(
             event.memberId(),
+            event.tripId(),
             BadgeMetric.MISSION_COMPLETED_COUNT
         );
     }
@@ -118,6 +119,7 @@ public class BadgeEventListener {
     public void on(VisitRecorded event) {
         badgeEvaluationService.evaluate(
             event.memberId(),
+            event.tripId(),
             BadgeMetric.HERITAGE_VISITED_COUNT
         );
     }
@@ -126,6 +128,7 @@ public class BadgeEventListener {
     public void on(PointsDonated event) {
         badgeEvaluationService.evaluate(
             event.memberId(),
+            event.tripId(),
             BadgeMetric.POINT_DONATION_COUNT
         );
     }
