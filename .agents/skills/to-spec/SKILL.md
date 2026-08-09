@@ -9,7 +9,7 @@ description: 사용자가 명시적으로 요청했을 때 완료된 유즈케�
 
 ## 준비
 
-1. `AGENTS.md`와 대상 유즈케이스의 관련 문서를 다시 확인한다.
+1. `AGENTS.md`와 대상 유즈케이스 파일을 읽고 frontmatter의 owner, participants, policies, api와 adrs가 가리키는 context pack만 다시 확인한다.
 2. 문서 변경이 합의됐다면 Epic보다 먼저 반영됐는지 확인한다.
 3. `gh auth status`와 `gh repo view`로 GitHub 대상과 인증 상태를 확인한다. 비밀 값은 출력하지 않는다.
 4. 기존 Epic을 검색해 중복 생성을 피한다.

@@ -10,15 +10,17 @@ description: 사용자가 명시적으로 요청했을 때 선택한 부여ON �
 ## 시작
 
 1. 대상 유즈케이스 번호와 제목을 확인한다.
-2. `AGENTS.md`와 다음 문서 중 관련 범위를 읽는다.
-   - `docs/prd.md`
-   - `docs/use-cases.md`
-   - `docs/domain-model.md`
-   - `docs/architecture.md`
-   - `docs/adr/README.md`와 관련 ADR
-   - `docs/api-spec.md`, `docs/raw/openapi.yaml`
-   - `docs/raw/db-schema.sql`
-3. 코드와 GitHub의 선행 Epic·Issue가 있다면 함께 확인한다.
+2. `AGENTS.md`와 `docs/use-cases.md`에서 대상 유즈케이스 파일을 찾는다.
+3. 유즈케이스 frontmatter를 라우팅 정보로 사용한다.
+   - `owner`: 해당 도메인의 `rules.md`, `api.md`
+   - `participants`: 이번 흐름과 맞닿은 규칙과 API
+   - `policies`: 지정된 `docs/policies/*.md`
+   - `adrs`: 지정된 `docs/adr/*.md`
+4. 구현할 operation과 테이블만 `docs/raw/openapi.yaml`, `docs/raw/db-schema.sql`에서 확인한다.
+5. 제품 범위나 시스템 구성을 결정해야 할 때만 `docs/prd.md`, `docs/architecture.md`를 읽는다.
+6. 코드와 GitHub의 선행 Epic·Issue가 있다면 함께 확인한다.
+
+관련 없는 도메인 문서, 전체 OpenAPI와 전체 DB 스키마를 기본으로 읽지 않는다. frontmatter가 필요한 문서를 빠뜨렸다면 그릴링 전에 보완한다.
 
 ## 진행 원칙
 

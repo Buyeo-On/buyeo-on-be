@@ -36,7 +36,7 @@ iOS Flutter
 - 단일 인스턴스 단계에서는 Redis 기반 분산 Rate Limiter를 사용하지 않는다.
 ## 백엔드
 - 언어: Java 21
-- Spring Boot 하나를 배포 단위로 유지하고 회원, 여행, 장소, 미션, 포인트, 배지, 알림 패키지를 분리한다.
+- Spring Boot 하나를 배포 단위로 유지하고 [도메인 지도](./domains/README.md)에 따라 회원, 여행, 장소, 미션, 포인트, 배지, 알림 패키지를 분리한다.
 - 도메인 간 협력은 서비스와 도메인 사건을 사용하고 다른 도메인의 Repository를 직접 사용하지 않는다.
 - 배지는 Spring 내부의 메트릭 Provider와 데이터 조건으로 판정한다.
 - FCM은 Firebase Admin SDK로 Spring이 직접 발송하며 실패가 본 업무를 롤백하지 않는다.

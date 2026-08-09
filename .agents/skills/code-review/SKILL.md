@@ -27,7 +27,7 @@ git log <fixed-point>..HEAD --oneline
 1. 사용자가 지정한 Sub-issue와 Parent Epic
 2. 브랜치명과 커밋 메시지의 Issue 번호
 3. PR에 연결된 Issue
-4. 관련 유즈케이스와 프로젝트 문서
+4. 관련 유즈케이스 파일과 frontmatter가 가리키는 owner, participants, policies, api, adrs 문서
 
 Spec을 찾지 못하면 Standards만 수행하고 그 사실을 명시한다.
 

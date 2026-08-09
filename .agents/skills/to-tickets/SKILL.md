@@ -5,7 +5,7 @@ description: 사용자가 명시적으로 요청했을 때 GitHub Epic Issue를 
 
 # To tickets
 
-지정된 Epic Issue와 연결된 프로젝트 문서를 읽고 구현 Sub-issue를 설계한다.
+지정된 Epic Issue와 연결된 유즈케이스 파일을 찾고 frontmatter의 owner, participants, policies, api와 adrs가 가리키는 context pack만 읽어 구현 Sub-issue를 설계한다.
 
 ## 티켓 분할
 

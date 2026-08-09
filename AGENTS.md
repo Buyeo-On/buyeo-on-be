@@ -30,8 +30,22 @@
 ## 공통 요구사항
 
 - [PRD](./docs/prd.md)
-- [도메인 모델과 규칙](./docs/domain-model.md)
-- [유즈케이스](./docs/use-cases.md)
+- [도메인 지도](./docs/domains/README.md)
+- [전역 정책](./docs/policies/README.md)
+- [유즈케이스 인덱스](./docs/use-cases.md)
+
+## 컨텍스트 로딩
+
+전체 문서를 기본으로 읽지 않는다. 작업할 유즈케이스를 기준으로 다음 순서대로 필요한 context pack만 구성한다.
+
+1. `docs/use-cases.md`에서 대상 유즈케이스 파일을 찾는다.
+2. 유즈케이스 frontmatter의 `owner` 도메인에 있는 `rules.md`와 `api.md`를 읽는다.
+3. `participants` 도메인은 이번 작업과 맞닿은 규칙과 API만 추가로 읽는다.
+4. `policies`와 `adrs`에 명시된 문서만 읽는다.
+5. 구현할 operation과 테이블만 `docs/raw/openapi.yaml`, `docs/raw/db-schema.sql`에서 확인한다.
+6. 제품 범위나 시스템 구성을 결정할 때만 `docs/prd.md`, `docs/architecture.md`를 추가로 읽는다.
+
+유즈케이스의 frontmatter가 실제 의존 문서를 빠뜨렸다면 구현 전에 먼저 고친다. 관련 없는 다른 도메인의 전체 문서를 선제적으로 읽지 않는다.
 
 ## 설계
 
@@ -47,10 +61,12 @@
 ## 문서 책임과 동기화
 
 - 제품 목표와 MVP 범위는 `docs/prd.md`에 기록한다.
-- 표준 용어, 도메인 관계, 전역·도메인 규칙과 상태 전이는 `docs/domain-model.md`에 기록한다.
-- 사용자 목표, 사전 조건과 기본·예외 흐름은 `docs/use-cases.md`에 기록한다.
+- 도메인 경계와 코드 패키지의 대응은 `docs/domains/README.md`에 기록한다.
+- 도메인 모델, 용어, 불변식과 상태 전이는 `docs/domains/<domain>/rules.md`에 기록한다.
+- 여러 도메인에 적용되는 규칙은 `docs/policies/`에 기록한다.
+- 사용자 목표, 사전 조건과 기본·예외 흐름은 주도 도메인의 `use-cases/` 아래 개별 파일에 기록하고 `docs/use-cases.md` 인덱스를 갱신한다.
 - 현재 채택된 시스템 구성은 `docs/architecture.md`, 결정의 맥락과 대안은 `docs/adr/`에 기록한다.
-- API 계약의 원본은 `docs/raw/openapi.yaml`이다. 변경 시 `docs/api-spec.md`와 구현을 일치시킨다.
+- API 계약의 원본은 `docs/raw/openapi.yaml`이다. 변경 시 소유 도메인의 `api.md`, `docs/api-spec.md` 공통 규약과 구현을 일치시킨다.
 - 데이터베이스 스키마의 원본은 `docs/raw/db-schema.sql`이다. 구현 단계에서는 Flyway 마이그레이션과 일치시킨다.
 - 문서 간 충돌을 발견하면 조용히 한쪽을 선택하지 않는다. 충돌과 영향을 먼저 명시하고 필요한 결정을 확정한 뒤 함께 수정한다.
 
