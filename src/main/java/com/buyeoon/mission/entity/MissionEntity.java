@@ -1,0 +1,88 @@
+package com.buyeoon.mission.entity;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Entity
+@Table(name = "missions")
+public class MissionEntity {
+
+	@Id
+	@GeneratedValue(strategy = GenerationType.UUID)
+	private UUID id;
+
+	@Column(name = "place_id", nullable = false)
+	private UUID placeId;
+
+	@JdbcTypeCode(SqlTypes.NAMED_ENUM)
+	@Column(name = "type", nullable = false, columnDefinition = "mission_type")
+	private MissionType type;
+
+	@Column(name = "title", nullable = false, columnDefinition = "text")
+	private String title;
+
+	@Column(name = "description", nullable = false, columnDefinition = "text")
+	private String description;
+
+	@Column(name = "reward_points", nullable = false)
+	private int rewardPoints;
+
+	@Column(name = "max_attempts")
+	private Integer maxAttempts;
+
+	@Column(name = "ox_correct_answer")
+	private Boolean oxCorrectAnswer;
+
+	public static MissionEntity multipleChoice(
+			UUID placeId, String title, String description, int rewardPoints, Integer maxAttempts) {
+		return create(
+				placeId, MissionType.MULTIPLE_CHOICE, title, description, rewardPoints, maxAttempts, null);
+	}
+
+	public static MissionEntity ox(
+			UUID placeId,
+			String title,
+			String description,
+			int rewardPoints,
+			Integer maxAttempts,
+			boolean correctAnswer) {
+		return create(
+				placeId, MissionType.OX, title, description, rewardPoints, maxAttempts, correctAnswer);
+	}
+
+	public static MissionEntity photo(
+			UUID placeId, String title, String description, int rewardPoints, Integer maxAttempts) {
+		return create(placeId, MissionType.PHOTO, title, description, rewardPoints, maxAttempts, null);
+	}
+
+	private static MissionEntity create(
+			UUID placeId,
+			MissionType type,
+			String title,
+			String description,
+			int rewardPoints,
+			Integer maxAttempts,
+			Boolean oxCorrectAnswer) {
+		MissionEntity mission = new MissionEntity();
+		mission.placeId = placeId;
+		mission.type = type;
+		mission.title = title;
+		mission.description = description;
+		mission.rewardPoints = rewardPoints;
+		mission.maxAttempts = maxAttempts;
+		mission.oxCorrectAnswer = oxCorrectAnswer;
+		return mission;
+	}
+}

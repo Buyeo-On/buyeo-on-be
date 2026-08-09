@@ -61,6 +61,8 @@ iOS Flutter
 - 운영 JPA는 `ddl-auto=validate`를 사용한다.
 - 배포 단계에서 Flyway 마이그레이션을 먼저 실행하고 성공한 경우에만 애플리케이션을 시작한다.
 - PostgreSQL Role은 DDL 권한을 가진 `migrator`와 제한된 DML 권한의 `application`으로 분리한다.
+- Role 생성과 application Role의 DML 권한 부여는 Flyway가 아니라 인프라 provisioning 단계에서 수행한다.
+- 운영 PostGIS 확장은 권한이 분리된 Flyway 실행 전에 인프라 bootstrap 단계에서 설치한다.
 - 호환 가능한 단계적 마이그레이션을 사용하고 운영에서 자동 down migration을 하지 않는다.
 - 애플리케이션은 `Instant`, DB는 `timestamptz`, 서버·DB 시스템 시간대는 UTC를 사용한다. 사용자 표시와 날짜 판정만 `Asia/Seoul`로 변환한다.
 - RDS 자동 백업은 7일 보존하고 PITR, 삭제 방지와 삭제 시 최종 스냅샷을 활성화한다.

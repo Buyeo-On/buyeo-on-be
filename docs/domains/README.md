@@ -14,6 +14,8 @@
 | 배지 | 배지 정의, 조건, 진행도, 획득 | `com.buyeoon.badge` | [badge](./badge/) |
 | 알림 | 알림함, 발송 자격 판정, 푸시 발송 | `com.buyeoon.notification` | [notification](./notification/) |
 
+`com.buyeoon.common`은 업무 도메인이 아니라 여러 도메인에 공통인 기술 인프라 경계다. 현재는 멱등성 요청 저장처럼 특정 도메인이 단독 소유하지 않는 영속성 모델만 둔다.
+
 ## 핵심 도메인 흐름
 
 1. 사용자가 소셜 계정으로 가입하거나 로그인한다.
