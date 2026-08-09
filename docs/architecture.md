@@ -1,0 +1,105 @@
+# 아키텍처
+
+## 목표와 범위
+- **출시 대상:** iOS 단일 플랫폼
+- **클라이언트:** 향후 멀티플랫폼 확장을 고려해 Flutter 유지
+- **백엔드:** Spring Boot 모듈러 모놀리스
+- **운영 수준:** 단일 EC2 장애와 배포 중 일시 중단을 허용하는 MVP
+- **AWS 리전·계정:** 서울 `ap-northeast-2`, 단일 계정
+## 전체 요청 흐름
+```text
+iOS Flutter
+├─ Cloudflare HTTPS → Nginx → Spring Boot → RDS PostgreSQL/PostGIS
+├─ Kakao Map SDK
+├─ FCM
+├─ S3 Presigned PUT
+└─ CloudFront Signed URL → Private S3
+```
+## 클라이언트
+- Flutter의 현재 지원 플랫폼은 iOS다. Android 등은 추후 확장한다.
+- 기능 중심 구조를 사용하며 각 기능을 `presentation`, `application`, `domain`, `data`로 나눈다.
+- 상태 관리는 Riverpod을 사용하고 위젯이 API 클라이언트나 저장소를 직접 호출하지 않는다.
+- 액세스 토큰은 메모리, 리프레시 토큰은 `flutter_secure_storage`에 저장한다.
+- 동시에 여러 인증 요청이 실패해도 토큰 갱신은 하나만 실행한다.
+- MVP에서는 오프라인 쓰기·재전송 큐·영구 로컬 DB를 지원하지 않는다.
+- `raw/openapi.yaml`에서 Dart API 클라이언트를 생성하고 feature Repository가 이를 감싼다.
+- Flutter CI는 현재 `flutter analyze`, `flutter test`만 수행한다.
+- iOS 서명, TestFlight, App Store 자동화는 **TBD**다.
+## 외부 트래픽과 네트워크
+- Cloudflare 프록시와 `Full (strict)` TLS를 사용한다.
+- Nginx에는 Cloudflare Origin Certificate를 적용한다.
+- EC2 보안 그룹은 Cloudflare IP 대역의 443만 허용하고 서버 관리는 SSH 대신 SSM을 사용한다.
+- Nginx가 `request_id`를 만들고 Spring MDC에 전달하며 `CF-Ray`도 함께 기록한다.
+- RDS는 Private Subnet에 배치하고 Public Access를 비활성화한다.
+- RDS 인바운드는 EC2 Security Group에서 오는 PostgreSQL 연결만 허용한다.
+- Nginx는 IP 기준, Spring은 회원·도메인 기준으로 요청 속도를 제한하고 초과 시 `429`를 반환한다.
+- 단일 인스턴스 단계에서는 Redis 기반 분산 Rate Limiter를 사용하지 않는다.
+## 백엔드
+- Spring Boot 하나를 배포 단위로 유지하고 회원, 여행, 장소, 미션, 포인트, 배지, 알림 패키지를 분리한다.
+- 도메인 간 협력은 서비스와 도메인 사건을 사용하고 다른 도메인의 Repository를 직접 사용하지 않는다.
+- 배지는 Spring 내부의 메트릭 Provider와 데이터 조건으로 판정한다.
+- FCM은 Firebase Admin SDK로 Spring이 직접 발송하며 실패가 본 업무를 롤백하지 않는다.
+- 고아 사진 삭제와 포인트 만료 같은 내부 정기 작업은 멱등한 Spring Scheduler 작업으로 실행한다.
+- 관광공사 데이터는 사용자 요청 전에 내부 DB로 동기화한다. 주기·실행 주체·재시도·갱신 정책은 **TBD**다.
+- 지도 렌더링·마커·현재 위치는 Flutter의 Kakao Map SDK가 담당한다. 서버용 지오코딩이 필요할 때만 Spring이 Kakao REST API를 호출한다.
+- Redis, 별도 비동기 워커와 API Gateway·Lambda 기반 배지 판정은 보류한다.
+## 인증
+- 소셜 계정 연결은 로그인된 회원이 별도 API로 명시적으로 수행한다.
+- 액세스 토큰은 수명 1시간의 JWT다.
+- 리프레시 토큰은 `sessionId.randomSecret` 형태의 opaque token이며 DB에는 secret 해시만 저장한다.
+- 리프레시 토큰 수명은 30일이고 갱신할 때마다 교체한다.
+- 이전 토큰의 재사용은 `401`로 거절하되 MVP에서는 이를 탈취로 단정해 전체 세션을 폐기하지 않는다.
+- 로그아웃·탈퇴 시 세션을 즉시 폐기한다.
+- JWT 키와 OAuth 시크릿은 Parameter Store `SecureString`에서 읽는다.
+## 데이터베이스
+- AWS RDS PostgreSQL과 PostGIS를 사용한다.
+- 장소는 `geography(Point, 4326)`와 GiST 인덱스로 저장한다.
+- 운영 JPA는 `ddl-auto=validate`를 사용한다.
+- 배포 단계에서 Flyway 마이그레이션을 먼저 실행하고 성공한 경우에만 애플리케이션을 시작한다.
+- PostgreSQL Role은 DDL 권한을 가진 `migrator`와 제한된 DML 권한의 `application`으로 분리한다.
+- 호환 가능한 단계적 마이그레이션을 사용하고 운영에서 자동 down migration을 하지 않는다.
+- 애플리케이션은 `Instant`, DB는 `timestamptz`, 서버·DB 시스템 시간대는 UTC를 사용한다. 사용자 표시와 날짜 판정만 `Asia/Seoul`로 변환한다.
+- RDS 자동 백업은 7일 보존하고 PITR, 삭제 방지와 삭제 시 최종 스냅샷을 활성화한다.
+- Multi-AZ와 다중 리전은 MVP에서 사용하지 않는다.
+## 이미지와 정적 콘텐츠
+- 공개 정적 콘텐츠와 비공개 미션 사진은 버킷 또는 prefix를 분리한다.
+- S3는 Block Public Access와 SSE-S3를 사용하고 CloudFront만 OAC로 읽는다.
+- 미션 사진은 Presigned PUT URL로 직접 업로드하고 서버가 소유자, 크기와 MIME 타입을 검증한다.
+- 사진 조회 권한 확인 후 AWS SDK v2 `CloudFrontUtilities`가 10분 유효한 Signed URL을 로컬에서 생성한다.
+- CloudFront는 Trusted Key Group의 공개 키를 사용하고 비공개 키는 Parameter Store에서 로드한다.
+- 24시간 안에 제출되지 않은 고아 사진, 탈퇴 후 30일이 지난 사진과 실패한 multipart upload를 정리한다.
+- 비공개 사진 버킷은 개인정보 삭제를 위해 버전 관리를 사용하지 않는다.
+## 배포와 인프라 관리
+- 운영은 EIP가 연결된 단일 EC2에서 Nginx와 Spring 컨테이너를 Docker Compose로 실행한다.
+- EC2는 stateless하며 영구 데이터는 RDS·S3·CloudWatch에만 저장한다.
+- GitHub Actions가 테스트 후 커밋 SHA 태그의 Docker 이미지를 ECR에 push한다.
+- EC2는 SSM 명령으로 이미지를 pull하고 Docker Compose를 실행한다.
+- `/actuator/health`가 실패하면 이전 커밋 SHA 이미지로 자동 롤백한다.
+- AWS 인프라는 Terraform으로 관리하고 Remote State는 암호화·버전 관리·잠금이 적용된 S3에 저장한다.
+- 운영 `terraform apply`와 배포는 GitHub Actions만 수행하고 AWS 인증은 OIDC IAM Role을 사용한다.
+- 배포 Role과 Terraform Role을 분리하고 장기 AWS Access Key를 사용하지 않는다.
+- AWS에는 운영 환경만 상시 유지한다. 로컬은 Docker Compose, CI는 임시 PostgreSQL/PostGIS를 사용한다.
+## CI 품질 게이트
+- Spring 단위·통합 테스트
+- 임시 PostgreSQL/PostGIS에 Flyway 전체 마이그레이션 적용
+- OpenAPI 문법·참조 검증
+- Flutter `analyze`, `test`
+- Docker 이미지 빌드
+- 의존성과 컨테이너 이미지 취약점 스캔
+- 모든 검사를 통과한 `main`만 운영 배포
+## 관측성과 복구
+- SLF4J 구조화 로그를 사용하고 개발은 일반 로그, 운영은 JSON 로그로 출력한다.
+- Spring과 Nginx 로그를 CloudWatch Logs에 전송해 30일 보관한다.
+- 액세스 토큰, OAuth 코드, Signed URL과 개인정보는 로그에 기록하지 않는다.
+- CloudWatch Alarm과 SNS 이메일로 EC2 상태, 디스크, 5xx, RDS 저장 공간·연결 수를 감시한다.
+- Docker `HEALTHCHECK`는 Actuator liveness를 확인한다.
+- CloudWatch Synthetics는 5분마다 Cloudflare → Nginx → Spring 공개 헬스 경로를 확인한다.
+- 공개 헬스 응답은 내부 구성과 DB 상세정보를 노출하지 않는다.
+## 미정·보류
+- 관광공사 데이터 동기화 주기·실행 방식·재시도 정책
+- iOS 서명·TestFlight·App Store 배포 자동화
+- EC2·RDS 인스턴스 크기
+- Multi-AZ·다중 리전
+- Redis와 별도 비동기 워커
+## 관련 ADR
+- [Architecture Decision Records](./adr/README.md)
