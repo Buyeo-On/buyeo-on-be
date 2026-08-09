@@ -25,8 +25,6 @@
 - 구현자는 자신의 PR을 최종 승인하지 않는다. 리뷰는 Standards와 Spec 두 축으로 수행한다.
 - 모든 Sub-issue가 끝나면 Epic의 전체 사용자 흐름과 인수 조건을 다시 검증한 뒤 닫는다.
 
-프로젝트 맞춤 워크플로우 스킬은 [`.agents/skills`](./.agents/skills)에 있다.
-
 ## 공통 요구사항
 
 - [PRD](./docs/prd.md)
