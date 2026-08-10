@@ -23,12 +23,18 @@ class SchemaMappingTests {
 			Path.of("src/main/resources/db/migration/V1__initial_schema.sql");
 	private static final Path PLACE_EXTERNAL_ID_MIGRATION =
 			Path.of("src/main/resources/db/migration/V2__add_place_external_id.sql");
+	private static final Path MISSION_CONSTRAINTS_MIGRATION =
+			Path.of("src/main/resources/db/migration/V3__align_mission_constraints.sql");
 	private static final Pattern CREATE_TABLE = Pattern.compile("CREATE TABLE ([a-z_]+) ");
 
 	@Test
 	void canonicalSchemaMatchesMigrationChain() throws IOException {
 		String baseline = Files.readString(INITIAL_MIGRATION, StandardCharsets.UTF_8);
 		String canonicalSchema = Files.readString(SCHEMA_SOURCE, StandardCharsets.UTF_8);
+		String legacyMissionStatus =
+				"CREATE TYPE mission_status AS ENUM ('LOCKED', 'AVAILABLE', 'EXHAUSTED', 'COMPLETED');";
+		String currentMissionStatus =
+				"CREATE TYPE mission_status AS ENUM ('AVAILABLE', 'EXHAUSTED', 'COMPLETED');";
 		String placeSourceColumns = String.join(
 				"\n",
 				"    source_name text, -- 관광데이터 제공처",
@@ -49,12 +55,50 @@ class SchemaMappingTests {
 				"CREATE UNIQUE INDEX places_source_external_id_uq",
 				"    ON places (source_name, external_id)",
 				"    WHERE external_id IS NOT NULL;");
+		String legacyMissionConstraints = String.join(
+				"\n",
+				"    ox_correct_answer boolean, -- OX 미션 정답",
+				"    CHECK (",
+				"        (type = 'OX' AND ox_correct_answer IS NOT NULL)",
+				"        OR (type <> 'OX' AND ox_correct_answer IS NULL)",
+				"    )",
+				");");
+		String currentMissionConstraints = String.join(
+				"\n",
+				"    ox_correct_answer boolean, -- OX 미션 정답",
+				"    CHECK (",
+				"        (type = 'OX' AND ox_correct_answer IS NOT NULL)",
+				"        OR (type <> 'OX' AND ox_correct_answer IS NULL)",
+				"    ),",
+				"    CHECK (type <> 'PHOTO' OR max_attempts IS NULL)",
+				");");
 
-		assertThat(baseline).contains(placeSourceColumns).contains(placeLocationIndex);
+		assertThat(baseline)
+				.contains(placeSourceColumns)
+				.contains(placeLocationIndex)
+				.contains(legacyMissionStatus)
+				.contains(legacyMissionConstraints);
 		assertThat(baseline
 					.replace(placeSourceColumns, placeExternalIdentityColumns)
-					.replace(placeLocationIndex, placeIndexes))
+					.replace(placeLocationIndex, placeIndexes)
+					.replace(legacyMissionStatus, currentMissionStatus)
+					.replace(legacyMissionConstraints, currentMissionConstraints))
 				.isEqualTo(canonicalSchema);
+	}
+
+	@Test
+	void missionConstraintsAreDefinedInSchemaAndMigration() throws IOException {
+		String canonicalSchema = Files.readString(SCHEMA_SOURCE, StandardCharsets.UTF_8);
+		String migration = Files.readString(MISSION_CONSTRAINTS_MIGRATION, StandardCharsets.UTF_8);
+
+		assertThat(canonicalSchema)
+				.contains("CREATE TYPE mission_status AS ENUM ('AVAILABLE', 'EXHAUSTED', 'COMPLETED')")
+				.contains("CHECK (type <> 'PHOTO' OR max_attempts IS NULL)");
+		assertThat(migration)
+				.contains("SET status = 'AVAILABLE'")
+				.contains("WHERE status = 'LOCKED'")
+				.contains("CREATE TYPE mission_status AS ENUM ('AVAILABLE', 'EXHAUSTED', 'COMPLETED')")
+				.contains("CHECK (type <> 'PHOTO' OR max_attempts IS NULL)");
 	}
 
 	@Test

@@ -1,7 +1,10 @@
 package com.buyeoon.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.buyeoon.mission.entity.MissionEntity;
+import com.buyeoon.mission.entity.MissionStatus;
 import com.buyeoon.point.entity.PointSettlementEntity;
 import com.buyeoon.point.entity.SettlementChoice;
 import java.time.Duration;
@@ -10,6 +13,38 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class EntityInvariantTests {
+
+	@Test
+	void missionStatusOnlyContainsPersistentStates() {
+		assertThat(MissionStatus.values())
+				.extracting(Enum::name)
+				.containsExactly("AVAILABLE", "EXHAUSTED", "COMPLETED");
+	}
+
+	@Test
+	void missionFactoriesApplySupportedAttemptLimits() {
+		UUID placeId = UUID.randomUUID();
+
+		MissionEntity unlimited =
+				MissionEntity.multipleChoice(placeId, "Quiz", "Choose one", 100, null);
+		MissionEntity limited = MissionEntity.ox(placeId, "OX", "True or false", 100, 3, true);
+		MissionEntity photo = MissionEntity.photo(placeId, "Photo", "Take a photo", 100);
+
+		assertThat(unlimited.getMaxAttempts()).isNull();
+		assertThat(limited.getMaxAttempts()).isEqualTo(3);
+		assertThat(photo.getMaxAttempts()).isNull();
+	}
+
+	@Test
+	void quizMissionsRejectNonPositiveMaximumAttempts() {
+		UUID placeId = UUID.randomUUID();
+
+		assertThatThrownBy(
+					() -> MissionEntity.multipleChoice(placeId, "Quiz", "Choose one", 100, 0))
+				.isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(() -> MissionEntity.ox(placeId, "OX", "True or false", 100, -1, true))
+				.isInstanceOf(IllegalArgumentException.class);
+	}
 
 	@Test
 	void carryOverExpirationUsesTheSettlementTimestamp() {

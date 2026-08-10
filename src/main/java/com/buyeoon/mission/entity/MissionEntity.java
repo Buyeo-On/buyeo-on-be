@@ -63,8 +63,8 @@ public class MissionEntity {
 	}
 
 	public static MissionEntity photo(
-			UUID placeId, String title, String description, int rewardPoints, Integer maxAttempts) {
-		return create(placeId, MissionType.PHOTO, title, description, rewardPoints, maxAttempts, null);
+			UUID placeId, String title, String description, int rewardPoints) {
+		return create(placeId, MissionType.PHOTO, title, description, rewardPoints, null, null);
 	}
 
 	private static MissionEntity create(
@@ -75,6 +75,9 @@ public class MissionEntity {
 			int rewardPoints,
 			Integer maxAttempts,
 			Boolean oxCorrectAnswer) {
+		if (maxAttempts != null && maxAttempts <= 0) {
+			throw new IllegalArgumentException("Maximum attempts must be positive");
+		}
 		MissionEntity mission = new MissionEntity();
 		mission.placeId = placeId;
 		mission.type = type;
