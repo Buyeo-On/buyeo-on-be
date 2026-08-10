@@ -64,6 +64,7 @@ iOS Flutter
 - Role 생성과 application Role의 DML 권한 부여는 Flyway가 아니라 인프라 provisioning 단계에서 수행한다.
 - 운영 PostGIS 확장은 권한이 분리된 Flyway 실행 전에 인프라 bootstrap 단계에서 설치한다.
 - 호환 가능한 단계적 마이그레이션을 사용하고 운영에서 자동 down migration을 하지 않는다.
+- MVP의 장소·미션 예시 카탈로그는 버전 관리되는 Flyway 시드로 로컬·CI·운영에 동일하게 적용한다. 별도의 정식 운영 콘텐츠 관리·갱신 절차를 마련하기 전까지 임시 데이터로 사용한다.
 - 애플리케이션은 `Instant`, DB는 `timestamptz`, 서버·DB 시스템 시간대는 UTC를 사용한다. 사용자 표시와 날짜 판정만 `Asia/Seoul`로 변환한다.
 - RDS 자동 백업은 7일 보존하고 PITR, 삭제 방지와 삭제 시 최종 스냅샷을 활성화한다.
 - Multi-AZ와 다중 리전은 MVP에서 사용하지 않는다.
@@ -103,6 +104,7 @@ iOS Flutter
 - 공개 헬스 응답은 내부 구성과 DB 상세정보를 노출하지 않는다.
 ## 미정·보류
 - 관광공사 데이터 동기화 주기·실행 방식·재시도 정책
+- 예시 시드를 대체할 정식 운영 장소·미션 콘텐츠 관리·갱신 절차
 - iOS 서명·TestFlight·App Store 배포 자동화
 - EC2·RDS 인스턴스 크기
 - Multi-AZ·다중 리전

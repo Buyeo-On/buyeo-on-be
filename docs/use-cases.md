@@ -31,7 +31,7 @@
 
 ## 미션
 
-- [UC-06 퀴즈 탐색](./domains/mission/use-cases/uc-06-explore-missions.md)
+- [UC-06 미션 탐색](./domains/mission/use-cases/uc-06-explore-missions.md)
 - [UC-09 퀴즈 풀이](./domains/mission/use-cases/uc-09-complete-mission.md)
 
 ## 포인트

@@ -7,7 +7,7 @@ CREATE TYPE term_type AS ENUM ('SERVICE', 'PRIVACY', 'MARKETING');
 CREATE TYPE trip_status AS ENUM ('IN_PROGRESS', 'ENDED', 'SETTLED');
 CREATE TYPE place_category AS ENUM ('HERITAGE', 'RESTAURANT', 'CAFE');
 CREATE TYPE mission_type AS ENUM ('MULTIPLE_CHOICE', 'OX', 'PHOTO');
-CREATE TYPE mission_status AS ENUM ('LOCKED', 'AVAILABLE', 'EXHAUSTED', 'COMPLETED');
+CREATE TYPE mission_status AS ENUM ('AVAILABLE', 'EXHAUSTED', 'COMPLETED');
 CREATE TYPE settlement_choice AS ENUM ('LEAVE_TO_BUYEO', 'CARRY_OVER');
 CREATE TYPE point_transaction_type AS ENUM ('EARN', 'LEAVE_TO_BUYEO', 'EXPIRE', 'ADJUST');
 CREATE TYPE badge_category AS ENUM ('EXPLORATION', 'QUIZ', 'RECORD', 'ASSET', 'SPECIAL');
@@ -171,7 +171,8 @@ CREATE TABLE missions (
     CHECK (
         (type = 'OX' AND ox_correct_answer IS NOT NULL)
         OR (type <> 'OX' AND ox_correct_answer IS NULL)
-    )
+    ),
+    CHECK (type <> 'PHOTO' OR max_attempts IS NULL)
 );
 
 -- 객관식 미션의 선택지다.
