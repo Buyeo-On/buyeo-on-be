@@ -21,12 +21,59 @@ class SchemaMappingTests {
 	private static final Path SCHEMA_SOURCE = Path.of("docs/raw/db-schema.sql");
 	private static final Path INITIAL_MIGRATION =
 			Path.of("src/main/resources/db/migration/V1__initial_schema.sql");
+	private static final Path PLACE_EXTERNAL_ID_MIGRATION =
+			Path.of("src/main/resources/db/migration/V2__add_place_external_id.sql");
 	private static final Pattern CREATE_TABLE = Pattern.compile("CREATE TABLE ([a-z_]+) ");
 
 	@Test
-	void initialMigrationMatchesCanonicalSchema() throws IOException {
-		assertThat(Files.readString(INITIAL_MIGRATION, StandardCharsets.UTF_8))
-				.isEqualTo(Files.readString(SCHEMA_SOURCE, StandardCharsets.UTF_8));
+	void canonicalSchemaMatchesMigrationChain() throws IOException {
+		String baseline = Files.readString(INITIAL_MIGRATION, StandardCharsets.UTF_8);
+		String canonicalSchema = Files.readString(SCHEMA_SOURCE, StandardCharsets.UTF_8);
+		String placeSourceColumns = String.join(
+				"\n",
+				"    source_name text, -- 관광데이터 제공처",
+				"    source_url text -- 관광데이터 원문 URL",
+				"");
+		String placeExternalIdentityColumns = String.join(
+				"\n",
+				"    source_name text, -- 관광데이터 제공처",
+				"    external_id text, -- 제공처가 부여한 장소 식별자",
+				"    source_url text, -- 관광데이터 원문 URL",
+				"    CHECK (external_id IS NULL OR source_name IS NOT NULL)",
+				"");
+		String placeLocationIndex =
+				"CREATE INDEX places_location_gix ON places USING GIST (location);";
+		String placeIndexes = String.join(
+				"\n",
+				"CREATE INDEX places_location_gix ON places USING GIST (location);",
+				"CREATE UNIQUE INDEX places_source_external_id_uq",
+				"    ON places (source_name, external_id)",
+				"    WHERE external_id IS NOT NULL;");
+
+		assertThat(baseline).contains(placeSourceColumns).contains(placeLocationIndex);
+		assertThat(baseline
+					.replace(placeSourceColumns, placeExternalIdentityColumns)
+					.replace(placeLocationIndex, placeIndexes))
+				.isEqualTo(canonicalSchema);
+	}
+
+	@Test
+	void placeExternalIdentityIsDefinedInSchemaAndMigration() throws IOException {
+		String canonicalSchema = Files.readString(SCHEMA_SOURCE, StandardCharsets.UTF_8);
+		String migration = Files.readString(PLACE_EXTERNAL_ID_MIGRATION, StandardCharsets.UTF_8);
+
+		assertThat(canonicalSchema)
+				.contains("external_id text")
+				.contains("CHECK (external_id IS NULL OR source_name IS NOT NULL)")
+				.contains("CREATE UNIQUE INDEX places_source_external_id_uq")
+				.contains("ON places (source_name, external_id)")
+				.contains("WHERE external_id IS NOT NULL");
+		assertThat(migration)
+				.contains("ADD COLUMN external_id text")
+				.contains("CHECK (external_id IS NULL OR source_name IS NOT NULL)")
+				.contains("CREATE UNIQUE INDEX places_source_external_id_uq")
+				.contains("ON places (source_name, external_id)")
+				.contains("WHERE external_id IS NOT NULL");
 	}
 
 	@Test
