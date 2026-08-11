@@ -46,12 +46,19 @@ iOS Flutter
 - 부여 행정구역은 애플리케이션 리소스의 버전 관리되는 GeoJSON Polygon으로 고정하고, 군민증 생성과 여행 시작 위치를 서버에서 point-in-polygon 방식으로 검증한다.
 - Redis, 별도 비동기 워커와 API Gateway·Lambda 기반 배지 판정은 보류한다.
 ## 인증
+- 소셜 인증은 회원 도메인의 제공자 검증 인터페이스 뒤에서 카카오와 Apple 외부 어댑터로 구현한다. 자동 테스트는 제어 가능한 가짜 어댑터를 사용한다.
+- 카카오 네이티브 Flutter SDK가 발급한 access token을 앱이 전달하면 서버가 카카오 API에서 유효성과 제공자 회원 식별자를 확인한다.
+- Apple은 앱이 전달한 인가 코드, identity token과 nonce를 서버가 검증하고 subject를 회원 식별자로 사용한다.
+- OAuth 인가 코드, 외부 access token, identity token과 client secret은 DB나 로그에 저장하지 않는다.
 - 소셜 계정 연결은 로그인된 회원이 별도 API로 명시적으로 수행한다.
 - 액세스 토큰은 수명 1시간의 JWT다.
+- 액세스 JWT는 단일 백엔드 MVP에서 Parameter Store의 256-bit 이상 비밀 키로 `HS256` 서명한다.
 - 액세스 JWT의 `sub`에는 회원 ID, `sid`에는 인증 세션 ID를 넣는다. 인증이 필요한 요청은 `sid`의 세션이 만료·폐기되지 않았는지 확인한다.
 - 리프레시 토큰은 `sessionId.randomSecret` 형태의 opaque token이며 DB에는 secret 해시만 저장한다.
+- 리프레시 토큰 secret은 CSPRNG로 256-bit 이상 생성하고 DB에는 SHA-256 해시를 저장한다.
 - 리프레시 토큰 수명은 30일이고 갱신할 때마다 교체한다.
 - 이전 토큰의 재사용은 `401`로 거절하되 MVP에서는 이를 탈취로 단정해 전체 세션을 폐기하지 않는다.
+- 갱신할 때 인증 세션 행을 직렬화하며 먼저 확정된 요청만 리프레시 토큰을 교체한다.
 - 로그아웃·탈퇴 시 세션을 즉시 폐기한다.
 - FCM 등록 토큰은 현재 인증 세션과 1:1로 관리한다. 로그아웃·탈퇴 시 발송 대상에서 제외하고 FCM이 무효로 응답한 토큰은 삭제한다.
 - JWT 키와 OAuth 시크릿은 Parameter Store `SecureString`에서 읽는다.

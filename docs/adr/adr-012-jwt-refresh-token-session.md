@@ -6,8 +6,10 @@
 iOS 앱의 로그인 상태를 유지하면서 액세스 토큰 노출 범위와 서버 측 세션 폐기 가능성을 함께 관리해야 한다.
 ## 결정
 - 액세스 토큰은 수명 1시간의 JWT로 발급하고 Flutter 메모리에만 둔다.
+- 단일 백엔드 MVP에서는 Parameter Store의 256-bit 이상 비밀 키로 JWT를 `HS256` 서명한다.
 - 액세스 JWT의 `sub`에는 회원 ID, `sid`에는 인증 세션 ID를 넣고 인증이 필요한 요청마다 해당 세션이 만료·폐기되지 않았는지 확인한다.
 - 리프레시 토큰은 30일 수명의 `sessionId.randomSecret` opaque token으로 발급한다.
+- `randomSecret`은 CSPRNG로 256-bit 이상 생성하고 DB에는 SHA-256 해시만 저장한다.
 - Flutter는 리프레시 토큰을 Secure Storage에 보관한다.
 - DB에는 secret 해시와 세션 만료·폐기 상태만 저장한다.
 - 갱신 시 DB 행을 직렬화해 토큰을 교체하고 Flutter는 갱신 요청을 single-flight로 제한한다.

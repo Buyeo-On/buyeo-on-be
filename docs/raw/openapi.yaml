@@ -45,9 +45,11 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          $ref: '#/components/responses/SocialAuthenticationFailed'
         '409':
-          $ref: '#/components/responses/StateConflict'
+          $ref: '#/components/responses/WithdrawnMemberConflict'
+        '502':
+          $ref: '#/components/responses/SocialProviderUnavailable'
   /auth/refresh:
     post:
       tags: [Auth]
@@ -1344,6 +1346,39 @@ components:
                 data:
                   code: SOCIAL_PROVIDER_ALREADY_LINKED
                   message: 같은 제공자의 다른 소셜 계정이 이미 연결되어 있습니다.
+    WithdrawnMemberConflict:
+      description: 탈퇴한 회원에게 연결된 소셜 계정이라 로그인할 수 없음
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            success: false
+            data:
+              code: MEMBER_WITHDRAWN
+              message: 탈퇴한 회원은 로그인할 수 없습니다.
+    SocialProviderUnavailable:
+      description: 소셜 제공자 장애로 인증 정보를 검증할 수 없음
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            success: false
+            data:
+              code: SOCIAL_PROVIDER_UNAVAILABLE
+              message: 소셜 로그인을 일시적으로 사용할 수 없습니다.
+    SocialAuthenticationFailed:
+      description: 소셜 인증 정보가 유효하지 않거나 만료됨
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            success: false
+            data:
+              code: SOCIAL_AUTHENTICATION_FAILED
+              message: 소셜 인증에 실패했습니다.
     PayloadTooLarge:
       description: 업로드 파일 크기 초과
       content:
@@ -1416,21 +1451,50 @@ components:
       type: string
       enum: [KAKAO, APPLE]
     SocialLoginRequest:
+      oneOf:
+        - $ref: '#/components/schemas/KakaoSocialCredential'
+        - $ref: '#/components/schemas/AppleSocialCredential'
+      discriminator:
+        propertyName: provider
+        mapping:
+          KAKAO: '#/components/schemas/KakaoSocialCredential'
+          APPLE: '#/components/schemas/AppleSocialCredential'
+    SocialAccountLinkRequest:
+      oneOf:
+        - $ref: '#/components/schemas/KakaoSocialCredential'
+        - $ref: '#/components/schemas/AppleSocialCredential'
+      discriminator:
+        propertyName: provider
+        mapping:
+          KAKAO: '#/components/schemas/KakaoSocialCredential'
+          APPLE: '#/components/schemas/AppleSocialCredential'
+    KakaoSocialCredential:
       type: object
-      required: [provider, authorizationCode]
+      additionalProperties: false
+      required: [provider, accessToken]
       properties:
         provider:
-          $ref: '#/components/schemas/SocialProvider'
+          type: string
+          const: KAKAO
+        accessToken:
+          type: string
+          minLength: 1
+          description: 카카오 Flutter SDK가 발급한 access token. 서버가 카카오 API에서 유효성과 회원 식별자를 확인한다.
+    AppleSocialCredential:
+      type: object
+      additionalProperties: false
+      required: [provider, authorizationCode, identityToken, nonce]
+      properties:
+        provider:
+          type: string
+          const: APPLE
         authorizationCode:
           type: string
           minLength: 1
-    SocialAccountLinkRequest:
-      type: object
-      required: [provider, authorizationCode]
-      properties:
-        provider:
-          $ref: '#/components/schemas/SocialProvider'
-        authorizationCode:
+        identityToken:
+          type: string
+          minLength: 1
+        nonce:
           type: string
           minLength: 1
     RefreshTokenRequest:
