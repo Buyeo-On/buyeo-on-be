@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.core.type.filter.AnnotationTypeFilter;
@@ -26,7 +27,9 @@ class SchemaMappingTests {
 			.of("src/main/resources/db/migration/V3__align_mission_constraints.sql");
 	private static final Pattern CREATE_TABLE = Pattern.compile("CREATE TABLE ([a-z_]+) ");
 
+	/** 초기 스키마에 후속 마이그레이션을 적용한 정의가 기준 DB 스키마와 같음을 보장한다. */
 	@Test
+	@DisplayName("기준 DB 스키마는 Flyway 마이그레이션 체인의 최종 상태와 일치한다")
 	void canonicalSchemaMatchesMigrationChain() throws IOException {
 		String baseline = Files.readString(INITIAL_MIGRATION, StandardCharsets.UTF_8);
 		String canonicalSchema = Files.readString(SCHEMA_SOURCE, StandardCharsets.UTF_8);
@@ -56,7 +59,9 @@ class SchemaMappingTests {
 				.replace(legacyMissionConstraints, currentMissionConstraints)).isEqualTo(canonicalSchema);
 	}
 
+	/** 미션 상태와 시도 횟수 제약이 신규 설치용 스키마와 기존 DB 업그레이드에 모두 반영됐는지 검증한다. */
 	@Test
+	@DisplayName("미션 제약조건은 기준 스키마와 마이그레이션에 모두 정의되어 있다")
 	void missionConstraintsAreDefinedInSchemaAndMigration() throws IOException {
 		String canonicalSchema = Files.readString(SCHEMA_SOURCE, StandardCharsets.UTF_8);
 		String migration = Files.readString(MISSION_CONSTRAINTS_MIGRATION, StandardCharsets.UTF_8);
@@ -69,7 +74,9 @@ class SchemaMappingTests {
 				.contains("CHECK (type <> 'PHOTO' OR max_attempts IS NULL)");
 	}
 
+	/** 장소의 외부 식별자 필수 조건과 제공처 범위 유일성이 모든 DB 생성 경로에 존재하는지 검증한다. */
 	@Test
+	@DisplayName("장소 외부 식별자 규칙은 기준 스키마와 마이그레이션에 모두 정의되어 있다")
 	void placeExternalIdentityIsDefinedInSchemaAndMigration() throws IOException {
 		String canonicalSchema = Files.readString(SCHEMA_SOURCE, StandardCharsets.UTF_8);
 		String migration = Files.readString(PLACE_EXTERNAL_ID_MIGRATION, StandardCharsets.UTF_8);
@@ -84,7 +91,9 @@ class SchemaMappingTests {
 				.contains("ON places (source_name, external_id)").contains("WHERE external_id IS NOT NULL");
 	}
 
+	/** 기준 스키마의 테이블과 JPA 엔티티가 누락이나 잉여 매핑 없이 일대일로 대응함을 보장한다. */
 	@Test
+	@DisplayName("기준 스키마의 모든 테이블에는 대응하는 JPA 엔티티가 있다")
 	void everyTableHasAnEntityMapping() throws ClassNotFoundException, IOException {
 		Set<String> schemaTables = schemaTables();
 		Set<String> entityTables = entityTables();
