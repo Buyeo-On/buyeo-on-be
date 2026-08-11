@@ -47,7 +47,7 @@ import org.testcontainers.utility.DockerImageName;
 @Testcontainers
 class RefreshTokenIntegrationTests {
 
-	private static final String APPLICATION_USERNAME = "buyeoon_application";
+	private static final String APPLICATION_USERNAME = "buyeoon_app";
 	private static final String APPLICATION_PASSWORD = "application-test-password";
 	private static final String JWT_SECRET = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
 	private static final String UNAUTHORIZED_RESPONSE = """
@@ -57,7 +57,7 @@ class RefreshTokenIntegrationTests {
 	@Container
 	private static final PostgreSQLContainer POSTGIS = new PostgreSQLContainer(
 			DockerImageName.parse("postgis/postgis:17-3.5").asCompatibleSubstituteFor("postgres"))
-			.withDatabaseName("buyeoon_test").withUsername("buyeoon_migrator").withPassword("migrator-test-password")
+			.withDatabaseName("buyeoon_test").withUsername("buyeoon_admin").withPassword("admin-test-password")
 			.withInitScript("db/test-postgis-init.sql");
 
 	@Autowired
@@ -220,13 +220,13 @@ class RefreshTokenIntegrationTests {
 		insertMember(memberId, "ACTIVE", Instant.now());
 		insertSession(sessionId, memberId, fixture.hash(), Instant.now().plus(30, ChronoUnit.DAYS), null);
 
-		executeAsMigrator("REVOKE UPDATE ON auth_sessions FROM buyeoon_application");
+		executeAsMigrator("REVOKE UPDATE ON auth_sessions FROM buyeoon_app");
 		try {
 			assertThatThrownBy(() -> refresh(fixture.token()).andReturn())
 					.isInstanceOf(jakarta.servlet.ServletException.class);
 			assertThat(sessionState(sessionId).refreshTokenHash()).isEqualTo(fixture.hash());
 		} finally {
-			executeAsMigrator("GRANT UPDATE ON auth_sessions TO buyeoon_application");
+			executeAsMigrator("GRANT UPDATE ON auth_sessions TO buyeoon_app");
 		}
 
 		refresh(fixture.token()).andExpect(status().isOk());
@@ -292,8 +292,8 @@ class RefreshTokenIntegrationTests {
 		registry.add("spring.datasource.password", () -> APPLICATION_PASSWORD);
 		registry.add("spring.flyway.enabled", () -> true);
 		registry.add("spring.flyway.url", POSTGIS::getJdbcUrl);
-		registry.add("spring.flyway.user", POSTGIS::getUsername);
-		registry.add("spring.flyway.password", POSTGIS::getPassword);
+		registry.add("spring.flyway.user", () -> APPLICATION_USERNAME);
+		registry.add("spring.flyway.password", () -> APPLICATION_PASSWORD);
 		registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
 		registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.PostgreSQLDialect");
 		registry.add("security.jwt.secret-base64", () -> JWT_SECRET);
