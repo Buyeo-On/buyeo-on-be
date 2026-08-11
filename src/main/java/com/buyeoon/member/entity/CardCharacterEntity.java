@@ -24,13 +24,13 @@ public class CardCharacterEntity {
 	@Column(name = "name", nullable = false, columnDefinition = "text")
 	private String name;
 
-	@Column(name = "image_url", nullable = false, columnDefinition = "text")
-	private String imageUrl;
+	@Column(name = "image_key", nullable = false, columnDefinition = "text")
+	private String imageKey;
 
-	public static CardCharacterEntity create(String name, String imageUrl) {
+	public static CardCharacterEntity create(String name, String imageKey) {
 		CardCharacterEntity character = new CardCharacterEntity();
 		character.name = name;
-		character.imageUrl = imageUrl;
+		character.imageKey = imageKey;
 		return character;
 	}
 }

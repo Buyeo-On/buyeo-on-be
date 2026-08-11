@@ -1155,7 +1155,7 @@ components:
                   category: EXPLORATION
                   name: 부소산성 탐험가
                   description: 부소산성 문화재 퀴즈를 완료한다.
-                  imageUrl: https://cdn.buyeoon.example.com/example.png
+                  imageUrl: https://buyeoon-prod-images.s3.ap-northeast-2.amazonaws.com/public/badges/example.png?X-Amz-Expires=600
                   condition: 부소산성 방문 기록 1회
                   conditions:
                     - metricKey: HERITAGE_VISITED_COUNT
@@ -1177,7 +1177,7 @@ components:
               category: EXPLORATION
               name: 부소산성 탐험가
               description: 부소산성 문화재 퀴즈를 완료한다.
-              imageUrl: https://cdn.buyeoon.example.com/example.png
+              imageUrl: https://buyeoon-prod-images.s3.ap-northeast-2.amazonaws.com/public/badges/example.png?X-Amz-Expires=600
               condition: 부소산성 방문 기록 1회
               conditions:
                 - metricKey: HERITAGE_VISITED_COUNT
@@ -1577,6 +1577,7 @@ components:
         imageUrl:
           type: string
           format: uri
+          description: 10분 유효한 S3 Presigned GET URL. 저장하거나 로그에 기록하지 않는다.
     CitizenCardCreateRequest:
       type: object
       required: [displayName, characterId, themeId, location]
@@ -1710,6 +1711,7 @@ components:
         imageUrl:
           type: [string, 'null']
           format: uri
+          description: 10분 유효한 S3 Presigned GET URL. 저장하거나 로그에 기록하지 않는다.
         latitude:
           type: number
           format: double
@@ -1934,6 +1936,7 @@ components:
         url:
           type: string
           format: uri
+          description: 소유권 확인 후 발급한 10분 유효 S3 Presigned GET URL. bearer URL이므로 저장·공유하거나 로그에 기록하지 않는다.
         uploadedAt:
           type: string
           format: date-time
@@ -2116,6 +2119,7 @@ components:
         imageUrl:
           type: [string, 'null']
           format: uri
+          description: 10분 유효한 S3 Presigned GET URL. 저장하거나 로그에 기록하지 않는다.
         condition:
           type: string
         conditions:
