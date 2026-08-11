@@ -149,12 +149,14 @@ class MemberMeIntegrationTests {
 		insertMember(memberId, "ACTIVE", Instant.now());
 		insertSession(sessionId, memberId, Instant.now().plus(30, ChronoUnit.DAYS), null);
 		String validToken = accessTokenService.issue(memberId, sessionId);
-		String changedLastCharacter = validToken.substring(0, validToken.length() - 1)
-				+ (validToken.endsWith("A") ? "B" : "A");
+		int signatureStart = validToken.lastIndexOf('.') + 1;
+		char firstSignatureCharacter = validToken.charAt(signatureStart);
+		String changedSignature = validToken.substring(0, signatureStart) + (firstSignatureCharacter == 'A' ? 'B' : 'A')
+				+ validToken.substring(signatureStart + 1);
 
 		assertUnauthorized(null);
 		assertUnauthorized("not-a-jwt");
-		assertUnauthorized(changedLastCharacter);
+		assertUnauthorized(changedSignature);
 		assertUnauthorized(expiredToken(memberId, sessionId));
 	}
 
