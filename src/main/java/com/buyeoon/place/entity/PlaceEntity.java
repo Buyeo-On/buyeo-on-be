@@ -50,6 +50,9 @@ public class PlaceEntity {
 	@Column(name = "source_name", columnDefinition = "text")
 	private String sourceName;
 
+	@Column(name = "external_id", columnDefinition = "text")
+	private String externalId;
+
 	@Column(name = "source_url", columnDefinition = "text")
 	private String sourceUrl;
 
@@ -62,6 +65,7 @@ public class PlaceEntity {
 			String imageUrl,
 			Point location,
 			String sourceName,
+			String externalId,
 			String sourceUrl) {
 		location.setSRID(4326);
 		PlaceEntity place = new PlaceEntity();
@@ -73,6 +77,7 @@ public class PlaceEntity {
 		place.imageUrl = imageUrl;
 		place.location = location;
 		place.sourceName = sourceName;
+		place.externalId = externalId;
 		place.sourceUrl = sourceUrl;
 		return place;
 	}

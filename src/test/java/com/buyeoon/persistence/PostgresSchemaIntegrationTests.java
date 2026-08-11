@@ -1,6 +1,7 @@
 package com.buyeoon.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.buyeoon.common.entity.IdempotencyRequestEntity;
 import com.buyeoon.member.entity.MemberEntity;
@@ -11,6 +12,7 @@ import com.buyeoon.member.entity.TermType;
 import com.buyeoon.place.entity.PlaceCategory;
 import com.buyeoon.place.entity.PlaceEntity;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -85,7 +87,8 @@ class PostgresSchemaIntegrationTests {
 				null,
 				null,
 				geometryFactory.createPoint(new Coordinate(126.91, 36.28)),
-				null,
+				"KTO_TOUR_API",
+				"3310483",
 				null);
 		entityManager.persist(place);
 
@@ -103,7 +106,43 @@ class PostgresSchemaIntegrationTests {
 
 		PlaceEntity savedPlace = entityManager.find(PlaceEntity.class, place.getId());
 		assertThat(savedPlace.getLocation().getSRID()).isEqualTo(4326);
+		assertThat(savedPlace.getExternalId()).isEqualTo("3310483");
 		assertThat(entityManager.find(IdempotencyRequestEntity.class, request.getId())).isNotNull();
+	}
+
+	@Test
+	@Transactional
+	void placeExternalIdentityIsUniqueWithinItsSource() {
+		String externalId = UUID.randomUUID().toString();
+		entityManager.persist(createPlace("KTO_TOUR_API", externalId));
+		entityManager.flush();
+
+		entityManager.persist(createPlace("KTO_TOUR_API", externalId));
+
+		assertThatThrownBy(entityManager::flush).isInstanceOf(PersistenceException.class);
+	}
+
+	@Test
+	@Transactional
+	void placeExternalIdentityRequiresItsSource() {
+		entityManager.persist(createPlace(null, UUID.randomUUID().toString()));
+
+		assertThatThrownBy(entityManager::flush).isInstanceOf(PersistenceException.class);
+	}
+
+	private PlaceEntity createPlace(String sourceName, String externalId) {
+		GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
+		return PlaceEntity.create(
+				PlaceCategory.HERITAGE,
+				"Integration place " + UUID.randomUUID(),
+				null,
+				null,
+				null,
+				null,
+				geometryFactory.createPoint(new Coordinate(126.91, 36.28)),
+				sourceName,
+				externalId,
+				null);
 	}
 
 	private static String requiredEnvironment(String name) {

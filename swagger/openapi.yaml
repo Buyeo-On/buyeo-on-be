@@ -379,19 +379,15 @@ paths:
       operationId: getPlaces
       parameters:
         - $ref: '#/components/parameters/PlaceCategory'
-        - $ref: '#/components/parameters/LatitudeRequired'
-        - $ref: '#/components/parameters/LongitudeRequired'
+        - $ref: '#/components/parameters/Latitude'
+        - $ref: '#/components/parameters/Longitude'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Size'
       responses:
         '200':
           $ref: '#/components/responses/PlaceListSuccess'
-        '400':
-          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
   /places/{placeId}:
     get:
       tags: [Places]
@@ -399,17 +395,13 @@ paths:
       operationId: getPlace
       parameters:
         - $ref: '#/components/parameters/PlaceId'
-        - $ref: '#/components/parameters/LatitudeRequired'
-        - $ref: '#/components/parameters/LongitudeRequired'
+        - $ref: '#/components/parameters/Latitude'
+        - $ref: '#/components/parameters/Longitude'
       responses:
         '200':
           $ref: '#/components/responses/PlaceSuccess'
-        '400':
-          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
   /members/me/saved-places:

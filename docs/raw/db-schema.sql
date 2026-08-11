@@ -7,7 +7,7 @@ CREATE TYPE term_type AS ENUM ('SERVICE', 'PRIVACY', 'MARKETING');
 CREATE TYPE trip_status AS ENUM ('IN_PROGRESS', 'ENDED', 'SETTLED');
 CREATE TYPE place_category AS ENUM ('HERITAGE', 'RESTAURANT', 'CAFE');
 CREATE TYPE mission_type AS ENUM ('MULTIPLE_CHOICE', 'OX', 'PHOTO');
-CREATE TYPE mission_status AS ENUM ('LOCKED', 'AVAILABLE', 'EXHAUSTED', 'COMPLETED');
+CREATE TYPE mission_status AS ENUM ('AVAILABLE', 'EXHAUSTED', 'COMPLETED');
 CREATE TYPE settlement_choice AS ENUM ('LEAVE_TO_BUYEO', 'CARRY_OVER');
 CREATE TYPE point_transaction_type AS ENUM ('EARN', 'LEAVE_TO_BUYEO', 'EXPIRE', 'ADJUST');
 CREATE TYPE badge_category AS ENUM ('EXPLORATION', 'QUIZ', 'RECORD', 'ASSET', 'SPECIAL');
@@ -126,7 +126,9 @@ CREATE TABLE places (
     image_url text, -- 대표 이미지 URL
     location geography(Point, 4326) NOT NULL, -- 장소 위치
     source_name text, -- 관광데이터 제공처
-    source_url text -- 관광데이터 원문 URL
+    external_id text, -- 제공처가 부여한 장소 식별자
+    source_url text, -- 관광데이터 원문 URL
+    CHECK (external_id IS NULL OR source_name IS NOT NULL)
 );
 
 -- 회원이 저장한 장소 관계다.
@@ -169,7 +171,8 @@ CREATE TABLE missions (
     CHECK (
         (type = 'OX' AND ox_correct_answer IS NOT NULL)
         OR (type <> 'OX' AND ox_correct_answer IS NULL)
-    )
+    ),
+    CHECK (type <> 'PHOTO' OR max_attempts IS NULL)
 );
 
 -- 객관식 미션의 선택지다.
@@ -329,6 +332,9 @@ CREATE TABLE idempotency_requests (
 CREATE INDEX auth_sessions_member_idx ON auth_sessions (member_id, expires_at);
 CREATE INDEX trips_member_idx ON trips (member_id, started_at DESC);
 CREATE INDEX places_location_gix ON places USING GIST (location);
+CREATE UNIQUE INDEX places_source_external_id_uq
+    ON places (source_name, external_id)
+    WHERE external_id IS NOT NULL;
 CREATE INDEX missions_place_idx ON missions (place_id);
 CREATE INDEX mission_participations_trip_idx ON mission_participations (trip_id, status);
 CREATE INDEX visit_records_trip_idx ON visit_records (trip_id, visited_at);
