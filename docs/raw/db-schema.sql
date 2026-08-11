@@ -64,7 +64,8 @@ CREATE TABLE terms (
     title text NOT NULL, -- 약관 제목
     content text NOT NULL, -- 약관 본문
     effective_at timestamptz NOT NULL, -- 시행 시각
-    UNIQUE (type, version)
+    UNIQUE (type, version),
+    UNIQUE (type, effective_at)
 );
 
 -- 회원이 동의한 약관과 버전을 기록한다.
