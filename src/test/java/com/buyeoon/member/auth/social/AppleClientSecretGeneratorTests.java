@@ -15,11 +15,14 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class AppleClientSecretGeneratorTests {
 
+	/** Apple client secret이 필수 claim과 ES256 서명을 포함하는지 검증한다. */
 	@Test
+	@DisplayName("Apple client secret은 필수 claim과 ES256 서명을 포함한다")
 	void createsAppleClientSecretWithRequiredClaimsAndSignature() throws Exception {
 		KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("EC");
 		keyPairGenerator.initialize(256);

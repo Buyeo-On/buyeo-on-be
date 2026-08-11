@@ -207,8 +207,12 @@ class PostgresSchemaIntegrationTests {
 					assertThat(resultSet.getLong("image_url_columns")).isEqualTo(4L);
 					assertThat(resultSet.getLong("image_key_columns")).isZero();
 				}
-				try (ResultSet resultSet = statement
-						.executeQuery("SELECT count(*) FROM flyway_schema_history WHERE version = '5' AND success")) {
+				String appliedMigrationCountQuery = """
+						SELECT count(*)
+						FROM flyway_schema_history
+						WHERE version = '5' AND success
+						""";
+				try (ResultSet resultSet = statement.executeQuery(appliedMigrationCountQuery)) {
 					assertThat(resultSet.next()).isTrue();
 					assertThat(resultSet.getLong(1)).isZero();
 				}

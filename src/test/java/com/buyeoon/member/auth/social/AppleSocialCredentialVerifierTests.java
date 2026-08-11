@@ -33,6 +33,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Date;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -70,7 +71,9 @@ class AppleSocialCredentialVerifierTests {
 		verifier = new AppleSocialCredentialVerifier(builder, CLIENT_ID, () -> "generated-client-secret", clock);
 	}
 
+	/** 유효한 Apple 인증 정보가 검증된 Apple subject로 변환되는지 검증한다. */
 	@Test
+	@DisplayName("유효한 Apple 인증 정보는 검증된 subject를 반환한다")
 	void validCredentialsReturnVerifiedAppleSubject() throws Exception {
 		String identityToken = identityToken(SUBJECT, APPLE_ISSUER, CLIENT_ID, NOW.plusSeconds(300), NONCE,
 				applePrivateKey);
@@ -87,7 +90,9 @@ class AppleSocialCredentialVerifierTests {
 		server.verify();
 	}
 
+	/** Apple 공개 키와 다른 키로 서명한 identity token을 거부하는지 검증한다. */
 	@Test
+	@DisplayName("잘못된 서명의 identity token은 거부된다")
 	void invalidSignatureIsRejected() throws Exception {
 		KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
 		generator.initialize(2048);
@@ -101,33 +106,43 @@ class AppleSocialCredentialVerifierTests {
 		server.verify();
 	}
 
+	/** Apple이 아닌 발급자의 identity token을 거부하는지 검증한다. */
 	@Test
+	@DisplayName("잘못된 발급자의 identity token은 거부된다")
 	void invalidIssuerIsRejected() throws Exception {
 		assertInvalidIdentityToken(identityToken(SUBJECT, "https://attacker.example", CLIENT_ID, NOW.plusSeconds(300),
 				NONCE, applePrivateKey), NONCE);
 	}
 
+	/** 설정된 Apple client ID와 audience가 다른 token을 거부하는지 검증한다. */
 	@Test
+	@DisplayName("잘못된 audience의 identity token은 거부된다")
 	void invalidAudienceIsRejected() throws Exception {
 		assertInvalidIdentityToken(
 				identityToken(SUBJECT, APPLE_ISSUER, "another-client", NOW.plusSeconds(300), NONCE, applePrivateKey),
 				NONCE);
 	}
 
+	/** 만료 시각이 지난 identity token을 거부하는지 검증한다. */
 	@Test
+	@DisplayName("만료된 identity token은 거부된다")
 	void expiredTokenIsRejected() throws Exception {
 		assertInvalidIdentityToken(
 				identityToken(SUBJECT, APPLE_ISSUER, CLIENT_ID, NOW.minusSeconds(1), NONCE, applePrivateKey), NONCE);
 	}
 
+	/** 로그인 요청과 identity token의 nonce가 다르면 거부하는지 검증한다. */
 	@Test
+	@DisplayName("nonce가 다른 identity token은 거부된다")
 	void mismatchedNonceIsRejected() throws Exception {
 		assertInvalidIdentityToken(
 				identityToken(SUBJECT, APPLE_ISSUER, CLIENT_ID, NOW.plusSeconds(300), "another-nonce", applePrivateKey),
 				NONCE);
 	}
 
+	/** 인가 코드 교환 결과와 앱이 전달한 identity token의 subject 일치를 검증한다. */
 	@Test
+	@DisplayName("인가 코드와 identity token의 subject가 다르면 거부된다")
 	void authorizationCodeSubjectMismatchIsRejected() throws Exception {
 		String identityToken = identityToken(SUBJECT, APPLE_ISSUER, CLIENT_ID, NOW.plusSeconds(300), NONCE,
 				applePrivateKey);
@@ -140,7 +155,9 @@ class AppleSocialCredentialVerifierTests {
 		server.verify();
 	}
 
+	/** Apple 토큰 API의 인증 거절을 사용자 인증 실패로 분류하는지 검증한다. */
 	@Test
+	@DisplayName("Apple 인증 거절은 인증 실패로 분류된다")
 	void appleAuthenticationRejectionIsClassifiedAsAuthenticationFailure() throws Exception {
 		String identityToken = identityToken(SUBJECT, APPLE_ISSUER, CLIENT_ID, NOW.plusSeconds(300), NONCE,
 				applePrivateKey);
@@ -154,7 +171,9 @@ class AppleSocialCredentialVerifierTests {
 		server.verify();
 	}
 
+	/** Apple 공개 키 API의 서버 오류를 제공자 장애로 분류하는지 검증한다. */
 	@Test
+	@DisplayName("Apple 공개 키 API 서버 오류는 제공자 장애로 분류된다")
 	void appleKeysServerErrorIsClassifiedAsProviderUnavailable() throws Exception {
 		String identityToken = identityToken(SUBJECT, APPLE_ISSUER, CLIENT_ID, NOW.plusSeconds(300), NONCE,
 				applePrivateKey);
@@ -166,7 +185,9 @@ class AppleSocialCredentialVerifierTests {
 		server.verify();
 	}
 
+	/** Apple 토큰 API의 서버 오류를 제공자 장애로 분류하는지 검증한다. */
 	@Test
+	@DisplayName("Apple 토큰 API 서버 오류는 제공자 장애로 분류된다")
 	void appleTokenServerErrorIsClassifiedAsProviderUnavailable() throws Exception {
 		String identityToken = identityToken(SUBJECT, APPLE_ISSUER, CLIENT_ID, NOW.plusSeconds(300), NONCE,
 				applePrivateKey);
@@ -179,7 +200,9 @@ class AppleSocialCredentialVerifierTests {
 		server.verify();
 	}
 
+	/** Apple 토큰 API의 네트워크 오류를 제공자 장애로 분류하는지 검증한다. */
 	@Test
+	@DisplayName("Apple 토큰 API 네트워크 오류는 제공자 장애로 분류된다")
 	void appleTokenNetworkFailureIsClassifiedAsProviderUnavailable() throws Exception {
 		String identityToken = identityToken(SUBJECT, APPLE_ISSUER, CLIENT_ID, NOW.plusSeconds(300), NONCE,
 				applePrivateKey);
@@ -192,7 +215,9 @@ class AppleSocialCredentialVerifierTests {
 		server.verify();
 	}
 
+	/** 네트워크 오류 응답이 인증 정보 원문을 노출하지 않는지 검증한다. */
 	@Test
+	@DisplayName("네트워크 오류는 인증 정보를 노출하지 않는다")
 	void networkFailureIsClassifiedAsProviderUnavailableWithoutExposingCredentials() throws Exception {
 		String identityToken = identityToken(SUBJECT, APPLE_ISSUER, CLIENT_ID, NOW.plusSeconds(300), NONCE,
 				applePrivateKey);
@@ -207,14 +232,18 @@ class AppleSocialCredentialVerifierTests {
 		server.verify();
 	}
 
+	/** 빈 Apple 인증 정보를 외부 호출 전에 거부하는지 검증한다. */
 	@Test
+	@DisplayName("빈 Apple 인증 정보는 외부 호출 없이 거부된다")
 	void blankCredentialIsRejectedWithoutCallingApple() {
 		assertThrows(SocialAuthenticationFailedException.class,
 				() -> verifier.verify(new AppleSocialCredential("", "", "")));
 		server.verify();
 	}
 
+	/** Credential 문자열 표현에 인가 코드와 token, nonce가 포함되지 않는지 검증한다. */
 	@Test
+	@DisplayName("Credential의 문자열 표현은 인증 정보를 노출하지 않는다")
 	void credentialStringDoesNotExposeSecrets() {
 		AppleSocialCredential credential = new AppleSocialCredential(AUTHORIZATION_CODE, "identity-token", NONCE);
 
