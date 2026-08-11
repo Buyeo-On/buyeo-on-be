@@ -13,6 +13,7 @@ services:
       FLYWAY_URL: ${FLYWAY_URL:?FLYWAY_URL is required}
       FLYWAY_USERNAME: ${FLYWAY_USERNAME:?FLYWAY_USERNAME is required}
       FLYWAY_PASSWORD: ${FLYWAY_PASSWORD:?FLYWAY_PASSWORD is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=75.0}
     expose:
       - "8080"
