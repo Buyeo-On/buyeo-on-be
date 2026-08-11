@@ -70,7 +70,7 @@ iOS Flutter
 - MVP에서는 Flyway DDL과 애플리케이션 DML에 하나의 PostgreSQL Role을 사용한다. RDS 관리자 계정은 최초 bootstrap에만 사용하고 애플리케이션에 제공하지 않는다.
 - 운영 PostGIS 확장은 최초 애플리케이션 배포 전에 인프라 bootstrap 단계에서 설치한다.
 - 호환 가능한 단계적 마이그레이션을 사용하고 운영에서 자동 down migration을 하지 않는다.
-- `V5__replace_public_image_urls_with_keys.sql`은 운영 시작 전 공개 이미지 저장 모델을 확정하는 pre-production boundary다. V5를 적용한 앱을 최초 운영 기준 SHA로 삼으며 그 이전 앱으로의 rollback은 지원하지 않는다.
+- `V5__replace_public_image_urls_with_keys.sql`은 최초 production 배포 전에 한 번만 적용하는 비호환 migration이다. V5를 적용한 앱을 최초 운영 기준 SHA로 삼으며 그 이전 앱으로의 rollback은 지원하지 않는다.
 - MVP의 장소·미션 예시 카탈로그는 버전 관리되는 Flyway 시드로 로컬·CI·운영에 동일하게 적용한다. 별도의 정식 운영 콘텐츠 관리·갱신 절차를 마련하기 전까지 임시 데이터로 사용한다.
 - 애플리케이션은 `Instant`, DB는 `timestamptz`, 서버·DB 시스템 시간대는 UTC를 사용한다. 사용자 표시와 날짜 판정만 `Asia/Seoul`로 변환한다.
 - RDS 자동 백업은 7일 보존하고 PITR과 삭제 방지를 활성화한다. RDS 삭제 절차에서는 이름이 지정된 최종 Snapshot 생성과 완료를 확인한다.
