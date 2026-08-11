@@ -80,14 +80,14 @@ CREATE TABLE term_consents (
 CREATE TABLE card_characters (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(), -- 캐릭터 ID
     name text NOT NULL, -- 캐릭터 이름
-    image_url text NOT NULL -- 캐릭터 이미지 URL
+    image_key text NOT NULL CHECK (image_key LIKE 'public/%') -- 캐릭터 이미지 객체 키
 );
 
 -- 디지털 군민증에서 선택할 카드 테마 목록이다.
 CREATE TABLE card_themes (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(), -- 테마 ID
     name text NOT NULL, -- 테마 이름
-    image_url text NOT NULL -- 테마 이미지 URL
+    image_key text NOT NULL CHECK (image_key LIKE 'public/%') -- 테마 이미지 객체 키
 );
 
 -- 마이페이지와 군민증에 표시할 회원 프로필이다.
@@ -123,7 +123,7 @@ CREATE TABLE places (
     summary text, -- 목록용 요약
     description text, -- 상세 설명
     address text, -- 주소
-    image_url text, -- 대표 이미지 URL
+    image_key text CHECK (image_key IS NULL OR image_key LIKE 'public/%'), -- 대표 이미지 객체 키
     location geography(Point, 4326) NOT NULL, -- 장소 위치
     source_name text, -- 관광데이터 제공처
     external_id text, -- 제공처가 부여한 장소 식별자
@@ -279,7 +279,7 @@ CREATE TABLE badges (
     category badge_category NOT NULL, -- 배지 분야
     name text NOT NULL, -- 배지명
     description text NOT NULL, -- 배지 설명
-    image_url text, -- 배지 이미지 URL
+    image_key text CHECK (image_key IS NULL OR image_key LIKE 'public/%'), -- 배지 이미지 객체 키
     condition_text text NOT NULL, -- 사용자에게 표시할 달성 조건
     retired_at timestamptz -- 신규 지급 중단 시각
 );

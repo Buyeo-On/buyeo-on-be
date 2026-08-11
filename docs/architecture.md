@@ -13,7 +13,7 @@ iOS Flutter
 ├─ Kakao Map SDK
 ├─ FCM
 ├─ S3 Presigned PUT
-└─ CloudFront Signed URL → Private S3
+└─ S3 Presigned GET
 ```
 ## 클라이언트
 - Flutter의 현재 지원 플랫폼은 iOS다. Android 등은 추후 확장한다.
@@ -70,26 +70,29 @@ iOS Flutter
 - MVP에서는 Flyway DDL과 애플리케이션 DML에 하나의 PostgreSQL Role을 사용한다. RDS 관리자 계정은 최초 bootstrap에만 사용하고 애플리케이션에 제공하지 않는다.
 - 운영 PostGIS 확장은 최초 애플리케이션 배포 전에 인프라 bootstrap 단계에서 설치한다.
 - 호환 가능한 단계적 마이그레이션을 사용하고 운영에서 자동 down migration을 하지 않는다.
+- `V5__replace_public_image_urls_with_keys.sql`은 운영 시작 전 공개 이미지 저장 모델을 확정하는 pre-production boundary다. V5를 적용한 앱을 최초 운영 기준 SHA로 삼으며 그 이전 앱으로의 rollback은 지원하지 않는다.
 - MVP의 장소·미션 예시 카탈로그는 버전 관리되는 Flyway 시드로 로컬·CI·운영에 동일하게 적용한다. 별도의 정식 운영 콘텐츠 관리·갱신 절차를 마련하기 전까지 임시 데이터로 사용한다.
 - 애플리케이션은 `Instant`, DB는 `timestamptz`, 서버·DB 시스템 시간대는 UTC를 사용한다. 사용자 표시와 날짜 판정만 `Asia/Seoul`로 변환한다.
-- RDS 자동 백업은 7일 보존하고 PITR, 삭제 방지와 삭제 시 최종 스냅샷을 활성화한다.
+- RDS 자동 백업은 7일 보존하고 PITR과 삭제 방지를 활성화한다. RDS 삭제 절차에서는 이름이 지정된 최종 Snapshot 생성과 완료를 확인한다.
 - Multi-AZ와 다중 리전은 MVP에서 사용하지 않는다.
 ## 이미지와 정적 콘텐츠
-- 공개 정적 콘텐츠와 비공개 미션 사진은 버킷 또는 prefix를 분리한다.
-- S3는 Block Public Access와 SSE-S3를 사용하고 CloudFront만 OAC로 읽는다.
+- 공개 정적 콘텐츠와 비공개 미션 사진은 하나의 Private S3 Bucket에서 `public/`과 `private/` prefix로 분리한다.
+- S3는 Block Public Access와 SSE-S3를 사용하고 Bucket Policy로 비 HTTPS 요청을 거부하며 객체를 공개 S3 URL로 제공하지 않는다.
 - 미션 사진은 Presigned PUT URL로 직접 업로드하고 서버가 소유자, 크기와 MIME 타입을 검증한다.
-- 사진 조회 권한 확인 후 AWS SDK v2 `CloudFrontUtilities`가 10분 유효한 Signed URL을 로컬에서 생성한다.
-- CloudFront는 Trusted Key Group의 공개 키를 사용하고 비공개 키는 Parameter Store에서 로드한다.
+- 공개 콘텐츠는 콘텐츠 API, 비공개 사진은 소유권 확인이 필요한 사진 API가 각각 10분 유효한 S3 Presigned GET URL을 발급한다.
+- 공개 콘텐츠 테이블에는 만료되는 Presigned URL 대신 `public/` prefix의 S3 객체 키를 `image_key`로 저장한다.
+- Presigned GET URL은 만료 전까지 소지자가 사용할 수 있는 bearer URL이므로 로그에 기록하거나 외부로 공유하지 않는다.
 - 24시간 안에 제출되지 않은 고아 사진, 탈퇴 후 30일이 지난 사진과 실패한 multipart upload를 정리한다.
-- 비공개 사진 버킷은 개인정보 삭제를 위해 버전 관리를 사용하지 않는다.
+- 개인정보 삭제 시 이전 객체 버전이 남지 않도록 이 Bucket은 버전 관리를 사용하지 않는다.
 ## 배포와 인프라 관리
 - 운영은 EIP가 연결된 단일 EC2에서 Nginx와 Spring 컨테이너를 Docker Compose로 실행한다.
 - EC2는 stateless하며 영구 데이터는 RDS·S3·CloudWatch에만 저장한다.
 - GitHub Actions가 테스트 후 커밋 SHA 태그의 단일 애플리케이션 이미지를 ECR에 push한다.
 - EC2는 SSM 명령으로 이미지를 pull하고 Docker Compose를 실행하며 애플리케이션 시작 과정에서 Flyway를 적용한다.
-- `/actuator/health`가 실패하면 이전 커밋 SHA 이미지로 자동 롤백한다.
-- AWS 인프라는 Terraform으로 관리하고 Remote State는 암호화·버전 관리·잠금이 적용된 S3에 저장한다.
-- 운영 `terraform apply`, ECR push와 배포는 GitHub Actions만 수행하고 하나의 GitHub Automation OIDC IAM Role을 사용한다.
+- 최초 운영 기준 SHA 이후 배포는 `/actuator/health`가 실패하면 직전 운영 SHA 이미지로 자동 롤백한다.
+- 배포가 끝나면 GitHub Actions가 Cloudflare를 경유해 공개 health endpoint를 확인한다.
+- AWS 인프라는 전용 IAM User로 접근한 운영 담당자가 [AWS Console 구성 Runbook](./aws-console-provisioning.md)에 따라 Console에서 생성·변경하고 리소스 목록과 변경 이력을 문서에 남긴다. IAM User는 MFA와 Console 비밀번호만 사용하고 Access Key를 만들지 않는다.
+- ECR push와 SSM 배포는 GitHub Actions만 수행하고 하나의 GitHub Automation OIDC IAM Role을 사용한다.
 - GitHub Automation Role과 EC2 Instance Role은 신뢰 주체가 다르므로 분리하며 장기 AWS Access Key를 사용하지 않는다.
 - AWS에는 운영 환경만 상시 유지한다. 로컬 개발은 개발용 Supabase와 Git에서 제외한 `.env`를, CI는 임시 PostgreSQL/PostGIS를 사용한다.
 ## CI 품질 게이트
@@ -103,10 +106,9 @@ iOS Flutter
 ## 관측성과 복구
 - SLF4J 구조화 로그를 사용하고 개발은 일반 로그, 운영은 JSON 로그로 출력한다.
 - Spring과 Nginx 로그를 CloudWatch Logs에 전송해 30일 보관한다.
-- 액세스 토큰, OAuth 코드, Signed URL과 개인정보는 로그에 기록하지 않는다.
+- 액세스 토큰, OAuth 코드, Presigned URL과 개인정보는 로그에 기록하지 않는다.
 - CloudWatch Alarm과 SNS 이메일로 EC2 상태, 디스크, 5xx, RDS 저장 공간·연결 수를 감시한다.
 - Docker `HEALTHCHECK`는 Actuator liveness를 확인한다.
-- CloudWatch Synthetics는 5분마다 Cloudflare → Nginx → Spring 공개 헬스 경로를 확인한다.
 - 공개 헬스 응답은 내부 구성과 DB 상세정보를 노출하지 않는다.
 ## 미정·보류
 - 관광공사 데이터 동기화 주기·실행 방식·재시도 정책

@@ -108,6 +108,116 @@ class PostgresSchemaIntegrationTests {
 		}
 	}
 
+	/** V4의 공개 이미지 객체 키가 V5 컬럼 변경 이후에도 보존되는지 검증한다. */
+	@Test
+	@DisplayName("V4의 public 이미지 객체 키는 V5의 image_key로 보존된다")
+	void publicImageKeysArePreservedWhenUpgradingFromV4() throws Exception {
+		String schema = "image_key_upgrade_" + UUID.randomUUID().toString().replace("-", "");
+		String url = POSTGIS.getJdbcUrl();
+		String username = POSTGIS.getUsername();
+		String password = POSTGIS.getPassword();
+		Flyway flyway = Flyway.configure().dataSource(url, username, password).schemas(schema).defaultSchema(schema)
+				.target(MigrationVersion.fromVersion("4")).cleanDisabled(false).load();
+
+		try {
+			flyway.migrate();
+			try (Connection connection = DriverManager.getConnection(url, username, password);
+					Statement statement = connection.createStatement()) {
+				connection.setSchema(schema);
+				statement.executeUpdate("""
+						INSERT INTO card_characters (name, image_url)
+						VALUES ('Character', 'public/characters/character.webp');
+						INSERT INTO card_themes (name, image_url)
+						VALUES ('Theme', 'public/themes/theme.webp');
+						INSERT INTO places (category, name, image_url, location)
+						VALUES ('HERITAGE', 'Image place', 'public/places/place.webp',
+						        public.ST_SetSRID(public.ST_MakePoint(126.91, 36.28), 4326)::public.geography);
+						INSERT INTO badges (category, name, description, image_url, condition_text)
+						VALUES ('EXPLORATION', 'Badge', 'Description', 'public/badges/badge.webp', 'Condition');
+						""");
+			}
+
+			Flyway.configure().dataSource(url, username, password).schemas(schema).defaultSchema(schema).load()
+					.migrate();
+
+			try (Connection connection = DriverManager.getConnection(url, username, password);
+					Statement statement = connection.createStatement()) {
+				connection.setSchema(schema);
+				try (ResultSet resultSet = statement.executeQuery("""
+						SELECT count(*)
+						FROM (
+						    SELECT image_key FROM card_characters WHERE image_key LIKE 'public/%'
+						    UNION ALL
+						    SELECT image_key FROM card_themes WHERE image_key LIKE 'public/%'
+						    UNION ALL
+						    SELECT image_key FROM places WHERE image_key LIKE 'public/%'
+						    UNION ALL
+						    SELECT image_key FROM badges WHERE image_key LIKE 'public/%'
+						) public_images
+						""")) {
+					assertThat(resultSet.next()).isTrue();
+					assertThat(resultSet.getLong(1)).isEqualTo(4L);
+				}
+			}
+		} finally {
+			flyway.clean();
+		}
+	}
+
+	/** 기존 공개 이미지 URL이 남아 있으면 V5 전체가 원자적으로 실패하는지 검증한다. */
+	@Test
+	@DisplayName("V4에 공개 이미지 URL이 남아 있으면 V5를 적용하지 않는다")
+	void legacyPublicImageUrlRejectsV5Atomically() throws Exception {
+		String schema = "image_url_rejection_" + UUID.randomUUID().toString().replace("-", "");
+		String url = POSTGIS.getJdbcUrl();
+		String username = POSTGIS.getUsername();
+		String password = POSTGIS.getPassword();
+		Flyway flyway = Flyway.configure().dataSource(url, username, password).schemas(schema).defaultSchema(schema)
+				.target(MigrationVersion.fromVersion("4")).cleanDisabled(false).load();
+
+		try {
+			flyway.migrate();
+			try (Connection connection = DriverManager.getConnection(url, username, password);
+					Statement statement = connection.createStatement()) {
+				connection.setSchema(schema);
+				statement.executeUpdate("""
+						INSERT INTO places (category, name, image_url, location)
+						VALUES ('HERITAGE', 'Legacy image place', 'https://example.com/place.webp',
+						        public.ST_SetSRID(public.ST_MakePoint(126.91, 36.28), 4326)::public.geography)
+						""");
+			}
+
+			Flyway latest = Flyway.configure().dataSource(url, username, password).schemas(schema).defaultSchema(schema)
+					.load();
+			assertThatThrownBy(latest::migrate)
+					.hasMessageContaining("Public image URLs must be replaced with public/ S3 object keys before V5");
+
+			try (Connection connection = DriverManager.getConnection(url, username, password);
+					Statement statement = connection.createStatement()) {
+				connection.setSchema(schema);
+				try (ResultSet resultSet = statement.executeQuery("""
+						SELECT
+						    count(*) FILTER (WHERE column_name = 'image_url') AS image_url_columns,
+						    count(*) FILTER (WHERE column_name = 'image_key') AS image_key_columns
+						FROM information_schema.columns
+						WHERE table_schema = current_schema()
+						  AND table_name IN ('card_characters', 'card_themes', 'places', 'badges')
+						""")) {
+					assertThat(resultSet.next()).isTrue();
+					assertThat(resultSet.getLong("image_url_columns")).isEqualTo(4L);
+					assertThat(resultSet.getLong("image_key_columns")).isZero();
+				}
+				try (ResultSet resultSet = statement
+						.executeQuery("SELECT count(*) FROM flyway_schema_history WHERE version = '5' AND success")) {
+					assertThat(resultSet.next()).isTrue();
+					assertThat(resultSet.getLong(1)).isZero();
+				}
+			}
+		} finally {
+			flyway.clean();
+		}
+	}
+
 	/** 실제 PostgreSQL enum에서 위치에 따라 계산되는 상태가 제거되고 영속 상태만 남았는지 검증한다. */
 	@Test
 	@DisplayName("DB 미션 상태 enum에는 위치와 무관한 영속 상태만 존재한다")
@@ -175,6 +285,31 @@ class PostgresSchemaIntegrationTests {
 		} finally {
 			jdbcTemplate.update("DELETE FROM missions WHERE place_id = ?", placeId);
 			jdbcTemplate.update("DELETE FROM places WHERE id = ?", placeId);
+		}
+	}
+
+	/** 공개 이미지 값이 임시 URL이 아니라 public prefix의 S3 객체 키로 제한되는지 검증한다. */
+	@Test
+	@DisplayName("DB는 공개 이미지에 public prefix의 객체 키만 허용한다")
+	void publicImageKeysRequirePublicPrefix() {
+		UUID validPlaceId = UUID.randomUUID();
+
+		assertThatThrownBy(() -> jdbcTemplate.update("""
+				INSERT INTO places (category, name, image_key, location)
+				VALUES ('HERITAGE', 'Invalid image place', 'https://example.com/image.webp',
+				        ST_SetSRID(ST_MakePoint(126.91, 36.28), 4326)::geography)
+				""")).isInstanceOf(DataIntegrityViolationException.class);
+
+		try {
+			jdbcTemplate.update("""
+					INSERT INTO places (id, category, name, image_key, location)
+					VALUES (?, 'HERITAGE', 'Valid image place', 'public/places/valid.webp',
+					        ST_SetSRID(ST_MakePoint(126.91, 36.28), 4326)::geography)
+					""", validPlaceId);
+			assertThat(jdbcTemplate.queryForObject("SELECT image_key FROM places WHERE id = ?", String.class,
+					validPlaceId)).isEqualTo("public/places/valid.webp");
+		} finally {
+			jdbcTemplate.update("DELETE FROM places WHERE id = ?", validPlaceId);
 		}
 	}
 

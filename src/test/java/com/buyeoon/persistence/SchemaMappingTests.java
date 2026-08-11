@@ -25,6 +25,8 @@ class SchemaMappingTests {
 			.of("src/main/resources/db/migration/V2__add_place_external_id.sql");
 	private static final Path MISSION_CONSTRAINTS_MIGRATION = Path
 			.of("src/main/resources/db/migration/V3__align_mission_constraints.sql");
+	private static final Path PUBLIC_IMAGE_KEYS_MIGRATION = Path
+			.of("src/main/resources/db/migration/V5__replace_public_image_urls_with_keys.sql");
 	private static final Pattern CREATE_TABLE = Pattern.compile("CREATE TABLE ([a-z_]+) ");
 
 	/** 초기 스키마에 후속 마이그레이션을 적용한 정의가 기준 DB 스키마와 같음을 보장한다. */
@@ -51,10 +53,19 @@ class SchemaMappingTests {
 				"    CHECK (", "        (type = 'OX' AND ox_correct_answer IS NOT NULL)",
 				"        OR (type <> 'OX' AND ox_correct_answer IS NULL)", "    ),",
 				"    CHECK (type <> 'PHOTO' OR max_attempts IS NULL)", ");");
+		String publicImageKeySchema = baseline
+				.replace("image_url text NOT NULL -- 캐릭터 이미지 URL",
+						"image_key text NOT NULL CHECK (image_key LIKE 'public/%') -- 캐릭터 이미지 객체 키")
+				.replace("image_url text NOT NULL -- 테마 이미지 URL",
+						"image_key text NOT NULL CHECK (image_key LIKE 'public/%') -- 테마 이미지 객체 키")
+				.replace("image_url text, -- 대표 이미지 URL",
+						"image_key text CHECK (image_key IS NULL OR image_key LIKE 'public/%'), -- 대표 이미지 객체 키")
+				.replace("image_url text, -- 배지 이미지 URL",
+						"image_key text CHECK (image_key IS NULL OR image_key LIKE 'public/%'), -- 배지 이미지 객체 키");
 
 		assertThat(baseline).contains(placeSourceColumns).contains(placeLocationIndex).contains(legacyMissionStatus)
 				.contains(legacyMissionConstraints);
-		assertThat(baseline.replace(placeSourceColumns, placeExternalIdentityColumns)
+		assertThat(publicImageKeySchema.replace(placeSourceColumns, placeExternalIdentityColumns)
 				.replace(placeLocationIndex, placeIndexes).replace(legacyMissionStatus, currentMissionStatus)
 				.replace(legacyMissionConstraints, currentMissionConstraints)).isEqualTo(canonicalSchema);
 	}
@@ -89,6 +100,20 @@ class SchemaMappingTests {
 				.contains("CHECK (external_id IS NULL OR source_name IS NOT NULL)")
 				.contains("CREATE UNIQUE INDEX places_source_external_id_uq")
 				.contains("ON places (source_name, external_id)").contains("WHERE external_id IS NOT NULL");
+	}
+
+	/** 공개 콘텐츠의 영속 값이 만료 URL이 아니라 S3 객체 키로 저장되는지 검증한다. */
+	@Test
+	@DisplayName("공개 콘텐츠 이미지는 URL 대신 S3 객체 키로 저장한다")
+	void publicImagesUseStableObjectKeys() throws IOException {
+		String canonicalSchema = Files.readString(SCHEMA_SOURCE, StandardCharsets.UTF_8);
+		String migration = Files.readString(PUBLIC_IMAGE_KEYS_MIGRATION, StandardCharsets.UTF_8);
+
+		assertThat(canonicalSchema).doesNotContain("image_url").contains("image_key text")
+				.contains("image_key LIKE 'public/%'");
+		assertThat(migration).contains("RENAME COLUMN image_url TO image_key")
+				.contains("Public image URLs must be replaced with public/ S3 object keys before V5")
+				.contains("CHECK (image_key LIKE 'public/%')");
 	}
 
 	/** 기준 스키마의 테이블과 JPA 엔티티가 누락이나 잉여 매핑 없이 일대일로 대응함을 보장한다. */

@@ -40,8 +40,8 @@ public class PlaceEntity {
 	@Column(name = "address", columnDefinition = "text")
 	private String address;
 
-	@Column(name = "image_url", columnDefinition = "text")
-	private String imageUrl;
+	@Column(name = "image_key", columnDefinition = "text")
+	private String imageKey;
 
 	@JdbcTypeCode(SqlTypes.GEOGRAPHY)
 	@Column(name = "location", nullable = false, columnDefinition = "geography(Point, 4326)")
@@ -56,17 +56,8 @@ public class PlaceEntity {
 	@Column(name = "source_url", columnDefinition = "text")
 	private String sourceUrl;
 
-	public static PlaceEntity create(
-			PlaceCategory category,
-			String name,
-			String summary,
-			String description,
-			String address,
-			String imageUrl,
-			Point location,
-			String sourceName,
-			String externalId,
-			String sourceUrl) {
+	public static PlaceEntity create(PlaceCategory category, String name, String summary, String description,
+			String address, String imageKey, Point location, String sourceName, String externalId, String sourceUrl) {
 		location.setSRID(4326);
 		PlaceEntity place = new PlaceEntity();
 		place.category = category;
@@ -74,7 +65,7 @@ public class PlaceEntity {
 		place.summary = summary;
 		place.description = description;
 		place.address = address;
-		place.imageUrl = imageUrl;
+		place.imageKey = imageKey;
 		place.location = location;
 		place.sourceName = sourceName;
 		place.externalId = externalId;
