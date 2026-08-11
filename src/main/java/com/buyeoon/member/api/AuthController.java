@@ -66,10 +66,10 @@ public class AuthController {
 			throw new InvalidSocialLoginRequestException();
 		}
 		JsonNode value = request.get(property);
-		if (value == null || !value.isTextual() || value.textValue().isBlank()) {
+		if (value == null || !value.isString() || value.stringValue().isBlank()) {
 			throw new InvalidSocialLoginRequestException();
 		}
-		return value.textValue();
+		return value.stringValue();
 	}
 
 	private void requireProperties(JsonNode request, Set<String> properties) {

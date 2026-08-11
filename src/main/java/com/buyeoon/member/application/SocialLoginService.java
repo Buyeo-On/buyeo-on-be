@@ -35,7 +35,7 @@ public class SocialLoginService {
 			RefreshTokenService refreshTokenService, AccessTokenService accessTokenService,
 			MemberQueryService memberQueryService, PlatformTransactionManager transactionManager) {
 		this.jdbcOperations = jdbcOperations;
-		this.verifiers = verifiers;
+		this.verifiers = List.copyOf(verifiers);
 		this.refreshTokenService = refreshTokenService;
 		this.accessTokenService = accessTokenService;
 		this.memberQueryService = memberQueryService;

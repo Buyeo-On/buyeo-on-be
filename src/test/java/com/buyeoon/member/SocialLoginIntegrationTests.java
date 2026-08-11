@@ -26,6 +26,7 @@ import java.sql.SQLException;
 import java.time.Duration;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -297,20 +298,13 @@ class SocialLoginIntegrationTests {
 	}
 
 	private ResultActions kakaoLogin(String accessToken) throws Exception {
-		return socialLogin("""
-				{"provider":"KAKAO","accessToken":"%s"}
-				""".formatted(accessToken));
+		return socialLogin("{\"provider\":\"KAKAO\",\"accessToken\":\"%s\"}".formatted(accessToken));
 	}
 
 	private ResultActions appleLogin(String authorizationCode) throws Exception {
-		return socialLogin("""
-				{
-				  "provider":"APPLE",
-				  "authorizationCode":"%s",
-				  "identityToken":"apple-identity-token",
-				  "nonce":"apple-nonce"
-				}
-				""".formatted(authorizationCode));
+		return socialLogin(("{\"provider\":\"APPLE\",\"authorizationCode\":\"%s\","
+				+ "\"identityToken\":\"apple-identity-token\",\"nonce\":\"apple-nonce\"}")
+				.formatted(authorizationCode));
 	}
 
 	private ResultActions socialLogin(String requestBody) throws Exception {
@@ -366,7 +360,7 @@ class SocialLoginIntegrationTests {
 	}
 
 	private long count(String table) {
-		return jdbcTemplate.queryForObject("SELECT count(*) FROM " + table, Long.class);
+		return Objects.requireNonNull(jdbcTemplate.queryForObject("SELECT count(*) FROM " + table, Long.class));
 	}
 
 	private String hash(String secret) throws Exception {
