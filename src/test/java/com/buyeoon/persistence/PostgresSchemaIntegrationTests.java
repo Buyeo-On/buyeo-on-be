@@ -42,13 +42,13 @@ import org.testcontainers.utility.DockerImageName;
 @Testcontainers
 class PostgresSchemaIntegrationTests {
 
-	private static final String APPLICATION_USERNAME = "buyeoon_application";
+	private static final String APPLICATION_USERNAME = "buyeoon_app";
 	private static final String APPLICATION_PASSWORD = "application-test-password";
 
 	@Container
 	private static final PostgreSQLContainer POSTGIS = new PostgreSQLContainer(
 			DockerImageName.parse("postgis/postgis:17-3.5").asCompatibleSubstituteFor("postgres"))
-			.withDatabaseName("buyeoon_test").withUsername("buyeoon_migrator").withPassword("migrator-test-password")
+			.withDatabaseName("buyeoon_test").withUsername("buyeoon_admin").withPassword("admin-test-password")
 			.withInitScript("db/test-postgis-init.sql");
 
 	@Autowired
@@ -116,6 +116,21 @@ class PostgresSchemaIntegrationTests {
 				  AND namespace.nspname = current_schema()
 				ORDER BY enum_value.enumsortorder
 				""", String.class)).containsExactly("AVAILABLE", "EXHAUSTED", "COMPLETED");
+	}
+
+	@Test
+	void migrationAndApplicationUseSameDatabaseAccount() {
+		assertThat(jdbcTemplate.queryForObject("SELECT current_user", String.class)).isEqualTo(APPLICATION_USERNAME);
+		assertThat(jdbcTemplate.queryForObject("""
+				SELECT tableowner
+				FROM pg_tables
+				WHERE schemaname = current_schema() AND tablename = 'members'
+				""", String.class)).isEqualTo(APPLICATION_USERNAME);
+		assertThat(jdbcTemplate.queryForObject("""
+				SELECT rolsuper
+				FROM pg_roles
+				WHERE rolname = current_user
+				""", Boolean.class)).isFalse();
 	}
 
 	@Test
@@ -188,9 +203,6 @@ class PostgresSchemaIntegrationTests {
 		registry.add("spring.datasource.username", () -> APPLICATION_USERNAME);
 		registry.add("spring.datasource.password", () -> APPLICATION_PASSWORD);
 		registry.add("spring.flyway.enabled", () -> true);
-		registry.add("spring.flyway.url", POSTGIS::getJdbcUrl);
-		registry.add("spring.flyway.user", POSTGIS::getUsername);
-		registry.add("spring.flyway.password", POSTGIS::getPassword);
 		registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
 		registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.PostgreSQLDialect");
 	}

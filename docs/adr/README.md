@@ -8,7 +8,7 @@
 - [ADR-004: 상태 컬럼은 명확한 생명주기가 있을 때만 둔다](./adr-004-explicit-lifecycle-status.md)
 - [ADR-006: 배포와 인프라는 GitHub Actions·ECR·SSM·Terraform으로 관리한다](./adr-006-deployment-and-infrastructure.md)
 - [ADR-005: MVP는 단일 EC2와 Private RDS로 운영한다](./adr-005-single-ec2-private-rds.md)
-- [ADR-007: DB 변경과 운영 권한을 분리한다](./adr-007-database-permissions.md)
+- [ADR-007: MVP는 애플리케이션 시작 시 Flyway를 실행한다](./adr-007-database-permissions.md)
 - [ADR-012: 서비스 세션은 단기 JWT와 회전형 Refresh Token으로 관리한다](./adr-012-jwt-refresh-token-session.md)
 - [ADR-010: 백엔드는 모듈러 모놀리스와 인프로세스 작업으로 시작한다](./adr-010-modular-monolith.md)
 - [ADR-009: 운영 관측성은 CloudWatch로 통합한다](./adr-009-cloudwatch-observability.md)

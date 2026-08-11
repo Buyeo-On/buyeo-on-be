@@ -59,10 +59,9 @@ iOS Flutter
 - AWS RDS PostgreSQL과 PostGIS를 사용한다.
 - 장소는 `geography(Point, 4326)`와 GiST 인덱스로 저장한다.
 - 운영 JPA는 `ddl-auto=validate`를 사용한다.
-- 배포 단계에서 Flyway 마이그레이션을 먼저 실행하고 성공한 경우에만 애플리케이션을 시작한다.
-- PostgreSQL Role은 DDL 권한을 가진 `migrator`와 제한된 DML 권한의 `application`으로 분리한다.
-- Role 생성과 application Role의 DML 권한 부여는 Flyway가 아니라 인프라 provisioning 단계에서 수행한다.
-- 운영 PostGIS 확장은 권한이 분리된 Flyway 실행 전에 인프라 bootstrap 단계에서 설치한다.
+- Spring Boot가 시작될 때 런타임 DB Role로 Flyway 마이그레이션을 실행하며 실패하면 애플리케이션 시작도 실패한다.
+- MVP에서는 Flyway DDL과 애플리케이션 DML에 하나의 PostgreSQL Role을 사용한다. RDS 관리자 계정은 최초 bootstrap에만 사용하고 애플리케이션에 제공하지 않는다.
+- 운영 PostGIS 확장은 최초 애플리케이션 배포 전에 인프라 bootstrap 단계에서 설치한다.
 - 호환 가능한 단계적 마이그레이션을 사용하고 운영에서 자동 down migration을 하지 않는다.
 - MVP의 장소·미션 예시 카탈로그는 버전 관리되는 Flyway 시드로 로컬·CI·운영에 동일하게 적용한다. 별도의 정식 운영 콘텐츠 관리·갱신 절차를 마련하기 전까지 임시 데이터로 사용한다.
 - 애플리케이션은 `Instant`, DB는 `timestamptz`, 서버·DB 시스템 시간대는 UTC를 사용한다. 사용자 표시와 날짜 판정만 `Asia/Seoul`로 변환한다.
@@ -79,13 +78,13 @@ iOS Flutter
 ## 배포와 인프라 관리
 - 운영은 EIP가 연결된 단일 EC2에서 Nginx와 Spring 컨테이너를 Docker Compose로 실행한다.
 - EC2는 stateless하며 영구 데이터는 RDS·S3·CloudWatch에만 저장한다.
-- GitHub Actions가 테스트 후 커밋 SHA 태그의 Docker 이미지를 ECR에 push한다.
-- EC2는 SSM 명령으로 이미지를 pull하고 Docker Compose를 실행한다.
+- GitHub Actions가 테스트 후 커밋 SHA 태그의 단일 애플리케이션 이미지를 ECR에 push한다.
+- EC2는 SSM 명령으로 이미지를 pull하고 Docker Compose를 실행하며 애플리케이션 시작 과정에서 Flyway를 적용한다.
 - `/actuator/health`가 실패하면 이전 커밋 SHA 이미지로 자동 롤백한다.
 - AWS 인프라는 Terraform으로 관리하고 Remote State는 암호화·버전 관리·잠금이 적용된 S3에 저장한다.
-- 운영 `terraform apply`와 배포는 GitHub Actions만 수행하고 AWS 인증은 OIDC IAM Role을 사용한다.
-- 배포 Role과 Terraform Role을 분리하고 장기 AWS Access Key를 사용하지 않는다.
-- AWS에는 운영 환경만 상시 유지한다. 로컬은 Docker Compose, CI는 임시 PostgreSQL/PostGIS를 사용한다.
+- 운영 `terraform apply`, ECR push와 배포는 GitHub Actions만 수행하고 하나의 GitHub Automation OIDC IAM Role을 사용한다.
+- GitHub Automation Role과 EC2 Instance Role은 신뢰 주체가 다르므로 분리하며 장기 AWS Access Key를 사용하지 않는다.
+- AWS에는 운영 환경만 상시 유지한다. 로컬 개발은 개발용 Supabase와 Git에서 제외한 `.env`를, CI는 임시 PostgreSQL/PostGIS를 사용한다.
 ## CI 품질 게이트
 - Spring 단위·통합 테스트
 - 임시 PostgreSQL/PostGIS에 Flyway 전체 마이그레이션 적용
