@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -75,7 +76,12 @@ class MemberMeIntegrationTests {
 		jdbcTemplate.update("DELETE FROM members");
 	}
 
+	/**
+	 * 프로필을 생성하지 않은 ACTIVE 회원이 GET /members/me를 호출하면
+	 * displayName, characterId는 null이고 requiredTermsAgreed, citizenCardIssued는 false로 반환된다.
+	 */
 	@Test
+	@DisplayName("프로필이 없는 활성 회원은 초기 온보딩 상태를 반환한다")
 	void activeMemberWithoutProfileGetsInitialOnboardingState() throws Exception {
 		UUID memberId = UUID.randomUUID();
 		UUID sessionId = UUID.randomUUID();
@@ -96,7 +102,12 @@ class MemberMeIntegrationTests {
 				.andExpect(jsonPath("$.data.createdAt").value("2026-08-11T12:00:00+09:00"));
 	}
 
+	/**
+	 * 프로필, 약관 동의, 군민증이 모두 설정된 회원이 GET /members/me를 호출하면
+	 * displayName, characterId, requiredTermsAgreed, citizenCardIssued가 모두 최신 상태로 반환된다.
+	 */
 	@Test
+	@DisplayName("최신 프로필·약관·군민증 상태를 반환한다")
 	void latestProfileTermsAndCitizenCardStateIsReturned() throws Exception {
 		UUID memberId = UUID.randomUUID();
 		UUID sessionId = UUID.randomUUID();
@@ -129,7 +140,12 @@ class MemberMeIntegrationTests {
 				.andExpect(jsonPath("$.data.citizenCardIssued").value(true));
 	}
 
+	/**
+	 * 발급된 액세스 토큰을 JWT 디코딩하면 subject에 memberId,
+	 * sid 클레임에 sessionId가 포함되고 만료 시간이 정확히 1시간이다.
+	 */
 	@Test
+	@DisplayName("액세스 토큰은 회원 ID·세션 ID·1시간 만료를 포함한다")
 	void accessTokenContainsMemberSessionAndOneHourLifetime() {
 		UUID memberId = UUID.randomUUID();
 		UUID sessionId = UUID.randomUUID();
@@ -144,7 +160,12 @@ class MemberMeIntegrationTests {
 				.isEqualTo(Duration.ofHours(1));
 	}
 
+	/**
+	 * Authorization 헤더가 없거나, JWT 형식이 아니거나, 서명이 변조되었거나,
+	 * 만료된 액세스 토큰은 모두 401로 거부된다.
+	 */
 	@Test
+	@DisplayName("없음·형식 오류·서명 불일치·만료된 액세스 토큰은 거부된다")
 	void missingMalformedInvalidSignatureAndExpiredTokensAreRejected() throws Exception {
 		UUID memberId = UUID.randomUUID();
 		UUID sessionId = UUID.randomUUID();
@@ -162,7 +183,12 @@ class MemberMeIntegrationTests {
 		assertUnauthorized(expiredToken(memberId, sessionId));
 	}
 
+	/**
+	 * 액세스 토큰의 sid가 DB에 존재하지 않거나, 해당 세션이 만료되었거나,
+	 * revoked_at이 설정되어 있으면 401로 거부된다.
+	 */
 	@Test
+	@DisplayName("세션 없음·만료·폐기된 액세스 토큰은 거부된다")
 	void missingExpiredAndRevokedSessionsAreRejected() throws Exception {
 		UUID memberId = UUID.randomUUID();
 		insertMember(memberId, "ACTIVE", Instant.now());
@@ -178,7 +204,12 @@ class MemberMeIntegrationTests {
 		assertUnauthorized(accessTokenService.issue(memberId, revokedSessionId));
 	}
 
+	/**
+	 * 회원 상태가 WITHDRAWN이면 유효한 액세스 토큰으로
+	 * GET /members/me를 호출해도 401로 거부된다.
+	 */
 	@Test
+	@DisplayName("탈퇴 회원의 액세스 토큰은 거부된다")
 	void withdrawnMemberIsRejected() throws Exception {
 		UUID memberId = UUID.randomUUID();
 		UUID sessionId = UUID.randomUUID();
@@ -191,7 +222,12 @@ class MemberMeIntegrationTests {
 		assertUnauthorized(accessTokenService.issue(memberId, sessionId));
 	}
 
+	/**
+	 * 액세스 토큰으로 GET /members/me를 호출하면 응답의 memberId는
+	 * 반드시 토큰에 포함된 회원의 ID와 일치하고 다른 회원의 ID는 반환되지 않는다.
+	 */
 	@Test
+	@DisplayName("토큰은 자신의 회원 정보만 조회할 수 있다")
 	void tokenCanOnlyReadItsOwnMember() throws Exception {
 		UUID authenticatedMemberId = UUID.randomUUID();
 		UUID otherMemberId = UUID.randomUUID();
