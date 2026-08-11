@@ -1,0 +1,30 @@
+# Local and CI verification stack. Production adds TLS, immutable ECR images,
+# and a separate one-shot migration step through deployment configuration.
+services:
+  app:
+    image: ${APP_IMAGE:-buyeo-on-be-app:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DB_URL: ${DB_URL:?DB_URL is required}
+      DB_USERNAME: ${DB_USERNAME:?DB_USERNAME is required}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      FLYWAY_URL: ${FLYWAY_URL:?FLYWAY_URL is required}
+      FLYWAY_USERNAME: ${FLYWAY_USERNAME:?FLYWAY_USERNAME is required}
+      FLYWAY_PASSWORD: ${FLYWAY_PASSWORD:?FLYWAY_PASSWORD is required}
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=75.0}
+    expose:
+      - "8080"
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.29-alpine
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${HTTP_PORT:-8080}:80"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    restart: unless-stopped

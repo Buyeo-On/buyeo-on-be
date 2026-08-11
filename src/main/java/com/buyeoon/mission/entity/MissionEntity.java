@@ -45,36 +45,25 @@ public class MissionEntity {
 	@Column(name = "ox_correct_answer")
 	private Boolean oxCorrectAnswer;
 
-	public static MissionEntity multipleChoice(
-			UUID placeId, String title, String description, int rewardPoints, Integer maxAttempts) {
-		return create(
-				placeId, MissionType.MULTIPLE_CHOICE, title, description, rewardPoints, maxAttempts, null);
+	public static MissionEntity multipleChoice(UUID placeId, String title, String description, int rewardPoints,
+			Integer maxAttempts) {
+		return create(placeId, MissionType.MULTIPLE_CHOICE, title, description, rewardPoints, maxAttempts, null);
 	}
 
-	public static MissionEntity ox(
-			UUID placeId,
-			String title,
-			String description,
-			int rewardPoints,
-			Integer maxAttempts,
-			boolean correctAnswer) {
-		return create(
-				placeId, MissionType.OX, title, description, rewardPoints, maxAttempts, correctAnswer);
+	public static MissionEntity ox(UUID placeId, String title, String description, int rewardPoints,
+			Integer maxAttempts, boolean correctAnswer) {
+		return create(placeId, MissionType.OX, title, description, rewardPoints, maxAttempts, correctAnswer);
 	}
 
-	public static MissionEntity photo(
-			UUID placeId, String title, String description, int rewardPoints, Integer maxAttempts) {
-		return create(placeId, MissionType.PHOTO, title, description, rewardPoints, maxAttempts, null);
+	public static MissionEntity photo(UUID placeId, String title, String description, int rewardPoints) {
+		return create(placeId, MissionType.PHOTO, title, description, rewardPoints, null, null);
 	}
 
-	private static MissionEntity create(
-			UUID placeId,
-			MissionType type,
-			String title,
-			String description,
-			int rewardPoints,
-			Integer maxAttempts,
-			Boolean oxCorrectAnswer) {
+	private static MissionEntity create(UUID placeId, MissionType type, String title, String description,
+			int rewardPoints, Integer maxAttempts, Boolean oxCorrectAnswer) {
+		if (maxAttempts != null && maxAttempts <= 0) {
+			throw new IllegalArgumentException("Maximum attempts must be positive");
+		}
 		MissionEntity mission = new MissionEntity();
 		mission.placeId = placeId;
 		mission.type = type;
