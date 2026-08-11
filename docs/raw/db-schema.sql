@@ -325,7 +325,7 @@ CREATE TABLE idempotency_requests (
     response_status integer, -- 최초 처리 HTTP 상태 코드
     response_body jsonb, -- 최초 처리 응답 본문
     created_at timestamptz NOT NULL DEFAULT now(), -- 키 등록 시각
-    expires_at timestamptz NOT NULL, -- 키 보관 만료 시각
+    expires_at timestamptz NOT NULL, -- 최초 성공 확정 시각부터 24시간인 키 보관 만료 시각
     PRIMARY KEY (member_id, idempotency_key),
     CHECK (char_length(idempotency_key) BETWEEN 8 AND 128)
 );
