@@ -34,8 +34,8 @@ public class BadgeEntity {
 	@Column(name = "description", nullable = false, columnDefinition = "text")
 	private String description;
 
-	@Column(name = "image_url", columnDefinition = "text")
-	private String imageUrl;
+	@Column(name = "image_key", columnDefinition = "text")
+	private String imageKey;
 
 	@Column(name = "condition_text", nullable = false, columnDefinition = "text")
 	private String conditionText;
@@ -43,17 +43,13 @@ public class BadgeEntity {
 	@Column(name = "retired_at")
 	private Instant retiredAt;
 
-	public static BadgeEntity create(
-			BadgeCategory category,
-			String name,
-			String description,
-			String imageUrl,
+	public static BadgeEntity create(BadgeCategory category, String name, String description, String imageKey,
 			String conditionText) {
 		BadgeEntity badge = new BadgeEntity();
 		badge.category = category;
 		badge.name = name;
 		badge.description = description;
-		badge.imageUrl = imageUrl;
+		badge.imageKey = imageKey;
 		badge.conditionText = conditionText;
 		return badge;
 	}

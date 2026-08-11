@@ -38,14 +38,14 @@ import org.testcontainers.utility.DockerImageName;
 @Testcontainers
 class MemberMeIntegrationTests {
 
-	private static final String APPLICATION_USERNAME = "buyeoon_application";
+	private static final String APPLICATION_USERNAME = "buyeoon_app";
 	private static final String APPLICATION_PASSWORD = "application-test-password";
 	private static final String JWT_SECRET = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
 
 	@Container
 	private static final PostgreSQLContainer POSTGIS = new PostgreSQLContainer(
 			DockerImageName.parse("postgis/postgis:17-3.5").asCompatibleSubstituteFor("postgres"))
-			.withDatabaseName("buyeoon_test").withUsername("buyeoon_migrator").withPassword("migrator-test-password")
+			.withDatabaseName("buyeoon_test").withUsername("buyeoon_admin").withPassword("admin-test-password")
 			.withInitScript("db/test-postgis-init.sql");
 
 	@Autowired
@@ -104,9 +104,11 @@ class MemberMeIntegrationTests {
 		UUID themeId = UUID.randomUUID();
 		insertMember(memberId, "ACTIVE", Instant.parse("2026-08-01T00:00:00Z"));
 		insertSession(sessionId, memberId, Instant.now().plus(30, ChronoUnit.DAYS), null);
-		jdbcTemplate.update("INSERT INTO card_characters (id, name, image_url) VALUES (?, '금동이', 'https://image')",
+		jdbcTemplate.update(
+				"INSERT INTO card_characters (id, name, image_key) VALUES (?, '금동이', 'public/characters/geumdong.webp')",
 				characterId);
-		jdbcTemplate.update("INSERT INTO card_themes (id, name, image_url) VALUES (?, '백제', 'https://image')", themeId);
+		jdbcTemplate.update(
+				"INSERT INTO card_themes (id, name, image_key) VALUES (?, '백제', 'public/themes/baekje.webp')", themeId);
 		jdbcTemplate.update(
 				"INSERT INTO member_profiles (member_id, display_name, character_id) VALUES (?, '부여여행자', ?)", memberId,
 				characterId);
@@ -257,9 +259,6 @@ class MemberMeIntegrationTests {
 		registry.add("spring.datasource.username", () -> APPLICATION_USERNAME);
 		registry.add("spring.datasource.password", () -> APPLICATION_PASSWORD);
 		registry.add("spring.flyway.enabled", () -> true);
-		registry.add("spring.flyway.url", POSTGIS::getJdbcUrl);
-		registry.add("spring.flyway.user", POSTGIS::getUsername);
-		registry.add("spring.flyway.password", POSTGIS::getPassword);
 		registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
 		registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.PostgreSQLDialect");
 		registry.add("security.jwt.secret-base64", () -> JWT_SECRET);

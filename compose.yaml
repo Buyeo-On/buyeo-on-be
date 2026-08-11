@@ -1,5 +1,5 @@
-# Local and CI verification stack. Production adds TLS, immutable ECR images,
-# and a separate one-shot migration step through deployment configuration.
+# Local stack. Production adds TLS and an immutable ECR image; Spring Boot
+# applies Flyway migrations with the application database account at startup.
 services:
   app:
     image: ${APP_IMAGE:-buyeo-on-be-app:local}
@@ -10,9 +10,6 @@ services:
       DB_URL: ${DB_URL:?DB_URL is required}
       DB_USERNAME: ${DB_USERNAME:?DB_USERNAME is required}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
-      FLYWAY_URL: ${FLYWAY_URL:?FLYWAY_URL is required}
-      FLYWAY_USERNAME: ${FLYWAY_USERNAME:?FLYWAY_USERNAME is required}
-      FLYWAY_PASSWORD: ${FLYWAY_PASSWORD:?FLYWAY_PASSWORD is required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       KAKAO_APP_ID: ${KAKAO_APP_ID:?KAKAO_APP_ID is required}
       JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=75.0}

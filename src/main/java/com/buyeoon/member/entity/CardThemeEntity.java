@@ -24,13 +24,13 @@ public class CardThemeEntity {
 	@Column(name = "name", nullable = false, columnDefinition = "text")
 	private String name;
 
-	@Column(name = "image_url", nullable = false, columnDefinition = "text")
-	private String imageUrl;
+	@Column(name = "image_key", nullable = false, columnDefinition = "text")
+	private String imageKey;
 
-	public static CardThemeEntity create(String name, String imageUrl) {
+	public static CardThemeEntity create(String name, String imageKey) {
 		CardThemeEntity theme = new CardThemeEntity();
 		theme.name = name;
-		theme.imageUrl = imageUrl;
+		theme.imageKey = imageKey;
 		return theme;
 	}
 }

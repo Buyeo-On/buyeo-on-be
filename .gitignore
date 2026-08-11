@@ -30,6 +30,7 @@ out/
 .springBeans
 .sts4-cache/
 bin/
+.factorypath
 
 # VS Code
 .vscode/
