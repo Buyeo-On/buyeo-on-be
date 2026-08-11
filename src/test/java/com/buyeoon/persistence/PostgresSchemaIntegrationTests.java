@@ -22,6 +22,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
@@ -57,7 +58,9 @@ class PostgresSchemaIntegrationTests {
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
+	/** V2의 기존 LOCKED 참여 데이터가 최신 스키마로 업그레이드될 때 유실되지 않고 AVAILABLE로 전환되는지 검증한다. */
 	@Test
+	@DisplayName("V2의 LOCKED 참여 데이터는 업그레이드 후 AVAILABLE로 보존된다")
 	void lockedParticipationIsPreservedAsAvailableWhenUpgradingFromV2() throws Exception {
 		String schema = "mission_upgrade_" + UUID.randomUUID().toString().replace("-", "");
 		String url = POSTGIS.getJdbcUrl();
@@ -105,7 +108,9 @@ class PostgresSchemaIntegrationTests {
 		}
 	}
 
+	/** 실제 PostgreSQL enum에서 위치에 따라 계산되는 상태가 제거되고 영속 상태만 남았는지 검증한다. */
 	@Test
+	@DisplayName("DB 미션 상태 enum에는 위치와 무관한 영속 상태만 존재한다")
 	void persistentMissionStatusOnlyContainsNonLocationStates() {
 		assertThat(jdbcTemplate.queryForList("""
 				SELECT enum_value.enumlabel
@@ -118,7 +123,9 @@ class PostgresSchemaIntegrationTests {
 				""", String.class)).containsExactly("AVAILABLE", "EXHAUSTED", "COMPLETED");
 	}
 
+	/** Flyway와 애플리케이션이 운영과 같은 비관리자 DB 계정을 공유하는지 검증한다. */
 	@Test
+	@DisplayName("Flyway와 애플리케이션은 같은 비관리자 DB 계정을 사용한다")
 	void migrationAndApplicationUseSameDatabaseAccount() {
 		assertThat(jdbcTemplate.queryForObject("SELECT current_user", String.class)).isEqualTo(APPLICATION_USERNAME);
 		assertThat(jdbcTemplate.queryForObject("""
@@ -133,7 +140,9 @@ class PostgresSchemaIntegrationTests {
 				""", Boolean.class)).isFalse();
 	}
 
+	/** 애플리케이션 검증을 우회한 입력도 DB가 유형별 시도 횟수 규칙에 따라 최종적으로 방어하는지 검증한다. */
 	@Test
+	@DisplayName("DB는 제한된 사진 미션을 거부하고 유효한 퀴즈 제한을 허용한다")
 	void databaseRejectsLimitedPhotoMissionAndAllowsValidQuizLimits() {
 		UUID placeId = UUID.randomUUID();
 		jdbcTemplate.update("""
@@ -169,7 +178,9 @@ class PostgresSchemaIntegrationTests {
 		}
 	}
 
+	/** 버전 관리되는 샘플 데이터가 모든 미션 유형과 정렬 가능한 객관식 선택지를 제공하는지 검증한다. */
 	@Test
+	@DisplayName("샘플 카탈로그에는 모든 미션 유형과 정렬 가능한 선택지가 있다")
 	void versionedSampleCatalogContainsEveryMissionTypeAndSortableChoices() {
 		for (String type : new String[]{"OX", "MULTIPLE_CHOICE", "PHOTO"}) {
 			assertThat(jdbcTemplate.queryForObject("""
@@ -207,7 +218,9 @@ class PostgresSchemaIntegrationTests {
 		registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.PostgreSQLDialect");
 	}
 
+	/** 실제 PostGIS에서 대표 엔티티의 저장·재조회, 공간 타입, 낙관적 잠금이 함께 동작하는지 검증한다. */
 	@Test
+	@DisplayName("Flyway 마이그레이션과 대표 JPA 매핑이 PostGIS에서 동작한다")
 	@Transactional
 	void migrationAndRepresentativeMappingsWorkAgainstPostgis() {
 		MemberEntity member = MemberEntity.create();
@@ -246,7 +259,9 @@ class PostgresSchemaIntegrationTests {
 		assertThat(entityManager.find(IdempotencyRequestEntity.class, request.getId())).isNotNull();
 	}
 
+	/** 같은 제공처가 부여한 동일한 장소 식별자로 중복 장소를 저장하지 못하도록 보장한다. */
 	@Test
+	@DisplayName("장소 외부 식별자는 제공처 안에서 유일하다")
 	@Transactional
 	void placeExternalIdentityIsUniqueWithinItsSource() {
 		String externalId = UUID.randomUUID().toString();
@@ -258,7 +273,9 @@ class PostgresSchemaIntegrationTests {
 		assertThatThrownBy(entityManager::flush).isInstanceOf(PersistenceException.class);
 	}
 
+	/** 외부 식별자의 출처를 해석할 수 있도록 externalId가 있으면 sourceName도 필수임을 보장한다. */
 	@Test
+	@DisplayName("장소 외부 식별자가 있으면 제공처도 반드시 있어야 한다")
 	@Transactional
 	void placeExternalIdentityRequiresItsSource() {
 		entityManager.persist(createPlace(null, UUID.randomUUID().toString()));
