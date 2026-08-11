@@ -25,6 +25,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -81,7 +82,12 @@ class RefreshTokenIntegrationTests {
 		jdbcTemplate.update("DELETE FROM members");
 	}
 
+	/**
+	 * 유효한 리프레시 토큰으로 갱신하면 새 액세스 토큰과 리프레시 토큰을 발급하고,
+	 * DB 세션 해시가 교체되며 응답에 최신 회원 상태가 포함된다.
+	 */
 	@Test
+	@DisplayName("유효한 리프레시 토큰으로 갱신하면 두 토큰이 모두 교체되고 최신 회원 상태를 반환한다")
 	void validRefreshTokenRotatesBothTokensAndReturnsLatestMemberState() throws Exception {
 		UUID memberId = UUID.randomUUID();
 		UUID sessionId = UUID.randomUUID();
@@ -121,7 +127,12 @@ class RefreshTokenIntegrationTests {
 		assertThat(Duration.between(jwt.getIssuedAt(), jwt.getExpiresAt())).isEqualTo(Duration.ofHours(1));
 	}
 
+	/**
+	 * 리프레시 토큰을 한 번 갱신한 뒤 이전 토큰으로 다시 갱신을 시도하면
+	 * 401로 거부되지만 세션의 revoked_at은 여전히 null이다.
+	 */
 	@Test
+	@DisplayName("갱신된 이전 토큰은 거부되지만 세션은 폐기되지 않는다")
 	void rotatedTokenRejectsPreviousTokenWithoutRevokingSession() throws Exception {
 		UUID memberId = UUID.randomUUID();
 		UUID sessionId = UUID.randomUUID();
@@ -138,7 +149,12 @@ class RefreshTokenIntegrationTests {
 		refresh(rotatedToken).andExpect(status().isOk());
 	}
 
+	/**
+	 * 형식 오류, 빈 body, DB 해시 불일치, 만료된 세션, 폐기된 세션의
+	 * 리프레시 토큰은 모두 401로 거부된다.
+	 */
 	@Test
+	@DisplayName("형식 오류·불일치·만료·폐기된 리프레시 토큰은 모두 거부된다")
 	void malformedMismatchedExpiredAndRevokedRefreshTokensAreRejected() throws Exception {
 		assertUnauthorized("not-a-refresh-token");
 		assertUnauthorized(UUID.randomUUID() + ".short");
@@ -167,7 +183,12 @@ class RefreshTokenIntegrationTests {
 		assertUnauthorized(revoked.token());
 	}
 
+	/**
+	 * 회원 상태가 WITHDRAWN이면 유효한 리프레시 토큰으로 갱신을 시도해도
+	 * 401로 거부된다.
+	 */
 	@Test
+	@DisplayName("탈퇴 회원의 리프레시 토큰은 거부된다")
 	void withdrawnMemberRefreshTokenIsRejected() throws Exception {
 		UUID memberId = UUID.randomUUID();
 		UUID sessionId = UUID.randomUUID();
@@ -181,7 +202,12 @@ class RefreshTokenIntegrationTests {
 		assertUnauthorized(fixture.token());
 	}
 
+	/**
+	 * 동일한 리프레시 토큰으로 두 스레드가 동시에 갱신을 시도하면
+	 * DB의 낙관적 잠금으로 하나만 200, 나머지는 401을 반환한다.
+	 */
 	@Test
+	@DisplayName("동일 토큰으로 동시 갱신하면 하나만 성공한다")
 	void concurrentRefreshWithSameTokenSucceedsOnlyOnce() throws Exception {
 		UUID memberId = UUID.randomUUID();
 		UUID sessionId = UUID.randomUUID();
@@ -212,7 +238,12 @@ class RefreshTokenIntegrationTests {
 		}
 	}
 
+	/**
+	 * 토큰 갱신 후 새 해시를 DB에 저장할 때 장애가 발생하면
+	 * 트랜잭션이 롤백되고 이전 토큰으로 재갱신이 가능해야 한다.
+	 */
 	@Test
+	@DisplayName("갱신 중 저장 실패 시 이전 토큰은 유효하게 유지된다")
 	void failedRotationSaveKeepsPreviousTokenValid() throws Exception {
 		UUID memberId = UUID.randomUUID();
 		UUID sessionId = UUID.randomUUID();
