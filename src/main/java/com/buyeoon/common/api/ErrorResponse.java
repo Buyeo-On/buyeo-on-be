@@ -30,6 +30,18 @@ public record ErrorResponse(boolean success, ErrorData data) {
 		return new ErrorResponse(false, new ErrorData("IDEMPOTENCY_KEY_REUSED", "같은 멱등성 키를 다른 요청에 재사용할 수 없습니다."));
 	}
 
+	public static ErrorResponse requiredTermsNotAgreed() {
+		return new ErrorResponse(false, new ErrorData("REQUIRED_TERMS_NOT_AGREED", "현재 필수 약관에 먼저 동의해 주세요."));
+	}
+
+	public static ErrorResponse outsideBuyeo() {
+		return new ErrorResponse(false, new ErrorData("OUTSIDE_BUYEO", "부여 안에서만 군민증을 만들 수 있습니다."));
+	}
+
+	public static ErrorResponse invalidStateTransition() {
+		return new ErrorResponse(false, new ErrorData("INVALID_STATE_TRANSITION", "현재 상태에서는 요청한 작업을 수행할 수 없습니다."));
+	}
+
 	public record ErrorData(String code, String message) {
 	}
 }
