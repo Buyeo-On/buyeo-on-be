@@ -39,6 +39,12 @@ public class CitizenCardController {
 		return SuccessResponse.of(citizenCards.getOptions());
 	}
 
+	@GetMapping("/citizen-cards/me")
+	public SuccessResponse<CitizenCardView> getMyCard(@AuthenticationPrincipal Jwt jwt) {
+		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
+		return SuccessResponse.of(citizenCards.getMyCard(memberId));
+	}
+
 	@PostMapping("/citizen-cards")
 	public ResponseEntity<SuccessResponse<CitizenCardView>> create(@AuthenticationPrincipal Jwt jwt,
 			@RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
