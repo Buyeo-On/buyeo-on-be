@@ -81,20 +81,26 @@ CREATE TABLE term_consents (
 CREATE TABLE card_characters (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(), -- 캐릭터 ID
     name text NOT NULL, -- 캐릭터 이름
-    image_key text NOT NULL CHECK (image_key LIKE 'public/%') -- 캐릭터 이미지 객체 키
+    image_key text NOT NULL CHECK (image_key LIKE 'public/%'), -- 캐릭터 이미지 객체 키
+    sort_order smallint NOT NULL UNIQUE CHECK (sort_order > 0) -- 화면 표시 순서
 );
 
 -- 디지털 군민증에서 선택할 카드 테마 목록이다.
 CREATE TABLE card_themes (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(), -- 테마 ID
     name text NOT NULL, -- 테마 이름
-    image_key text NOT NULL CHECK (image_key LIKE 'public/%') -- 테마 이미지 객체 키
+    image_key text NOT NULL CHECK (image_key LIKE 'public/%'), -- 테마 이미지 객체 키
+    sort_order smallint NOT NULL UNIQUE CHECK (sort_order > 0) -- 화면 표시 순서
 );
 
 -- 마이페이지와 군민증에 표시할 회원 프로필이다.
 CREATE TABLE member_profiles (
     member_id uuid PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE, -- 회원 ID
-    display_name varchar(8) NOT NULL CHECK (char_length(display_name) BETWEEN 1 AND 8), -- 표시 이름
+    display_name varchar(8) NOT NULL CHECK (
+        char_length(display_name) BETWEEN 1 AND 8
+        AND display_name = btrim(display_name)
+        AND display_name !~ '[[:cntrl:]]'
+    ), -- 앞뒤 공백과 제어문자가 없는 표시 이름
     character_id uuid NOT NULL REFERENCES card_characters(id), -- 선택한 캐릭터 ID
     updated_at timestamptz NOT NULL DEFAULT now() -- 마지막 수정 시각
 );
@@ -104,7 +110,9 @@ CREATE TABLE citizen_cards (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(), -- 군민증 ID
     member_id uuid NOT NULL UNIQUE REFERENCES members(id) ON DELETE CASCADE, -- 소유 회원 ID
     theme_id uuid NOT NULL REFERENCES card_themes(id), -- 선택한 카드 테마 ID
-    barcode_value text NOT NULL UNIQUE, -- 시연용 바코드 값
+    barcode_value text NOT NULL UNIQUE CHECK (
+        barcode_value ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+    ), -- UUID 형식의 시연용 바코드 값
     issued_at timestamptz NOT NULL DEFAULT now() -- 발급 시각
 );
 

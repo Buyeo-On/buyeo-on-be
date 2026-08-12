@@ -207,6 +207,7 @@ paths:
     get:
       tags: [CitizenCards]
       summary: 군민증 캐릭터와 테마 목록 조회
+      description: 승인된 캐릭터와 테마를 각 카탈로그의 표시 순서대로 반환한다.
       operationId: getCitizenCardOptions
       responses:
         '200':
@@ -235,13 +236,14 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          $ref: '#/components/responses/CitizenCardCreationForbidden'
         '409':
-          $ref: '#/components/responses/Conflict'
+          $ref: '#/components/responses/CitizenCardCreationConflict'
   /citizen-cards/me:
     get:
       tags: [CitizenCards]
       summary: 내 디지털 군민증 조회
+      description: 현재 프로필의 표시 이름·캐릭터와 발급 시 선택한 카드 테마를 반환한다.
       operationId: getMyCitizenCard
       responses:
         '200':
@@ -249,12 +251,12 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
-          $ref: '#/components/responses/NotFound'
+          $ref: '#/components/responses/CitizenCardNotFound'
   /citizen-cards/me/barcode:
     get:
       tags: [CitizenCards]
       summary: 군민증 바코드 조회
-      description: MVP 시연용 바코드를 반환하며 포인트를 차감하지 않는다.
+      description: MVP 시연용 바코드와 조회 시점의 포인트 원장 합계를 반환하며 포인트를 변경하지 않는다.
       operationId: getMyCitizenCardBarcode
       responses:
         '200':
@@ -262,7 +264,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
-          $ref: '#/components/responses/NotFound'
+          $ref: '#/components/responses/CitizenCardNotFound'
   /trips:
     post:
       tags: [Trips]
@@ -923,6 +925,59 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/CitizenCardEnvelope'
+    CitizenCardCreationForbidden:
+      description: 현재 필수 약관 미동의 또는 부여 행정구역 외부
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            requiredTermsNotAgreed:
+              summary: 현재 필수 약관 미동의
+              value:
+                success: false
+                data:
+                  code: REQUIRED_TERMS_NOT_AGREED
+                  message: 현재 필수 약관에 먼저 동의해 주세요.
+            outsideBuyeo:
+              summary: 부여 행정구역 외부
+              value:
+                success: false
+                data:
+                  code: OUTSIDE_BUYEO
+                  message: 부여 안에서만 군민증을 만들 수 있습니다.
+    CitizenCardCreationConflict:
+      description: 멱등성 키 재사용 또는 이미 군민증을 발급한 상태
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            idempotencyKeyReused:
+              summary: 멱등성 키를 다른 요청에 재사용
+              value:
+                success: false
+                data:
+                  code: IDEMPOTENCY_KEY_REUSED
+                  message: 같은 멱등성 키를 다른 요청에 재사용할 수 없습니다.
+            invalidStateTransition:
+              summary: 이미 군민증을 발급함
+              value:
+                success: false
+                data:
+                  code: INVALID_STATE_TRANSITION
+                  message: 현재 상태에서는 요청한 작업을 수행할 수 없습니다.
+    CitizenCardNotFound:
+      description: 요청 회원에게 발급된 군민증이 없음
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            success: false
+            data:
+              code: RESOURCE_NOT_FOUND
+              message: 대상을 찾을 수 없습니다.
     BarcodeSuccess:
       description: 군민증 바코드
       content:
@@ -1456,6 +1511,8 @@ components:
           type: boolean
     Location:
       type: object
+      additionalProperties: false
+      description: MVP에서는 유효 범위의 좌표를 요청 시점의 현재 위치로 간주하며 capturedAt은 요청 기록용이다.
       required: [latitude, longitude, capturedAt]
       properties:
         latitude:
@@ -1686,12 +1743,14 @@ components:
           description: 10분 유효한 S3 Presigned GET URL. 저장하거나 로그에 기록하지 않는다.
     CitizenCardCreateRequest:
       type: object
+      additionalProperties: false
       required: [displayName, characterId, themeId, location]
       properties:
         displayName:
           type: string
           minLength: 1
           maxLength: 8
+          description: 앞뒤 공백 제거 후 Unicode 문자 기준 1~8자이며 공백만 있거나 제어문자를 포함할 수 없다.
         characterId:
           type: string
           format: uuid
@@ -1725,6 +1784,8 @@ components:
           $ref: '#/components/schemas/CitizenCard'
         barcodeValue:
           type: string
+          format: uuid
+          description: 서버가 생성한 UUID 형식의 MVP 시연용 값이며 결제나 포인트 차감에 사용하지 않는다.
         pointBalance:
           type: integer
           minimum: 0
@@ -2384,10 +2445,12 @@ components:
       properties:
         characters:
           type: array
+          description: 캐릭터 카탈로그의 표시 순서 오름차순
           items:
             $ref: '#/components/schemas/CardOption'
         themes:
           type: array
+          description: 카드 테마 카탈로그의 표시 순서 오름차순
           items:
             $ref: '#/components/schemas/CardOption'
     CitizenCardOptionsEnvelope:
