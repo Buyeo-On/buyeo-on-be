@@ -22,6 +22,14 @@ public record ErrorResponse(boolean success, ErrorData data) {
 		return new ErrorResponse(false, new ErrorData("MEMBER_WITHDRAWN", "탈퇴한 회원은 로그인할 수 없습니다."));
 	}
 
+	public static ErrorResponse termVersionOutdated() {
+		return new ErrorResponse(false, new ErrorData("TERM_VERSION_OUTDATED", "약관이 변경되었습니다. 현재 약관을 다시 확인해 주세요."));
+	}
+
+	public static ErrorResponse idempotencyKeyReused() {
+		return new ErrorResponse(false, new ErrorData("IDEMPOTENCY_KEY_REUSED", "같은 멱등성 키를 다른 요청에 재사용할 수 없습니다."));
+	}
+
 	public record ErrorData(String code, String message) {
 	}
 }
