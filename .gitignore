@@ -1,6 +1,5 @@
 # --- Build ---
 build/
-!gradle/wrapper/gradle-wrapper.jar
 target/
 !**/src/main/**/target/
 !**/src/test/**/target/
@@ -8,7 +7,6 @@ target/
 # --- Gradle ---
 .gradle/
 gradle-app.setting
-!gradle-wrapper.jar
 
 # --- Maven ---
 .mvn/
@@ -46,6 +44,7 @@ Thumbs.db
 # --- Java ---
 *.class
 *.jar
+!gradle/wrapper/gradle-wrapper.jar
 *.war
 *.nar
 *.ear
