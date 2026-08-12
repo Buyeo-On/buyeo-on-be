@@ -27,6 +27,8 @@ class SchemaMappingTests {
 			.of("src/main/resources/db/migration/V3__align_mission_constraints.sql");
 	private static final Path PUBLIC_IMAGE_KEYS_MIGRATION = Path
 			.of("src/main/resources/db/migration/V5__replace_public_image_urls_with_keys.sql");
+	private static final Path CITIZEN_CARD_CONSTRAINTS_MIGRATION = Path
+			.of("src/main/resources/db/migration/V7__add_citizen_card_constraints.sql");
 	private static final Pattern CREATE_TABLE = Pattern.compile("CREATE TABLE ([a-z_]+) ");
 
 	/** 초기 스키마에 후속 마이그레이션을 적용한 정의가 기준 DB 스키마와 같음을 보장한다. */
@@ -53,15 +55,36 @@ class SchemaMappingTests {
 				"    CHECK (", "        (type = 'OX' AND ox_correct_answer IS NOT NULL)",
 				"        OR (type <> 'OX' AND ox_correct_answer IS NULL)", "    ),",
 				"    CHECK (type <> 'PHOTO' OR max_attempts IS NULL)", ");");
+		String imageKeyConstraint = "image_key text NOT NULL CHECK (image_key LIKE 'public/%'),";
+		String characterImageKeyColumn = imageKeyConstraint + " -- 캐릭터 이미지 객체 키";
+		String themeImageKeyColumn = imageKeyConstraint + " -- 테마 이미지 객체 키";
+		String sortOrderColumn = "    sort_order smallint NOT NULL UNIQUE CHECK (sort_order > 0)";
+		String displayNameConstraintEnd = "    )," + " -- 앞뒤 공백과 제어문자가 없는 표시 이름";
 		String publicImageKeySchema = baseline
+				.replace("expires_at timestamptz NOT NULL, -- 키 보관 만료 시각",
+						"expires_at timestamptz NOT NULL, -- 최초 성공 확정 시각부터 24시간인 키 보관 만료 시각")
+				.replace("    UNIQUE (type, version)\n);",
+						"    UNIQUE (type, version),\n    UNIQUE (type, effective_at)\n);")
 				.replace("image_url text NOT NULL -- 캐릭터 이미지 URL",
-						"image_key text NOT NULL CHECK (image_key LIKE 'public/%') -- 캐릭터 이미지 객체 키")
+						String.join("\n", characterImageKeyColumn, sortOrderColumn + " -- 화면 표시 순서"))
 				.replace("image_url text NOT NULL -- 테마 이미지 URL",
-						"image_key text NOT NULL CHECK (image_key LIKE 'public/%') -- 테마 이미지 객체 키")
+						String.join("\n", themeImageKeyColumn, sortOrderColumn + " -- 화면 표시 순서"))
 				.replace("image_url text, -- 대표 이미지 URL",
 						"image_key text CHECK (image_key IS NULL OR image_key LIKE 'public/%'), -- 대표 이미지 객체 키")
 				.replace("image_url text, -- 배지 이미지 URL",
-						"image_key text CHECK (image_key IS NULL OR image_key LIKE 'public/%'), -- 배지 이미지 객체 키");
+						"image_key text CHECK (image_key IS NULL OR image_key LIKE 'public/%'), -- 배지 이미지 객체 키")
+				.replace(
+						"display_name varchar(8) NOT NULL CHECK (char_length(display_name) BETWEEN 1 AND 8),"
+								+ " -- 표시 이름",
+						String.join("\n", "display_name varchar(8) NOT NULL CHECK (",
+								"        char_length(display_name) BETWEEN 1 AND 8",
+								"        AND display_name = btrim(display_name)",
+								"        AND display_name !~ '[[:cntrl:]]'", displayNameConstraintEnd))
+				.replace("barcode_value text NOT NULL UNIQUE, -- 시연용 바코드 값",
+						String.join("\n", "barcode_value text NOT NULL UNIQUE CHECK (",
+								"        barcode_value ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}"
+										+ "-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'",
+								"    ), -- UUID 형식의 시연용 바코드 값"));
 
 		assertThat(baseline).contains(placeSourceColumns).contains(placeLocationIndex).contains(legacyMissionStatus)
 				.contains(legacyMissionConstraints);
@@ -114,6 +137,20 @@ class SchemaMappingTests {
 		assertThat(migration).contains("RENAME COLUMN image_url TO image_key")
 				.contains("Public image URLs must be replaced with public/ S3 object keys before V5")
 				.contains("CHECK (image_key LIKE 'public/%')");
+	}
+
+	/** 군민증 카탈로그, 표시 이름과 바코드 제약이 기준 스키마와 업그레이드 경로에 함께 존재하는지 검증한다. */
+	@Test
+	@DisplayName("군민증 발급 기반 제약은 기준 스키마와 마이그레이션에 정의되어 있다")
+	void citizenCardConstraintsAreDefinedInSchemaAndMigration() throws IOException {
+		String canonicalSchema = Files.readString(SCHEMA_SOURCE, StandardCharsets.UTF_8);
+		String migration = Files.readString(CITIZEN_CARD_CONSTRAINTS_MIGRATION, StandardCharsets.UTF_8);
+
+		assertThat(canonicalSchema).contains("sort_order smallint NOT NULL UNIQUE CHECK (sort_order > 0)")
+				.contains("display_name = btrim(display_name)").contains("citizen_cards")
+				.contains("barcode_value ~ '^[0-9a-f]");
+		assertThat(migration).contains("card_characters_sort_order_uq").contains("member_profiles_display_name_ck")
+				.contains("citizen_cards_barcode_value_ck");
 	}
 
 	/** 기준 스키마의 테이블과 JPA 엔티티가 누락이나 잉여 매핑 없이 일대일로 대응함을 보장한다. */
