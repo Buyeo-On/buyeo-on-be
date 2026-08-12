@@ -9,7 +9,7 @@
 - [UC-03 약관 동의](./domains/member/use-cases/uc-03-agree-to-terms.md)
 - [UC-04 군민증 생성](./domains/member/use-cases/uc-04-create-citizen-card.md)
 - [UC-11 근처 퀴즈 알림 동의](./domains/member/use-cases/uc-11-enable-nearby-notifications.md)
-- [UC-15 군민증 바코드 보기](./domains/member/use-cases/uc-15-view-citizen-card-barcode.md)
+- [UC-15 군민증과 바코드 보기](./domains/member/use-cases/uc-15-view-citizen-card-barcode.md)
 - [UC-19 서비스 설정](./domains/member/use-cases/uc-19-update-settings.md)
 - [UC-20 프로필 정보 수정](./domains/member/use-cases/uc-20-update-profile.md)
 - [UC-21 탈퇴](./domains/member/use-cases/uc-21-withdraw.md)
