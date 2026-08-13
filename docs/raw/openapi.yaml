@@ -145,6 +145,7 @@ paths:
     get:
       tags: [Members]
       summary: 서비스 설정 조회
+      description: 현재 회원의 서비스 설정과 낙관적 잠금 버전을 상태 변경 없이 반환한다.
       operationId: getMySettings
       responses:
         '200':
@@ -154,6 +155,10 @@ paths:
     patch:
       tags: [Members]
       summary: 서비스 설정 변경
+      description: >-
+        조회한 version을 기준으로 전달한 설정만 변경한다. 생략한 설정은 유지하며 실제 값이 바뀌면
+        version을 1 증가시킨다. 근처 퀴즈 알림을 켤 때는 기기의 알림·위치 권한 허용 여부를 모두
+        true로 제출해야 하며 이 권한 값은 저장하지 않는다.
       operationId: updateMySettings
       requestBody:
         required: true
@@ -1641,6 +1646,7 @@ components:
           format: uuid
     Settings:
       type: object
+      additionalProperties: false
       required: [nearbyQuizNotificationEnabled, darkModeEnabled, version]
       properties:
         nearbyQuizNotificationEnabled:
@@ -1649,10 +1655,28 @@ components:
           type: boolean
         version:
           type: integer
+          format: int64
           minimum: 0
     SettingsUpdateRequest:
       type: object
+      additionalProperties: false
       required: [version]
+      allOf:
+        - anyOf:
+            - required: [nearbyQuizNotificationEnabled]
+            - required: [darkModeEnabled]
+        - if:
+            required: [nearbyQuizNotificationEnabled]
+            properties:
+              nearbyQuizNotificationEnabled:
+                const: true
+          then:
+            required: [deviceNotificationPermissionGranted, deviceLocationPermissionGranted]
+            properties:
+              deviceNotificationPermissionGranted:
+                const: true
+              deviceLocationPermissionGranted:
+                const: true
       properties:
         nearbyQuizNotificationEnabled:
           type: boolean
@@ -1664,6 +1688,7 @@ components:
           type: boolean
         version:
           type: integer
+          format: int64
           minimum: 0
     TermType:
       type: string
