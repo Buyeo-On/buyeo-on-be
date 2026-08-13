@@ -128,6 +128,7 @@ paths:
     patch:
       tags: [Members]
       summary: 프로필 수정
+      description: 군민증을 발급한 회원의 표시 이름 또는 캐릭터를 부분 변경한다. 표시 이름은 앞뒤 공백을 제거한 뒤 저장한다.
       operationId: updateMyProfile
       requestBody:
         required: true
@@ -142,6 +143,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/StateConflict'
   /members/me/settings:
     get:
       tags: [Members]
@@ -1637,6 +1640,7 @@ components:
           format: date-time
     ProfileUpdateRequest:
       type: object
+      additionalProperties: false
       minProperties: 1
       properties:
         displayName:
