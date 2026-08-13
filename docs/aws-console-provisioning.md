@@ -59,9 +59,6 @@ Console에서 생성한 직후 실제 ID, ARN 또는 Endpoint를 기록한다. �
 | 이미지 S3 | 확정 필요 | 미생성 |
 | Parameter Store 경로 | `/buyeoon/prod/` | 미생성 |
 | CloudWatch Log Group | `/buyeoon/prod/app`, `/buyeoon/prod/nginx` | 미생성 |
-| CloudWatch Alarm | `buyeoon-prod-*` | 미생성 |
-| Nginx 5xx Log Metric Filter | `buyeoon-prod-nginx-5xx` | 미생성 |
-| SNS Topic·Subscription | `buyeoon-prod-alerts` | 미생성 |
 
 모든 Tag 지원 리소스에는 다음 값을 적용한다.
 
@@ -119,7 +116,7 @@ Console에서 생성한 직후 실제 ID, ARN 또는 Endpoint를 기록한다. �
 9. 공개 콘텐츠 DB 필드에는 `public/` prefix의 S3 객체 키를 `image_key`로 저장하고 Presigned URL을 저장하지 않는다.
 10. Bucket Policy에서 `aws:SecureTransport=false`인 모든 요청을 거부한다.
 11. S3 Lifecycle에 1일이 지난 미완료 multipart upload를 중단하는 규칙을 추가한다.
-12. CloudWatch Log Group, SNS Topic·Subscription을 생성한다.
+12. CloudWatch Log Group을 생성한다.
 13. `/buyeoon/prod/` 아래에 필요한 Parameter 이름을 생성하고 비밀값은 `SecureString`으로 저장한다.
 
 RDS 삭제는 일반 변경과 분리해 승인된 변경으로만 수행한다.
@@ -136,7 +133,6 @@ RDS 삭제는 일반 변경과 분리해 승인된 변경으로만 수행한다.
 - [ ] RDS 백업 보존, PITR과 삭제 방지가 활성화되어 있다.
 - [ ] S3 Bucket은 공개 접근과 Versioning이 비활성화되어 있다.
 - [ ] S3가 비 HTTPS 요청을 거부하고 미완료 multipart upload lifecycle을 가진다.
-- [ ] SNS 이메일 구독이 확인된 상태다.
 
 ### 4. EC2 Instance Role과 EC2
 
@@ -149,7 +145,6 @@ EC2 Instance Role은 다음 권한만 가진다.
 | Parameter Store | `/buyeoon/prod/*`의 필요한 Parameter 조회·복호화 |
 | 이미지 S3 Bucket | prefix 범위의 `ListBucket`, 객체 `GetObject`, `PutObject`, `DeleteObject` |
 | CloudWatch Logs | 지정 Log Group의 Stream 생성과 이벤트 전송 |
-| CloudWatch Metrics | Agent namespace로 제한한 `PutMetricData` |
 
 S3 `ListBucket`은 `public/*`, `private/*` prefix 조건으로 제한하고 객체 권한은 해당 객체 ARN으로 제한한다. 이 권한으로 애플리케이션이 Presigned PUT·GET을 생성하고 `HeadObject` 검증과 삭제 작업을 수행한다.
 
@@ -165,7 +160,7 @@ S3 `ListBucket`은 `public/*`, `private/*` prefix 조건으로 제한하고 객�
 - [ ] SSH 없이 Session Manager로 접속할 수 있다.
 - [ ] EIP 연결 후 외부로 보이는 IP가 EIP와 일치한다.
 - [ ] 필요한 Parameter와 S3 prefix에는 접근하고 다른 경로에는 접근하지 못한다.
-- [ ] CloudWatch Logs와 Agent metric을 전송할 수 있다.
+- [ ] 지정된 CloudWatch Log Group에 로그를 전송할 수 있다.
 
 ### 5. DB bootstrap
 
@@ -213,7 +208,6 @@ Trust Policy 조건:
 1. GitHub OIDC Provider를 생성한다.
 2. 위 Trust Policy로 GitHub Automation Role을 생성한다.
 3. GitHub production Environment는 보호된 `main`만 배포하도록 제한하고 승인자를 설정한다.
-4. 장기 AWS Access Key를 GitHub에 저장하지 않는다.
 
 검증:
 
@@ -267,16 +261,12 @@ EC2 복구는 새 EC2를 같은 Public Subnet과 Instance Profile로 생성하�
 ### 9. 관측성과 복구
 
 1. Spring과 Nginx 로그를 CloudWatch Logs에 전송하고 30일 보관한다.
-2. Nginx JSON 로그에서 5xx를 집계하는 CloudWatch Logs Metric Filter와 사용자 정의 Metric을 생성한다.
-3. EC2 상태·Agent 디스크 Metric·Nginx 5xx Metric과 RDS 저장 공간·연결 수 Alarm을 생성한다.
-4. 테스트 Alarm과 SNS 이메일을 수신한다.
-5. RDS Snapshot 복원과 이전 app SHA 재배포를 비운영 복원 대상으로 검증한다.
+2. RDS Snapshot 복원과 이전 app SHA 재배포를 비운영 복원 대상으로 검증한다.
 
 검증:
 
 - [ ] 로그에 토큰, Presigned URL, DB 비밀번호와 개인정보가 노출되지 않는다.
-- [ ] Agent disk metric과 모든 Alarm이 데이터를 수신한다.
-- [ ] 테스트 5xx 요청이 Log Metric Filter와 Alarm에 집계된다.
+- [ ] Spring과 Nginx 로그가 지정된 Log Group에 기록되고 30일 후 만료된다.
 - [ ] RDS Snapshot에서 새 인스턴스를 복원할 수 있다.
 
 ## Console 변경 절차
