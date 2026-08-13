@@ -91,16 +91,15 @@ paths:
     delete:
       tags: [Members]
       summary: 회원 탈퇴
+      description: >-
+        회원을 즉시 탈퇴 상태로 전환하고 모든 인증 세션과 푸시 토큰을 폐기한다. 성공 직후 현재 자격 증명도
+        무효가 되므로 성공 응답을 받지 못한 재요청의 401 응답은 탈퇴 완료 상태로 처리한다.
       operationId: withdrawMember
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '200':
           $ref: '#/components/responses/EmptySuccess'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '409':
-          $ref: '#/components/responses/Conflict'
   /members/me/social-accounts:
     post:
       tags: [Members]
