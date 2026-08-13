@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class MemberExceptionHandler {
 
 	@ExceptionHandler({InvalidSettingsRequestException.class, InvalidPushTokenRequestException.class,
-			HttpMessageNotReadableException.class})
+			InvalidProfileRequestException.class, HttpMessageNotReadableException.class})
 	@ResponseStatus(HttpStatus.BAD_REQUEST)
 	public ErrorResponse handleInvalidRequest() {
 		return ErrorResponse.invalidRequest();
