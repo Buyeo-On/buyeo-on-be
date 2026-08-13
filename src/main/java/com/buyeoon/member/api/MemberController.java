@@ -6,6 +6,7 @@ import com.buyeoon.member.application.MemberQueryService.MemberView;
 import com.buyeoon.member.application.MemberQueryService.SettingsView;
 import com.buyeoon.member.application.MemberSettingsUpdateService;
 import com.buyeoon.member.application.MemberSettingsUpdateService.SettingsUpdateCommand;
+import com.buyeoon.member.application.MemberWithdrawalService;
 import com.buyeoon.member.application.ProfileUpdateService;
 import com.buyeoon.member.application.ProfileUpdateService.ProfileUpdateCommand;
 import com.buyeoon.member.application.PushTokenService;
@@ -34,14 +35,16 @@ public class MemberController {
 
 	private final MemberQueryService memberQueryService;
 	private final MemberSettingsUpdateService memberSettingsUpdateService;
+	private final MemberWithdrawalService memberWithdrawalService;
 	private final ProfileUpdateService profileUpdateService;
 	private final PushTokenService pushTokenService;
 
 	public MemberController(MemberQueryService memberQueryService,
 			MemberSettingsUpdateService memberSettingsUpdateService, ProfileUpdateService profileUpdateService,
-			PushTokenService pushTokenService) {
+			PushTokenService pushTokenService, MemberWithdrawalService memberWithdrawalService) {
 		this.memberQueryService = memberQueryService;
 		this.memberSettingsUpdateService = memberSettingsUpdateService;
+		this.memberWithdrawalService = memberWithdrawalService;
 		this.profileUpdateService = profileUpdateService;
 		this.pushTokenService = pushTokenService;
 	}
@@ -50,6 +53,12 @@ public class MemberController {
 	public SuccessResponse<MemberView> getMyMember(@AuthenticationPrincipal Jwt jwt) {
 		return SuccessResponse
 				.of(memberQueryService.getActiveMember(UUID.fromString(Objects.requireNonNull(jwt.getSubject()))));
+	}
+
+	@DeleteMapping("/me")
+	public SuccessResponse<Map<String, Object>> withdrawMyMember(@AuthenticationPrincipal Jwt jwt) {
+		memberWithdrawalService.withdraw(memberId(jwt));
+		return SuccessResponse.of(Map.of());
 	}
 
 	@GetMapping("/me/settings")

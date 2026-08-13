@@ -34,19 +34,30 @@ public final class LogoutService {
 	}
 
 	private void lockActiveSession(UUID memberId, UUID sessionId) {
+		lockActiveMember(memberId);
 		boolean sessionExists = !jdbcOperations.query("""
 				SELECT session.id
 				FROM auth_sessions session
-				JOIN members member ON member.id = session.member_id
 				WHERE session.id = ?
 				  AND session.member_id = ?
 				  AND session.expires_at > CURRENT_TIMESTAMP
 				  AND session.revoked_at IS NULL
-				  AND member.status = 'ACTIVE'
-				FOR UPDATE OF session, member
+				FOR UPDATE
 				""", (resultSet, rowNumber) -> resultSet.getObject("id", UUID.class), sessionId, memberId).isEmpty();
 		if (!sessionExists) {
 			throw new AuthenticationCredentialsNotFoundException("활성 인증 세션이 아닙니다.");
+		}
+	}
+
+	private void lockActiveMember(UUID memberId) {
+		boolean memberExists = !jdbcOperations.query("""
+				SELECT id
+				FROM members
+				WHERE id = ? AND status = 'ACTIVE'
+				FOR UPDATE
+				""", (resultSet, rowNumber) -> resultSet.getObject("id", UUID.class), memberId).isEmpty();
+		if (!memberExists) {
+			throw new AuthenticationCredentialsNotFoundException("활성 회원이 아닙니다.");
 		}
 	}
 }
