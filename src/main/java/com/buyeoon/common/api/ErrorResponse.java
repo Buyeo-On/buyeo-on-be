@@ -42,6 +42,10 @@ public record ErrorResponse(boolean success, ErrorData data) {
 		return new ErrorResponse(false, new ErrorData("INVALID_STATE_TRANSITION", "현재 상태에서는 요청한 작업을 수행할 수 없습니다."));
 	}
 
+	public static ErrorResponse resourceNotFound() {
+		return new ErrorResponse(false, new ErrorData("RESOURCE_NOT_FOUND", "대상을 찾을 수 없습니다."));
+	}
+
 	public record ErrorData(String code, String message) {
 	}
 }
