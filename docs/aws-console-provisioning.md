@@ -11,27 +11,46 @@
 - 비밀번호, 토큰, 인증서 비공개 키와 Parameter Store `SecureString` 값은 기록하지 않는다.
 - Console 변경 계획은 실행 전에 문서 PR로 검토하고, 실행 후 실제 식별자와 검증 결과를 갱신한다.
 
-## 최초 구성 Blocker
+## 단계별 Blocker
 
-아래 입력을 모두 확정하고 배포 산출물을 구현하기 전에는 최초 운영 구성을 시작하지 않는다. 값이 바뀌면 리소스 목록과 관련 아키텍처 문서를 함께 갱신한다.
+모든 항목을 한 번에 확정할 필요는 없다. 각 표의 항목은 해당 단계만 차단한다. 값이 바뀌면 리소스 목록과 관련 아키텍처 문서를 함께 갱신한다.
 
-| 입력 | 현재 값 |
-| --- | --- |
-| AWS Account ID | 확정 필요 |
-| AWS Region | `ap-northeast-2` |
-| GitHub organization/repository | `Buyeo-On/buyeo-on-be` |
-| 운영 도메인 | 확정 필요 |
-| VPC CIDR | 확정 필요 |
-| Public Subnet CIDR·AZ | 확정 필요 |
-| Private DB Subnet 2개의 CIDR·AZ | 확정 필요, 서로 다른 AZ |
-| EC2 AMI·인스턴스 타입·루트 볼륨 | 확정 필요 |
-| PostgreSQL 버전·RDS 타입·스토리지·DB 이름 | 확정 필요 |
-| S3 Bucket 이름 | 확정 필요, 전역 유일 이름 |
-| Cloudflare zone·API hostname | 확정 필요 |
-| Production Compose 파일 | 미구현 |
-| SSM 배포·롤백 스크립트 또는 Command Document | 미구현 |
-| GitHub Actions production 배포 Workflow | 미구현 |
-| Nginx Origin Certificate 주입·갱신 절차 | 미구현 |
+### A. Resource 생성 입력
+
+각 AWS resource를 생성하기 전에 해당 입력을 확정한다. Domain이나 배포 자동화가 준비되지 않아도 이 입력이 준비된 resource부터 생성할 수 있다.
+
+| 입력 | 현재 값 | 차단되는 작업 |
+| --- | --- | --- |
+| AWS Account ID | 확정 필요 | 모든 AWS resource 생성 |
+| AWS Region | `ap-northeast-2` | 모든 regional resource 생성 |
+| VPC CIDR | 확정 필요 | VPC 생성 |
+| Public Subnet CIDR·AZ | 확정 필요 | Public Subnet과 EC2 생성 |
+| Private DB Subnet 2개의 CIDR·AZ | 확정 필요, 서로 다른 AZ | DB Subnet Group과 RDS 생성 |
+| EC2 AMI·인스턴스 타입·루트 볼륨 | 확정 필요 | EC2 생성 |
+| PostgreSQL 버전·RDS 타입·스토리지·DB 이름 | 확정 필요 | RDS 생성 |
+| S3 Bucket 이름 | 확정 필요, 전역 유일 이름 | 이미지 S3 생성 |
+
+### B. 최초 Production 배포 조건
+
+AWS resource는 먼저 생성할 수 있지만, 아래 항목이 준비되기 전에는 외부에 Production 서비스를 공개하지 않는다.
+
+| 입력·산출물 | 현재 값 | 차단되는 작업 |
+| --- | --- | --- |
+| 운영 Domain | 확정 필요 | Production API 공개 |
+| Cloudflare zone·API hostname | 확정 필요 | DNS·Proxy·TLS 연결 |
+| Production Compose 파일 | 미구현 | EC2 애플리케이션 실행 |
+| Nginx 설정과 Origin Certificate 주입·갱신 절차 | 미구현 | HTTPS origin 공개 |
+| DB bootstrap과 Parameter Store 운영 값 | 미구현 | Spring Boot 최초 시작 |
+
+### C. 자동 배포 완료 조건
+
+아래 항목은 AWS resource 생성이나 수동 배포를 차단하지 않는다. 승인된 GitHub Actions → ECR → SSM 자동 배포를 사용하기 전에 완료한다.
+
+| 입력·산출물 | 현재 값 | 차단되는 작업 |
+| --- | --- | --- |
+| GitHub organization/repository | `Buyeo-On/buyeo-on-be` | GitHub OIDC Trust Policy 생성 |
+| SSM 배포·rollback script 또는 Command Document | 미구현 | SSM 자동 배포·rollback |
+| GitHub Actions production 배포 Workflow | 미구현 | GitHub Actions 자동 배포 |
 
 ## 리소스 목록
 
@@ -282,7 +301,7 @@ EC2 복구는 새 EC2를 같은 Public Subnet과 Instance Profile로 생성하�
 
 | 일시 | 작업자 | 변경 목적 | 대상 리소스 | 검증 결과 | 복구 방법 |
 | --- | --- | --- | --- | --- | --- |
-| 미작성 | 미작성 | 최초 운영 인프라 구성 | 전체 | 미검증 | 최초 구성 Blocker와 단계별 검증 완료 필요 |
+| 미작성 | 미작성 | 최초 운영 인프라 구성 | 전체 | 미검증 | 해당 단계 Blocker와 단계별 검증 완료 필요 |
 
 ## Terraform 재검토 기준
 
