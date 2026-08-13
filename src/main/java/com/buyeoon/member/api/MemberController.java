@@ -6,6 +6,8 @@ import com.buyeoon.member.application.MemberQueryService.MemberView;
 import com.buyeoon.member.application.MemberQueryService.SettingsView;
 import com.buyeoon.member.application.MemberSettingsUpdateService;
 import com.buyeoon.member.application.MemberSettingsUpdateService.SettingsUpdateCommand;
+import com.buyeoon.member.application.PushTokenService;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -13,7 +15,9 @@ import java.util.UUID;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -28,11 +32,13 @@ public class MemberController {
 
 	private final MemberQueryService memberQueryService;
 	private final MemberSettingsUpdateService memberSettingsUpdateService;
+	private final PushTokenService pushTokenService;
 
 	public MemberController(MemberQueryService memberQueryService,
-			MemberSettingsUpdateService memberSettingsUpdateService) {
+			MemberSettingsUpdateService memberSettingsUpdateService, PushTokenService pushTokenService) {
 		this.memberQueryService = memberQueryService;
 		this.memberSettingsUpdateService = memberSettingsUpdateService;
+		this.pushTokenService = pushTokenService;
 	}
 
 	@GetMapping("/me")
@@ -52,6 +58,19 @@ public class MemberController {
 			@RequestBody JsonNode request) {
 		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
 		return SuccessResponse.of(memberSettingsUpdateService.update(memberId, parseSettingsUpdate(request)));
+	}
+
+	@PutMapping("/me/push-token")
+	public SuccessResponse<Map<String, Object>> upsertMyPushToken(@AuthenticationPrincipal Jwt jwt,
+			@RequestBody JsonNode request) {
+		pushTokenService.upsert(memberId(jwt), sessionId(jwt), pushToken(request));
+		return SuccessResponse.of(Map.of());
+	}
+
+	@DeleteMapping("/me/push-token")
+	public SuccessResponse<Map<String, Object>> deleteMyPushToken(@AuthenticationPrincipal Jwt jwt) {
+		pushTokenService.unregister(memberId(jwt), sessionId(jwt));
+		return SuccessResponse.of(Map.of());
 	}
 
 	private SettingsUpdateCommand parseSettingsUpdate(JsonNode request) {
@@ -89,5 +108,28 @@ public class MemberController {
 			throw new InvalidSettingsRequestException();
 		}
 		return Optional.of(value.booleanValue());
+	}
+
+	private String pushToken(JsonNode request) {
+		if (request == null || !request.isObject() || request.size() != 1 || !request.has("token")) {
+			throw new InvalidPushTokenRequestException();
+		}
+		JsonNode tokenNode = request.get("token");
+		if (tokenNode == null || !tokenNode.isString()) {
+			throw new InvalidPushTokenRequestException();
+		}
+		String token = tokenNode.stringValue();
+		if (token.isBlank() || token.codePointCount(0, token.length()) > 4_096) {
+			throw new InvalidPushTokenRequestException();
+		}
+		return token;
+	}
+
+	private UUID memberId(Jwt jwt) {
+		return UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
+	}
+
+	private UUID sessionId(Jwt jwt) {
+		return UUID.fromString(Objects.requireNonNull(jwt.getClaimAsString("sid")));
 	}
 }
