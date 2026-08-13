@@ -40,6 +40,9 @@ public class MemberEntity {
 	@Column(name = "purge_after")
 	private Instant purgeAfter;
 
+	@Column(name = "purged_at")
+	private Instant purgedAt;
+
 	public static MemberEntity create() {
 		return new MemberEntity();
 	}
