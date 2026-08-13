@@ -7,6 +7,7 @@ import com.buyeoon.member.auth.social.SocialAuthenticationFailedException;
 import com.buyeoon.member.auth.social.SocialProviderUnavailableException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -17,6 +18,12 @@ public class AuthExceptionHandler {
 	@ExceptionHandler(InvalidRefreshTokenException.class)
 	@ResponseStatus(HttpStatus.UNAUTHORIZED)
 	public ErrorResponse handleInvalidRefreshToken() {
+		return ErrorResponse.unauthorized();
+	}
+
+	@ExceptionHandler(AuthenticationCredentialsNotFoundException.class)
+	@ResponseStatus(HttpStatus.UNAUTHORIZED)
+	public ErrorResponse handleInvalidSession() {
 		return ErrorResponse.unauthorized();
 	}
 
