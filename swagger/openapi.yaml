@@ -694,6 +694,7 @@ paths:
     delete:
       tags: [Notifications]
       summary: 현재 인증 세션의 푸시 토큰 삭제
+      description: 등록된 토큰이 없어도 성공하며 근처 퀴즈 알림 설정은 변경하지 않는다.
       operationId: deleteMyPushToken
       responses:
         '200':
@@ -2166,6 +2167,7 @@ components:
           type: string
           minLength: 1
           maxLength: 4096
+          pattern: '.*\S.*'
           description: 현재 기기에 FCM이 발급한 등록 토큰
     TravelStatisticsData:
       type: object
