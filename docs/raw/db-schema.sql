@@ -221,7 +221,7 @@ CREATE TABLE mission_photos (
     member_id uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE, -- 촬영 회원 ID
     trip_id uuid NOT NULL REFERENCES trips(id) ON DELETE CASCADE, -- 여행 ID
     mission_id uuid NOT NULL REFERENCES missions(id), -- 사진 미션 ID
-    object_key text NOT NULL UNIQUE, -- 스토리지 객체 키
+    object_key text NOT NULL UNIQUE CHECK (object_key LIKE 'private/%'), -- 비공개 스토리지 객체 키
     content_type text NOT NULL CHECK (content_type IN ('image/jpeg', 'image/png', 'image/webp')), -- 파일 MIME 타입
     file_size_bytes bigint NOT NULL CHECK (file_size_bytes > 0), -- 파일 크기
     uploaded_at timestamptz NOT NULL DEFAULT now() -- 업로드 완료 시각
@@ -345,6 +345,9 @@ CREATE TABLE idempotency_requests (
 );
 
 CREATE INDEX auth_sessions_member_idx ON auth_sessions (member_id, expires_at);
+CREATE INDEX members_due_purge_idx
+    ON members (purge_after, id)
+    WHERE status = 'WITHDRAWN' AND purged_at IS NULL;
 CREATE INDEX trips_member_idx ON trips (member_id, started_at DESC);
 CREATE INDEX places_location_gix ON places USING GIST (location);
 CREATE UNIQUE INDEX places_source_external_id_uq

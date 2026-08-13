@@ -29,6 +29,8 @@ class SchemaMappingTests {
 			.of("src/main/resources/db/migration/V5__replace_public_image_urls_with_keys.sql");
 	private static final Path CITIZEN_CARD_CONSTRAINTS_MIGRATION = Path
 			.of("src/main/resources/db/migration/V7__add_citizen_card_constraints.sql");
+	private static final Path MEMBER_PURGE_MIGRATION = Path
+			.of("src/main/resources/db/migration/V8__track_member_data_purge.sql");
 	private static final Pattern CREATE_TABLE = Pattern.compile("CREATE TABLE ([a-z_]+) ");
 
 	/** 초기 스키마에 후속 마이그레이션을 적용한 정의가 기준 DB 스키마와 같음을 보장한다. */
@@ -60,6 +62,20 @@ class SchemaMappingTests {
 		String themeImageKeyColumn = imageKeyConstraint + " -- 테마 이미지 객체 키";
 		String sortOrderColumn = "    sort_order smallint NOT NULL UNIQUE CHECK (sort_order > 0)";
 		String displayNameConstraintEnd = "    )," + " -- 앞뒤 공백과 제어문자가 없는 표시 이름";
+		String legacyMemberLifecycle = String.join("\n", "    purge_after timestamptz, -- 개인정보 파기 기한", "    CHECK (",
+				"        (status = 'ACTIVE' AND withdrawn_at IS NULL AND purge_after IS NULL)",
+				"        OR (status = 'WITHDRAWN' AND withdrawn_at IS NOT NULL AND purge_after IS NOT NULL)", "    )");
+		String currentMemberLifecycle = String.join("\n", "    purge_after timestamptz, -- 개인정보 파기 기한",
+				"    purged_at timestamptz, -- 개인정보 파기 완료 시각", "    CHECK (",
+				"        (status = 'ACTIVE' AND withdrawn_at IS NULL AND purge_after IS NULL AND purged_at IS NULL)",
+				"        OR (", "            status = 'WITHDRAWN'", "            AND withdrawn_at IS NOT NULL",
+				"            AND purge_after IS NOT NULL",
+				"            AND (purged_at IS NULL OR purged_at >= withdrawn_at)", "        )", "    )");
+		String authSessionIndex = "CREATE INDEX auth_sessions_member_idx ON auth_sessions (member_id, expires_at);";
+		String memberPurgeIndexes = String.join("\n", authSessionIndex, "CREATE INDEX members_due_purge_idx",
+				"    ON members (purge_after, id)", "    WHERE status = 'WITHDRAWN' AND purged_at IS NULL;");
+		String privatePhotoObjectKey = "object_key text NOT NULL UNIQUE CHECK (object_key LIKE 'private/%'),"
+				+ " -- 비공개 스토리지 객체 키";
 		String publicImageKeySchema = baseline
 				.replace("expires_at timestamptz NOT NULL, -- 키 보관 만료 시각",
 						"expires_at timestamptz NOT NULL, -- 최초 성공 확정 시각부터 24시간인 키 보관 만료 시각")
@@ -84,13 +100,29 @@ class SchemaMappingTests {
 						String.join("\n", "barcode_value text NOT NULL UNIQUE CHECK (",
 								"        barcode_value ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}"
 										+ "-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'",
-								"    ), -- UUID 형식의 시연용 바코드 값"));
+								"    ), -- UUID 형식의 시연용 바코드 값"))
+				.replace(legacyMemberLifecycle, currentMemberLifecycle)
+				.replace("object_key text NOT NULL UNIQUE, -- 스토리지 객체 키", privatePhotoObjectKey)
+				.replace(authSessionIndex, memberPurgeIndexes);
 
 		assertThat(baseline).contains(placeSourceColumns).contains(placeLocationIndex).contains(legacyMissionStatus)
 				.contains(legacyMissionConstraints);
 		assertThat(publicImageKeySchema.replace(placeSourceColumns, placeExternalIdentityColumns)
 				.replace(placeLocationIndex, placeIndexes).replace(legacyMissionStatus, currentMissionStatus)
 				.replace(legacyMissionConstraints, currentMissionConstraints)).isEqualTo(canonicalSchema);
+	}
+
+	/** 탈퇴 회원 파기 완료 상태와 대상 조회 인덱스가 기준 스키마와 업그레이드 경로에 함께 존재하는지 검증한다. */
+	@Test
+	@DisplayName("회원 정보 파기 완료 상태는 기준 스키마와 마이그레이션에 정의되어 있다")
+	void memberPurgeCompletionIsDefinedInSchemaAndMigration() throws IOException {
+		String canonicalSchema = Files.readString(SCHEMA_SOURCE, StandardCharsets.UTF_8);
+		String migration = Files.readString(MEMBER_PURGE_MIGRATION, StandardCharsets.UTF_8);
+
+		assertThat(canonicalSchema).contains("purged_at timestamptz").contains("members_due_purge_idx")
+				.contains("purged_at IS NULL");
+		assertThat(migration).contains("ADD COLUMN purged_at timestamptz").contains("members_lifecycle_ck")
+				.contains("members_due_purge_idx").contains("mission_photos_object_key_prefix_ck");
 	}
 
 	/** 미션 상태와 시도 횟수 제약이 신규 설치용 스키마와 기존 DB 업그레이드에 모두 반영됐는지 검증한다. */
