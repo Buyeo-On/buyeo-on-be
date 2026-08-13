@@ -26,6 +26,7 @@ public class MemberSettingsUpdateService {
 	}
 
 	private SettingsView updateInTransaction(UUID memberId, SettingsUpdateCommand command) {
+		lockActiveMember(memberId);
 		SettingsView current = lockSettings(memberId);
 		if (current.version() != command.version()) {
 			throw new InvalidStateTransitionException();
@@ -51,6 +52,18 @@ public class MemberSettingsUpdateService {
 			throw new IllegalStateException("서비스 설정을 변경할 수 없습니다.");
 		}
 		return new SettingsView(nearbyQuizNotificationEnabled, darkModeEnabled, current.version() + 1);
+	}
+
+	private void lockActiveMember(UUID memberId) {
+		boolean memberExists = !jdbcOperations.query("""
+				SELECT id
+				FROM members
+				WHERE id = ? AND status = 'ACTIVE'
+				FOR UPDATE
+				""", (resultSet, rowNumber) -> resultSet.getObject("id", UUID.class), memberId).isEmpty();
+		if (!memberExists) {
+			throw new AuthenticationCredentialsNotFoundException("활성 회원이 아닙니다.");
+		}
 	}
 
 	private SettingsView lockSettings(UUID memberId) {

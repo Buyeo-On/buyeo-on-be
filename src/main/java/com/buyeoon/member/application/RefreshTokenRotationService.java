@@ -35,7 +35,9 @@ public class RefreshTokenRotationService {
 	@Transactional
 	public AuthResult rotate(String rawRefreshToken) {
 		ParsedRefreshToken parsed = refreshTokenService.parse(rawRefreshToken);
-		SessionState session = lockSession(parsed.sessionId());
+		UUID memberId = findMemberId(parsed.sessionId());
+		lockMember(memberId);
+		SessionState session = lockSession(parsed.sessionId(), memberId);
 		Instant now = Instant.now();
 		if (session.revokedAt() != null || !session.expiresAt().isAfter(now)
 				|| session.memberStatus() != MemberStatus.ACTIVE
@@ -59,7 +61,22 @@ public class RefreshTokenRotationService {
 				AccessTokenService.ACCESS_TOKEN_LIFETIME.toSeconds(), false, member);
 	}
 
-	private SessionState lockSession(UUID sessionId) {
+	private UUID findMemberId(UUID sessionId) {
+		return jdbcOperations
+				.query("SELECT member_id FROM auth_sessions WHERE id = ?",
+						(resultSet, rowNumber) -> resultSet.getObject("member_id", UUID.class), sessionId)
+				.stream().findFirst().orElseThrow(InvalidRefreshTokenException::new);
+	}
+
+	private void lockMember(UUID memberId) {
+		boolean exists = !jdbcOperations.query("SELECT id FROM members WHERE id = ? FOR UPDATE",
+				(resultSet, rowNumber) -> resultSet.getObject("id", UUID.class), memberId).isEmpty();
+		if (!exists) {
+			throw new InvalidRefreshTokenException();
+		}
+	}
+
+	private SessionState lockSession(UUID sessionId, UUID memberId) {
 		return jdbcOperations.query("""
 				SELECT session.id,
 				       session.member_id,
@@ -70,8 +87,10 @@ public class RefreshTokenRotationService {
 				FROM auth_sessions session
 				JOIN members member ON member.id = session.member_id
 				WHERE session.id = ?
-				FOR UPDATE OF session, member
-				""", this::mapSession, sessionId).stream().findFirst().orElseThrow(InvalidRefreshTokenException::new);
+				  AND session.member_id = ?
+				FOR UPDATE OF session
+				""", this::mapSession, sessionId, memberId).stream().findFirst()
+				.orElseThrow(InvalidRefreshTokenException::new);
 	}
 
 	private SessionState mapSession(ResultSet resultSet, int rowNumber) throws SQLException {
