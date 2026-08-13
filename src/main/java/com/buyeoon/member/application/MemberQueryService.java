@@ -54,6 +54,23 @@ public class MemberQueryService {
 				.orElseThrow(() -> new AuthenticationCredentialsNotFoundException("활성 회원이 아닙니다."));
 	}
 
+	public SettingsView getSettings(UUID memberId) {
+		return jdbcOperations
+				.query("""
+						SELECT nearby_quiz_notification_enabled,
+						       dark_mode_enabled,
+						       version
+						FROM member_settings
+						WHERE member_id = ?
+						""",
+						(resultSet, rowNumber) -> new SettingsView(
+								resultSet.getBoolean("nearby_quiz_notification_enabled"),
+								resultSet.getBoolean("dark_mode_enabled"), resultSet.getLong("version")),
+						memberId)
+				.stream().findFirst()
+				.orElseThrow(() -> new AuthenticationCredentialsNotFoundException("서비스 설정이 없습니다."));
+	}
+
 	private MemberView mapMember(ResultSet resultSet, int rowNumber) throws SQLException {
 		return new MemberView(resultSet.getObject("id", UUID.class),
 				MemberStatus.valueOf(resultSet.getString("status")), resultSet.getString("display_name"),
@@ -64,5 +81,8 @@ public class MemberQueryService {
 
 	public record MemberView(UUID memberId, MemberStatus status, String displayName, UUID characterId,
 			boolean requiredTermsAgreed, boolean citizenCardIssued, ZonedDateTime createdAt) {
+	}
+
+	public record SettingsView(boolean nearbyQuizNotificationEnabled, boolean darkModeEnabled, long version) {
 	}
 }
