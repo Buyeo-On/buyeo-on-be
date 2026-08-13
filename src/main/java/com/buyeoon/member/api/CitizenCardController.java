@@ -6,6 +6,7 @@ import com.buyeoon.member.application.CitizenCardCreationService.CitizenCardView
 import com.buyeoon.member.application.CitizenCardCreationService.LocationCommand;
 import com.buyeoon.member.application.CitizenCardCreator;
 import com.buyeoon.member.application.CitizenCardQueryService;
+import com.buyeoon.member.application.CitizenCardQueryService.BarcodeView;
 import com.buyeoon.member.application.CitizenCardQueryService.CitizenCardOptionsView;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
@@ -43,6 +44,12 @@ public class CitizenCardController {
 	public SuccessResponse<CitizenCardView> getMyCard(@AuthenticationPrincipal Jwt jwt) {
 		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
 		return SuccessResponse.of(citizenCards.getMyCard(memberId));
+	}
+
+	@GetMapping("/citizen-cards/me/barcode")
+	public SuccessResponse<BarcodeView> getMyBarcode(@AuthenticationPrincipal Jwt jwt) {
+		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
+		return SuccessResponse.of(citizenCards.getMyBarcode(memberId));
 	}
 
 	@PostMapping("/citizen-cards")

@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class CitizenCardQueryService {
 	private static final ZoneId ASIA_SEOUL = ZoneId.of("Asia/Seoul");
+	private static final String SIMULATION_NOTICE = "실제 상점에서의 사용은 제한됩니다.";
 
 	private final JdbcOperations jdbcOperations;
 	private final PublicImageUrlService imageUrls;
@@ -54,6 +55,19 @@ public class CitizenCardQueryService {
 				card.issuedAt());
 	}
 
+	public BarcodeView getMyBarcode(UUID memberId) {
+		CitizenCardView citizenCard = getMyCard(memberId);
+		BarcodeState barcode = jdbcOperations.query("""
+				SELECT card.barcode_value,
+				       COALESCE(SUM(point.amount), 0) AS point_balance
+				FROM citizen_cards card
+				LEFT JOIN point_transactions point ON point.member_id = card.member_id
+				WHERE card.member_id = ?
+				GROUP BY card.barcode_value
+				""", this::mapBarcode, memberId).stream().findFirst().orElseThrow(ResourceNotFoundException::new);
+		return new BarcodeView(citizenCard, barcode.barcodeValue(), barcode.pointBalance(), true, SIMULATION_NOTICE);
+	}
+
 	private CardOptionView mapOption(ResultSet resultSet, int rowNumber) throws SQLException {
 		return new CardOptionView(resultSet.getObject("id", UUID.class), resultSet.getString("name"),
 				imageUrls.create(resultSet.getString("image_key")));
@@ -67,6 +81,10 @@ public class CitizenCardQueryService {
 				resultSet.getTimestamp("issued_at").toInstant().atZone(ASIA_SEOUL));
 	}
 
+	private BarcodeState mapBarcode(ResultSet resultSet, int rowNumber) throws SQLException {
+		return new BarcodeState(resultSet.getString("barcode_value"), resultSet.getLong("point_balance"));
+	}
+
 	public record CitizenCardOptionsView(List<CardOptionView> characters, List<CardOptionView> themes) {
 		public CitizenCardOptionsView {
 			characters = List.copyOf(characters);
@@ -77,8 +95,15 @@ public class CitizenCardQueryService {
 	public record CardOptionView(UUID id, String name, String imageUrl) {
 	}
 
+	public record BarcodeView(CitizenCardView citizenCard, String barcodeValue, long pointBalance,
+			boolean simulationOnly, String notice) {
+	}
+
 	private record StoredCitizenCard(UUID cardId, String displayName, UUID characterId, String characterName,
 			String characterImageKey, UUID themeId, String themeName, String themeImageKey,
 			java.time.ZonedDateTime issuedAt) {
+	}
+
+	private record BarcodeState(String barcodeValue, long pointBalance) {
 	}
 }

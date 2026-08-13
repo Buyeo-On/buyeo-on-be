@@ -136,6 +136,57 @@ class MyCitizenCardIntegrationTests {
 				.andExpect(jsonPath("$.data.code").value("UNAUTHORIZED"));
 	}
 
+	/** 바코드 조회는 군민증과 UUID 바코드, 양수·음수 포인트 원장 합계를 상태 변경 없이 반환한다. */
+	@Test
+	@DisplayName("바코드 조회는 시연용 바코드와 현재 포인트 잔액을 반환한다")
+	void barcodeReturnsCitizenCardAndCurrentPointBalanceWithoutMutation() throws Exception {
+		AuthenticatedMember member = insertAuthenticatedMember();
+		UUID character = insertCharacter("금동이", "public/characters/geumdong.webp", 1);
+		UUID theme = insertTheme();
+		UUID cardId = issueCitizenCard(member.memberId(), character, theme);
+		insertPoint(member.memberId(), "EARN", 1000);
+		insertPoint(member.memberId(), "LEAVE_TO_BUYEO", -300);
+		Long beforeCount = jdbcTemplate.queryForObject("SELECT count(*) FROM point_transactions", Long.class);
+
+		mockMvc.perform(get("/citizen-cards/me/barcode").header("Authorization", "Bearer " + member.accessToken()))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.data.citizenCard.cardId").value(cardId.toString()))
+				.andExpect(jsonPath("$.data.barcodeValue").isString())
+				.andExpect(jsonPath("$.data.pointBalance").value(700))
+				.andExpect(jsonPath("$.data.simulationOnly").value(true))
+				.andExpect(jsonPath("$.data.notice").value("실제 상점에서의 사용은 제한됩니다."));
+
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM point_transactions", Long.class))
+				.isEqualTo(beforeCount);
+		assertThat(jdbcTemplate.queryForObject("SELECT sum(amount) FROM point_transactions", Long.class))
+				.isEqualTo(700L);
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM citizen_cards", Long.class)).isEqualTo(1L);
+	}
+
+	/** 포인트 내역이 없는 발급 회원은 0 잔액을 받는다. */
+	@Test
+	@DisplayName("포인트 내역이 없으면 바코드 잔액은 0이다")
+	void barcodeBalanceIsZeroWithoutPointTransactions() throws Exception {
+		AuthenticatedMember member = insertAuthenticatedMember();
+		UUID character = insertCharacter("금동이", "public/characters/geumdong.webp", 1);
+		UUID theme = insertTheme();
+		issueCitizenCard(member.memberId(), character, theme);
+
+		mockMvc.perform(get("/citizen-cards/me/barcode").header("Authorization", "Bearer " + member.accessToken()))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.data.pointBalance").value(0));
+	}
+
+	/** 미발급·미인증 회원은 바코드와 잔액을 조회할 수 없다. */
+	@Test
+	@DisplayName("바코드 조회는 발급된 군민증과 인증을 요구한다")
+	void barcodeRequiresIssuedCardAndAuthentication() throws Exception {
+		AuthenticatedMember member = insertAuthenticatedMember();
+
+		mockMvc.perform(get("/citizen-cards/me/barcode").header("Authorization", "Bearer " + member.accessToken()))
+				.andExpect(status().isNotFound()).andExpect(jsonPath("$.data.code").value("RESOURCE_NOT_FOUND"));
+		mockMvc.perform(get("/citizen-cards/me/barcode")).andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.data.code").value("UNAUTHORIZED"));
+	}
+
 	private AuthenticatedMember insertAuthenticatedMember() {
 		UUID memberId = UUID.randomUUID();
 		UUID sessionId = UUID.randomUUID();
@@ -164,6 +215,26 @@ class MyCitizenCardIntegrationTests {
 				VALUES (?, '백제 테마', 'public/themes/baekje.webp', 1)
 				""", id);
 		return id;
+	}
+
+	private UUID issueCitizenCard(UUID memberId, UUID characterId, UUID themeId) {
+		UUID cardId = UUID.randomUUID();
+		jdbcTemplate.update("""
+				INSERT INTO member_profiles (member_id, display_name, character_id)
+				VALUES (?, '부여인', ?)
+				""", memberId, characterId);
+		jdbcTemplate.update("""
+				INSERT INTO citizen_cards (id, member_id, theme_id, barcode_value)
+				VALUES (?, ?, ?, ?)
+				""", cardId, memberId, themeId, UUID.randomUUID().toString());
+		return cardId;
+	}
+
+	private void insertPoint(UUID memberId, String type, long amount) {
+		jdbcTemplate.update("""
+				INSERT INTO point_transactions (member_id, type, amount, description)
+				VALUES (?, ?::point_transaction_type, ?, '테스트 포인트')
+				""", memberId, type, amount);
 	}
 
 	@DynamicPropertySource
