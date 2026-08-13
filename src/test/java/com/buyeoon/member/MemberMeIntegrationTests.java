@@ -1,5 +1,6 @@
 package com.buyeoon.member;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -10,6 +11,7 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -240,6 +242,71 @@ class MemberMeIntegrationTests {
 				"Bearer " + accessTokenService.issue(authenticatedMemberId, sessionId))).andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.memberId").value(authenticatedMemberId.toString()))
 				.andExpect(jsonPath("$.data.memberId").value(org.hamcrest.Matchers.not(otherMemberId.toString())));
+	}
+
+	@Test
+	@DisplayName("신규 회원은 기본 서비스 설정을 조회한다")
+	void newMemberGetsDefaultSettings() throws Exception {
+		UUID memberId = UUID.randomUUID();
+		UUID sessionId = UUID.randomUUID();
+		insertMember(memberId, "ACTIVE", Instant.now());
+		insertSession(sessionId, memberId, Instant.now().plus(30, ChronoUnit.DAYS), null);
+		jdbcTemplate.update("INSERT INTO member_settings (member_id) VALUES (?)", memberId);
+
+		mockMvc.perform(get("/members/me/settings").header("Authorization",
+				"Bearer " + accessTokenService.issue(memberId, sessionId))).andExpect(status().isOk())
+				.andExpect(content().contentType(MediaType.APPLICATION_JSON))
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.data.nearbyQuizNotificationEnabled").value(false))
+				.andExpect(jsonPath("$.data.darkModeEnabled").value(false))
+				.andExpect(jsonPath("$.data.version").value(0));
+	}
+
+	@Test
+	@DisplayName("현재 서비스 설정을 상태 변경 없이 반환한다")
+	void currentSettingsAreReturnedWithoutMutation() throws Exception {
+		UUID memberId = UUID.randomUUID();
+		UUID sessionId = UUID.randomUUID();
+		insertMember(memberId, "ACTIVE", Instant.now());
+		insertSession(sessionId, memberId, Instant.now().plus(30, ChronoUnit.DAYS), null);
+		jdbcTemplate.update("""
+				INSERT INTO member_settings
+				    (member_id, nearby_quiz_notification_enabled, dark_mode_enabled, version)
+				VALUES (?, true, true, 7)
+				""", memberId);
+		Map<String, Object> before = settings(memberId);
+		String token = accessTokenService.issue(memberId, sessionId);
+
+		for (int request = 0; request < 2; request++) {
+			mockMvc.perform(get("/members/me/settings").header("Authorization", "Bearer " + token))
+					.andExpect(status().isOk()).andExpect(jsonPath("$.data.nearbyQuizNotificationEnabled").value(true))
+					.andExpect(jsonPath("$.data.darkModeEnabled").value(true))
+					.andExpect(jsonPath("$.data.version").value(7));
+		}
+
+		assertThat(settings(memberId)).isEqualTo(before);
+	}
+
+	@Test
+	@DisplayName("서비스 설정 조회에는 활성 인증 세션이 필요하다")
+	void settingsAuthenticationIsRequired() throws Exception {
+		mockMvc.perform(get("/members/me/settings")).andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.data.code").value("UNAUTHORIZED"));
+
+		UUID memberId = UUID.randomUUID();
+		insertMember(memberId, "ACTIVE", Instant.now());
+		jdbcTemplate.update("INSERT INTO member_settings (member_id) VALUES (?)", memberId);
+		mockMvc.perform(get("/members/me/settings").header("Authorization",
+				"Bearer " + accessTokenService.issue(memberId, UUID.randomUUID()))).andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.data.code").value("UNAUTHORIZED"));
+	}
+
+	private Map<String, Object> settings(UUID memberId) {
+		return jdbcTemplate.queryForMap("""
+				SELECT nearby_quiz_notification_enabled, dark_mode_enabled, version
+				FROM member_settings
+				WHERE member_id = ?
+				""", memberId);
 	}
 
 	private void insertMember(UUID memberId, String status, Instant createdAt) {
