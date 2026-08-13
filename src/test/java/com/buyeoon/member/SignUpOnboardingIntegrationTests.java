@@ -16,6 +16,7 @@ import com.buyeoon.member.auth.social.VerifiedSocialIdentity;
 import com.buyeoon.member.entity.SocialProvider;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -214,7 +215,7 @@ class SignUpOnboardingIntegrationTests {
 	}
 
 	private long count(String table) {
-		return jdbcTemplate.queryForObject("SELECT count(*) FROM " + table, Long.class);
+		return Objects.requireNonNull(jdbcTemplate.queryForObject("SELECT count(*) FROM " + table, Long.class));
 	}
 
 	@DynamicPropertySource
