@@ -6,6 +6,8 @@ import com.buyeoon.member.application.MemberQueryService.MemberView;
 import com.buyeoon.member.application.MemberQueryService.SettingsView;
 import com.buyeoon.member.application.MemberSettingsUpdateService;
 import com.buyeoon.member.application.MemberSettingsUpdateService.SettingsUpdateCommand;
+import com.buyeoon.member.application.ProfileUpdateService;
+import com.buyeoon.member.application.ProfileUpdateService.ProfileUpdateCommand;
 import com.buyeoon.member.application.PushTokenService;
 import java.util.Map;
 import java.util.Objects;
@@ -32,12 +34,15 @@ public class MemberController {
 
 	private final MemberQueryService memberQueryService;
 	private final MemberSettingsUpdateService memberSettingsUpdateService;
+	private final ProfileUpdateService profileUpdateService;
 	private final PushTokenService pushTokenService;
 
 	public MemberController(MemberQueryService memberQueryService,
-			MemberSettingsUpdateService memberSettingsUpdateService, PushTokenService pushTokenService) {
+			MemberSettingsUpdateService memberSettingsUpdateService, ProfileUpdateService profileUpdateService,
+			PushTokenService pushTokenService) {
 		this.memberQueryService = memberQueryService;
 		this.memberSettingsUpdateService = memberSettingsUpdateService;
+		this.profileUpdateService = profileUpdateService;
 		this.pushTokenService = pushTokenService;
 	}
 
@@ -58,6 +63,12 @@ public class MemberController {
 			@RequestBody JsonNode request) {
 		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
 		return SuccessResponse.of(memberSettingsUpdateService.update(memberId, parseSettingsUpdate(request)));
+	}
+
+	@PatchMapping("/me/profile")
+	public SuccessResponse<MemberView> updateMyProfile(@AuthenticationPrincipal Jwt jwt,
+			@RequestBody JsonNode request) {
+		return SuccessResponse.of(profileUpdateService.update(memberId(jwt), parseProfileUpdate(request)));
 	}
 
 	@PutMapping("/me/push-token")
@@ -123,6 +134,40 @@ public class MemberController {
 			throw new InvalidPushTokenRequestException();
 		}
 		return token;
+	}
+
+	private ProfileUpdateCommand parseProfileUpdate(JsonNode request) {
+		Set<String> fields = Set.of("displayName", "characterId");
+		if (request == null || !request.isObject() || request.isEmpty()
+				|| request.properties().stream().anyMatch(property -> !fields.contains(property.getKey()))) {
+			throw new InvalidProfileRequestException();
+		}
+		String displayName = request.has("displayName") ? displayName(request.get("displayName")) : null;
+		UUID characterId = request.has("characterId") ? profileCharacterId(request.get("characterId")) : null;
+		return new ProfileUpdateCommand(displayName, characterId);
+	}
+
+	private String displayName(JsonNode node) {
+		if (node == null || !node.isString()) {
+			throw new InvalidProfileRequestException();
+		}
+		String displayName = node.stringValue().strip();
+		int length = displayName.codePointCount(0, displayName.length());
+		if (length < 1 || length > 8 || displayName.codePoints().anyMatch(Character::isISOControl)) {
+			throw new InvalidProfileRequestException();
+		}
+		return displayName;
+	}
+
+	private UUID profileCharacterId(JsonNode node) {
+		if (node == null || !node.isString()) {
+			throw new InvalidProfileRequestException();
+		}
+		try {
+			return UUID.fromString(node.stringValue());
+		} catch (IllegalArgumentException exception) {
+			throw new InvalidProfileRequestException();
+		}
 	}
 
 	private UUID memberId(Jwt jwt) {
