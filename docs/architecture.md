@@ -107,7 +107,6 @@ iOS Flutter
 - SLF4J 구조화 로그를 사용하고 개발은 일반 로그, 운영은 JSON 로그로 출력한다.
 - Spring과 Nginx 로그를 CloudWatch Logs에 전송해 30일 보관한다.
 - 액세스 토큰, OAuth 코드, Presigned URL과 개인정보는 로그에 기록하지 않는다.
-- CloudWatch Alarm과 SNS 이메일로 EC2 상태, 디스크, 5xx, RDS 저장 공간·연결 수를 감시한다.
 - Docker `HEALTHCHECK`는 Actuator liveness를 확인한다.
 - 공개 헬스 응답은 내부 구성과 DB 상세정보를 노출하지 않는다.
 ## 미정·보류
