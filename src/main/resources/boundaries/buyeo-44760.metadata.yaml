@@ -1,0 +1,21 @@
+name: 부여군 법정구역 경계
+administrative-code: "44760"
+source:
+  provider: 국토교통부
+  dataset: 법정구역정보
+  portal-url: https://www.data.go.kr/data/15045881/fileData.do
+  download-url: https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?svcCde=NA&dsId=21
+  archive: AL_D001_00_20260609.zip
+  archive-sha256: 57e2092267df6b16b24ebaf8b44b3fa8b564121004e72d1d1ac0437a1e55dc6f
+  reference-date: 2026-06-09
+  published-at: 2026-06-10
+  license: 이용허락범위 제한 없음
+  crs: EPSG:5186
+extraction:
+  extracted-at: 2026-08-13
+  layer: SIG
+  filter: A1 == "44760"
+  output-crs: EPSG:4326
+  tool: mapshaper 0.7.52
+  output-sha256: 1c21e20c2b090f26692c82426e619baa7e8c84bfce7afabac96a8a6fc7f4fd02
+notice: 정보 제공 목적의 참고 자료이며 법적 효력이 없다.
