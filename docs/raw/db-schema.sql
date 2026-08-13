@@ -20,9 +20,15 @@ CREATE TABLE members (
     created_at timestamptz NOT NULL DEFAULT now(), -- 가입 시각
     withdrawn_at timestamptz, -- 탈퇴 확정 시각
     purge_after timestamptz, -- 개인정보 파기 기한
+    purged_at timestamptz, -- 개인정보 파기 완료 시각
     CHECK (
-        (status = 'ACTIVE' AND withdrawn_at IS NULL AND purge_after IS NULL)
-        OR (status = 'WITHDRAWN' AND withdrawn_at IS NOT NULL AND purge_after IS NOT NULL)
+        (status = 'ACTIVE' AND withdrawn_at IS NULL AND purge_after IS NULL AND purged_at IS NULL)
+        OR (
+            status = 'WITHDRAWN'
+            AND withdrawn_at IS NOT NULL
+            AND purge_after IS NOT NULL
+            AND (purged_at IS NULL OR purged_at >= withdrawn_at)
+        )
     )
 );
 
