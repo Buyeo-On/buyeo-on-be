@@ -66,7 +66,7 @@ iOS Flutter
 - AWS RDS PostgreSQL과 PostGIS를 사용한다.
 - 장소는 `geography(Point, 4326)`와 GiST 인덱스로 저장한다.
 - 운영 JPA는 `ddl-auto=validate`를 사용한다.
-- 데이터 접근은 Spring Data JPA를 기본으로 사용하고, 조회·집계 로직에는 raw SQL(네이티브 쿼리)을 허용한다.
+- 데이터 접근은 Spring Data JPA를 기본으로 사용한다. 조회는 JPQL + constructor projection을 기본으로 하고, JPQL로 표현할 수 없는 SQL(집계·PostgreSQL 전용 문법)에만 네이티브 쿼리를 허용한다.
 - Spring Boot가 시작될 때 런타임 DB Role로 Flyway 마이그레이션을 실행하며 실패하면 애플리케이션 시작도 실패한다.
 - MVP에서는 Flyway DDL과 애플리케이션 DML에 하나의 PostgreSQL Role을 사용한다. RDS 관리자 계정은 최초 bootstrap에만 사용하고 애플리케이션에 제공하지 않는다.
 - 운영 PostGIS 확장은 최초 애플리케이션 배포 전에 인프라 bootstrap 단계에서 설치한다.
