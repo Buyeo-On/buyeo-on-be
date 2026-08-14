@@ -52,13 +52,8 @@ public class NotificationEntity {
 	@Column(name = "occurred_at", nullable = false, updatable = false)
 	private Instant occurredAt;
 
-	public static NotificationEntity create(
-			UUID memberId,
-			NotificationType type,
-			String title,
-			String body,
-			String targetType,
-			UUID targetId) {
+	public static NotificationEntity create(UUID memberId, NotificationType type, String title, String body,
+			String targetType, UUID targetId) {
 		NotificationEntity notification = new NotificationEntity();
 		notification.memberId = memberId;
 		notification.type = type;
@@ -67,5 +62,11 @@ public class NotificationEntity {
 		notification.targetType = targetType;
 		notification.targetId = targetId;
 		return notification;
+	}
+
+	public void markRead() {
+		if (this.readAt == null) {
+			this.readAt = Instant.now();
+		}
 	}
 }
