@@ -46,6 +46,10 @@ public record ErrorResponse(boolean success, ErrorData data) {
 		return new ErrorResponse(false, new ErrorData("RESOURCE_NOT_FOUND", "대상을 찾을 수 없습니다."));
 	}
 
+	public static ErrorResponse activeTripRequired() {
+		return new ErrorResponse(false, new ErrorData("ACTIVE_TRIP_REQUIRED", "진행 중인 여행이 있어야 이용할 수 있습니다."));
+	}
+
 	public record ErrorData(String code, String message) {
 	}
 }
