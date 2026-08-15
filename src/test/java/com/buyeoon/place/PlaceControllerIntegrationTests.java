@@ -108,6 +108,38 @@ class PlaceControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.items[1].placeId").value(farPlace.toString()));
 	}
 
+	/**
+	 * 커서 다음 페이지의 동점 조건이 등호(=)면 재계산된 거리가 원래 값과 부동소수점 마지막 자리까지 일치하지 않는 경우 동점 그룹 나머지가
+	 * 통째로 누락된다. 좌표가 완전히 같은 두 장소로 동점을 만들어 id 가드(>=+id>)가 실제로 그 그룹을 넘기는지 확인한다.
+	 */
+	@Test
+	@DisplayName("같은 거리의 장소가 커서 경계에 걸쳐 있어도 누락되지 않는다")
+	void returnsTiedDistancePlacesAcrossCursorBoundary() throws Exception {
+		startTrip(member.memberId());
+		double tiedLatitude = ORIGIN_LATITUDE + 0.001;
+		double tiedLongitude = ORIGIN_LONGITUDE + 0.001;
+		UUID first = savePlace(PlaceCategory.HERITAGE, "동점1", tiedLatitude, tiedLongitude);
+		UUID second = savePlace(PlaceCategory.HERITAGE, "동점2", tiedLatitude, tiedLongitude);
+		UUID third = savePlace(PlaceCategory.HERITAGE, "동점3", tiedLatitude, tiedLongitude);
+
+		MvcResult firstPage = mockMvc
+				.perform(placeRequest().param("latitude", String.valueOf(ORIGIN_LATITUDE))
+						.param("longitude", String.valueOf(ORIGIN_LONGITUDE)).param("size", "1"))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.data.page.hasNext").value(true)).andReturn();
+		String nextCursor = objectMapper.readTree(firstPage.getResponse().getContentAsString()).get("data").get("page")
+				.get("nextCursor").stringValue();
+
+		mockMvc.perform(placeRequest().param("latitude", String.valueOf(ORIGIN_LATITUDE))
+				.param("longitude", String.valueOf(ORIGIN_LONGITUDE)).param("size", "2").param("cursor", nextCursor))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.data.items.length()").value(2));
+
+		mockMvc.perform(placeRequest().param("latitude", String.valueOf(ORIGIN_LATITUDE))
+				.param("longitude", String.valueOf(ORIGIN_LONGITUDE)).param("size", "10")).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.items[*].placeId").value(hasItem(first.toString())))
+				.andExpect(jsonPath("$.data.items[*].placeId").value(hasItem(second.toString())))
+				.andExpect(jsonPath("$.data.items[*].placeId").value(hasItem(third.toString())));
+	}
+
 	/** 장소 탐색은 진행 중인 여행이 있는 회원만 이용할 수 있다. */
 	@Test
 	@DisplayName("진행 중인 여행이 없으면 403을 받는다")

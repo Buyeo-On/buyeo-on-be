@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class PlaceController {
 
-	private static final int DEFAULT_SIZE = 20;
 	private static final int MIN_SIZE = 1;
 	private static final int MAX_SIZE = 100;
 
@@ -30,10 +29,13 @@ public class PlaceController {
 	public SuccessResponse<PlaceListView> getPlaces(@AuthenticationPrincipal Jwt jwt,
 			@RequestParam(required = false) String category, @RequestParam String latitude,
 			@RequestParam String longitude, @RequestParam(required = false) String cursor,
-			@RequestParam(required = false) String size) {
+			@RequestParam(defaultValue = "20") int size) {
 		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
+		if (size < MIN_SIZE || size > MAX_SIZE) {
+			throw new InvalidPlaceRequestException();
+		}
 		return SuccessResponse.of(placeQueryService.list(memberId, parseCategory(category), latitude(latitude),
-				longitude(longitude), parseCursor(cursor), parseSize(size)));
+				longitude(longitude), parseCursor(cursor), size));
 	}
 
 	private PlaceCategory parseCategory(String category) {
@@ -84,21 +86,5 @@ public class PlaceController {
 		} catch (IllegalArgumentException exception) {
 			throw new InvalidPlaceRequestException();
 		}
-	}
-
-	private int parseSize(String size) {
-		if (size == null) {
-			return DEFAULT_SIZE;
-		}
-		int value;
-		try {
-			value = Integer.parseInt(size);
-		} catch (NumberFormatException exception) {
-			throw new InvalidPlaceRequestException();
-		}
-		if (value < MIN_SIZE || value > MAX_SIZE) {
-			throw new InvalidPlaceRequestException();
-		}
-		return value;
 	}
 }

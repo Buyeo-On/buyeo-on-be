@@ -46,7 +46,7 @@ public interface PlaceQueryRepository extends JpaRepository<PlaceEntity, UUID> {
 			      > :distanceMeters
 			   OR (ST_Distance(p.location,
 			           ST_SetSRID(ST_MakePoint(cast(:longitude as double), cast(:latitude as double)), 4326))
-			       = :distanceMeters
+			       >= :distanceMeters
 			       AND p.id > :placeId)
 			ORDER BY 2 ASC, p.id ASC
 			""")
@@ -64,7 +64,7 @@ public interface PlaceQueryRepository extends JpaRepository<PlaceEntity, UUID> {
 			       > :distanceMeters
 			       OR (ST_Distance(p.location,
 			               ST_SetSRID(ST_MakePoint(cast(:longitude as double), cast(:latitude as double)), 4326))
-			           = :distanceMeters
+			           >= :distanceMeters
 			           AND p.id > :placeId))
 			ORDER BY 2 ASC, p.id ASC
 			""")
