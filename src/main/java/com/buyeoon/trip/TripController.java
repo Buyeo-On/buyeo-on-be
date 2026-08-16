@@ -1,0 +1,101 @@
+package com.buyeoon.trip;
+
+import com.buyeoon.common.api.SuccessResponse;
+import com.buyeoon.trip.TripStartService.LocationCommand;
+import com.buyeoon.trip.TripStartService.TripStartCommand;
+import com.buyeoon.trip.TripStartService.TripView;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RestController;
+import tools.jackson.databind.JsonNode;
+
+@RestController
+public class TripController {
+
+	private final TripStarter tripStart;
+
+	public TripController(TripStarter tripStart) {
+		this.tripStart = tripStart;
+	}
+
+	@PostMapping("/trips")
+	public ResponseEntity<SuccessResponse<TripView>> start(@AuthenticationPrincipal Jwt jwt,
+			@RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+			@RequestBody JsonNode request) {
+		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
+		TripView trip = tripStart.start(memberId, idempotencyKey, parseRequest(request));
+		return ResponseEntity.status(HttpStatus.CREATED).body(SuccessResponse.of(trip));
+	}
+
+	private TripStartCommand parseRequest(JsonNode request) {
+		if (request == null || !request.isObject() || !hasOnlyProperties(request, Set.of("location"))) {
+			throw new InvalidTripStartRequestException();
+		}
+		return new TripStartCommand(location(request.get("location")));
+	}
+
+	private LocationCommand location(JsonNode node) {
+		Set<String> fields = Set.of("latitude", "longitude", "accuracyMeters", "capturedAt");
+		if (node == null || !node.isObject() || !hasOnlyOptionalProperties(node, fields, 3, 4)) {
+			throw new InvalidTripStartRequestException();
+		}
+		double latitude = finiteNumber(node.get("latitude"));
+		double longitude = finiteNumber(node.get("longitude"));
+		if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+			throw new InvalidTripStartRequestException();
+		}
+		Double accuracy = nullableAccuracy(node.get("accuracyMeters"));
+		OffsetDateTime capturedAt = dateTime(node.get("capturedAt"));
+		return new LocationCommand(latitude, longitude, accuracy, capturedAt);
+	}
+
+	private double finiteNumber(JsonNode node) {
+		if (node == null || !node.isNumber() || !Double.isFinite(node.doubleValue())) {
+			throw new InvalidTripStartRequestException();
+		}
+		return node.doubleValue();
+	}
+
+	private Double nullableAccuracy(JsonNode node) {
+		if (node == null || node.isNull()) {
+			return null;
+		}
+		double accuracy = finiteNumber(node);
+		if (accuracy < 0) {
+			throw new InvalidTripStartRequestException();
+		}
+		return accuracy;
+	}
+
+	private OffsetDateTime dateTime(JsonNode node) {
+		if (node == null || !node.isString()) {
+			throw new InvalidTripStartRequestException();
+		}
+		try {
+			return OffsetDateTime.parse(node.stringValue());
+		} catch (DateTimeParseException exception) {
+			throw new InvalidTripStartRequestException();
+		}
+	}
+
+	private boolean hasOnlyProperties(JsonNode node, Set<String> properties) {
+		return node.size() == properties.size()
+				&& node.properties().stream().allMatch(property -> properties.contains(property.getKey()));
+	}
+
+	private boolean hasOnlyOptionalProperties(JsonNode node, Set<String> properties, int minimum, int maximum) {
+		return node.size() >= minimum && node.size() <= maximum
+				&& node.properties().stream().allMatch(property -> properties.contains(property.getKey()))
+				&& node.has("latitude") && node.has("longitude") && node.has("capturedAt");
+	}
+}
