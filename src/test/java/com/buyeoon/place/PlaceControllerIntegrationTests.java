@@ -294,7 +294,21 @@ class PlaceControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.placeId").value(placeId.toString()))
 				.andExpect(jsonPath("$.data.name").value("장소")).andExpect(jsonPath("$.data.category").value("HERITAGE"))
 				.andExpect(jsonPath("$.data.distanceMeters").exists())
-				.andExpect(jsonPath("$.data.walkingMinutes").exists());
+				.andExpect(jsonPath("$.data.walkingMinutes").exists())
+				.andExpect(jsonPath("$.data.saved").value(false));
+	}
+
+	/** 요청 회원이 저장한 장소는 saved가 참으로 표시된다. */
+	@Test
+	@DisplayName("저장한 장소의 상세 조회는 saved가 true를 받는다")
+	void returnsSavedTrueForPlaceSavedByRequestingMember() throws Exception {
+		startTrip(member.memberId());
+		UUID placeId = savePlace(PlaceCategory.HERITAGE, "장소", ORIGIN_LATITUDE + 0.001, ORIGIN_LONGITUDE + 0.001);
+		savePlaceForMember(member.memberId(), placeId);
+
+		mockMvc.perform(placeDetailRequest(placeId).param("latitude", String.valueOf(ORIGIN_LATITUDE))
+				.param("longitude", String.valueOf(ORIGIN_LONGITUDE))).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.saved").value(true));
 	}
 
 	/** 장소 탐색은 진행 중인 여행이 있는 회원만 이용할 수 있다. */
