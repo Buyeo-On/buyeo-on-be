@@ -281,8 +281,74 @@ class PlaceControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.items[0].walkingMinutes").exists());
 	}
 
+	/** 진행 중인 여행이 있는 회원은 존재하는 장소의 상세를 받는다. */
+	@Test
+	@DisplayName("유효한 위치·진행 중 여행으로 요청하면 200과 함께 장소 상세를 받는다")
+	void returnsPlaceDetailForMemberWithActiveTrip() throws Exception {
+		startTrip(member.memberId());
+		UUID placeId = savePlace(PlaceCategory.HERITAGE, "장소", ORIGIN_LATITUDE + 0.001, ORIGIN_LONGITUDE + 0.001);
+
+		mockMvc.perform(placeDetailRequest(placeId).param("latitude", String.valueOf(ORIGIN_LATITUDE))
+				.param("longitude", String.valueOf(ORIGIN_LONGITUDE))).andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.data.placeId").value(placeId.toString()))
+				.andExpect(jsonPath("$.data.name").value("장소")).andExpect(jsonPath("$.data.category").value("HERITAGE"))
+				.andExpect(jsonPath("$.data.distanceMeters").exists())
+				.andExpect(jsonPath("$.data.walkingMinutes").exists());
+	}
+
+	/** 장소 탐색은 진행 중인 여행이 있는 회원만 이용할 수 있다. */
+	@Test
+	@DisplayName("장소 상세 조회는 진행 중인 여행이 없으면 403을 받는다")
+	void returns403ForPlaceDetailWhenMemberHasNoActiveTrip() throws Exception {
+		UUID placeId = savePlace(PlaceCategory.HERITAGE, "장소", ORIGIN_LATITUDE + 0.001, ORIGIN_LONGITUDE + 0.001);
+
+		mockMvc.perform(placeDetailRequest(placeId).param("latitude", String.valueOf(ORIGIN_LATITUDE))
+				.param("longitude", String.valueOf(ORIGIN_LONGITUDE))).andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.data.code").value("ACTIVE_TRIP_REQUIRED"));
+	}
+
+	/** 인증되지 않은 요청은 장소 상세를 볼 수 없다. */
+	@Test
+	@DisplayName("장소 상세 조회는 인증하지 않으면 401을 받는다")
+	void returns401ForPlaceDetailWhenUnauthenticated() throws Exception {
+		UUID placeId = UUID.randomUUID();
+
+		mockMvc.perform(get("/places/" + placeId).param("latitude", String.valueOf(ORIGIN_LATITUDE)).param("longitude",
+				String.valueOf(ORIGIN_LONGITUDE))).andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.data.code").value("UNAUTHORIZED"));
+	}
+
+	/** latitude·longitude는 장소 상세 조회에서도 필수 파라미터다. */
+	@Test
+	@DisplayName("장소 상세 조회는 좌표가 없으면 400을 받는다")
+	void returns400ForPlaceDetailWhenCoordinatesMissing() throws Exception {
+		startTrip(member.memberId());
+		UUID placeId = savePlace(PlaceCategory.HERITAGE, "장소", ORIGIN_LATITUDE + 0.001, ORIGIN_LONGITUDE + 0.001);
+
+		mockMvc.perform(placeDetailRequest(placeId)).andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.data.code").value("INVALID_REQUEST"));
+	}
+
+	/** 존재하지 않는 placeId는 404를 받는다. */
+	@Test
+	@DisplayName("존재하지 않는 placeId면 404를 받는다")
+	void returns404WhenPlaceDoesNotExist() throws Exception {
+		startTrip(member.memberId());
+		UUID placeId = UUID.randomUUID();
+
+		mockMvc.perform(placeDetailRequest(placeId).param("latitude", String.valueOf(ORIGIN_LATITUDE))
+				.param("longitude", String.valueOf(ORIGIN_LONGITUDE))).andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.data.code").value("RESOURCE_NOT_FOUND"));
+	}
+
 	private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder placeRequest() {
 		return get("/places").header("Authorization", "Bearer " + member.accessToken());
+	}
+
+	private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder placeDetailRequest(
+			UUID placeId) {
+		return get("/places/" + placeId).header("Authorization", "Bearer " + member.accessToken());
 	}
 
 	private AuthenticatedMember insertAuthenticatedMember() {

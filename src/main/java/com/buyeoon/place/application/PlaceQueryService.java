@@ -50,6 +50,17 @@ public class PlaceQueryService {
 		return new PlaceListView(items, new PageInfoView(nextCursor, hasNext));
 	}
 
+	public PlaceItemView get(UUID memberId, UUID placeId, double latitude, double longitude) {
+		if (!tripQueryService.hasActiveTrip(memberId)) {
+			throw new ActiveTripRequiredException();
+		}
+
+		PlaceProjection row = placeQueryRepository.findByIdWithDistance(placeId, latitude, longitude)
+				.orElseThrow(PlaceNotFoundException::new);
+		Set<UUID> savedPlaceIds = Set.copyOf(savedPlaceRepository.findSavedPlaceIds(memberId, List.of(placeId)));
+		return toView(row, savedPlaceIds);
+	}
+
 	private Set<UUID> findSavedPlaceIds(UUID memberId, List<PlaceProjection> page) {
 		if (page.isEmpty()) {
 			return Set.of();
