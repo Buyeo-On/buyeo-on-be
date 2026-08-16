@@ -35,7 +35,11 @@ public record ErrorResponse(boolean success, ErrorData data) {
 	}
 
 	public static ErrorResponse outsideBuyeo() {
-		return new ErrorResponse(false, new ErrorData("OUTSIDE_BUYEO", "부여 안에서만 군민증을 만들 수 있습니다."));
+		return new ErrorResponse(false, new ErrorData("OUTSIDE_BUYEO", "부여 안에서만 이용할 수 있습니다."));
+	}
+
+	public static ErrorResponse citizenCardNotIssued() {
+		return new ErrorResponse(false, new ErrorData("CITIZEN_CARD_NOT_ISSUED", "군민증을 먼저 발급해 주세요."));
 	}
 
 	public static ErrorResponse invalidStateTransition() {
