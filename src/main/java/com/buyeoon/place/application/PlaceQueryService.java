@@ -50,6 +50,17 @@ public class PlaceQueryService {
 		return new PlaceListView(items, new PageInfoView(nextCursor, hasNext));
 	}
 
+	public PlaceItemView get(UUID memberId, UUID placeId, double latitude, double longitude) {
+		if (!tripQueryService.hasActiveTrip(memberId)) {
+			throw new ActiveTripRequiredException();
+		}
+
+		PlaceProjection row = placeQueryRepository.findByIdWithDistance(placeId, latitude, longitude)
+				.orElseThrow(PlaceNotFoundException::new);
+		boolean saved = savedPlaceRepository.existsByMemberIdAndPlaceId(memberId, placeId);
+		return toView(row, saved);
+	}
+
 	private Set<UUID> findSavedPlaceIds(UUID memberId, List<PlaceProjection> page) {
 		if (page.isEmpty()) {
 			return Set.of();
@@ -74,6 +85,10 @@ public class PlaceQueryService {
 	}
 
 	private PlaceItemView toView(PlaceProjection row, Set<UUID> savedPlaceIds) {
+		return toView(row, savedPlaceIds.contains(row.place().getId()));
+	}
+
+	private PlaceItemView toView(PlaceProjection row, boolean saved) {
 		PlaceEntity place = row.place();
 		int distanceMeters = (int) Math.round(row.distanceMeters());
 		int walkingMinutes = (int) Math.ceil(row.distanceMeters() / WALKING_METERS_PER_MINUTE);
@@ -81,7 +96,7 @@ public class PlaceQueryService {
 
 		return new PlaceItemView(place.getId(), place.getCategory(), place.getName(), place.getSummary(),
 				place.getDescription(), place.getAddress(), imageUrl, place.getLocation().getY(),
-				place.getLocation().getX(), distanceMeters, walkingMinutes, savedPlaceIds.contains(place.getId()));
+				place.getLocation().getX(), distanceMeters, walkingMinutes, saved);
 	}
 
 	public record PlaceListView(List<PlaceItemView> items, PageInfoView page) {

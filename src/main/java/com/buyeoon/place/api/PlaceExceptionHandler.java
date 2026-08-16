@@ -2,6 +2,7 @@ package com.buyeoon.place.api;
 
 import com.buyeoon.common.api.ErrorResponse;
 import com.buyeoon.place.application.ActiveTripRequiredException;
+import com.buyeoon.place.application.PlaceNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -23,5 +24,11 @@ public class PlaceExceptionHandler {
 	@ResponseStatus(HttpStatus.FORBIDDEN)
 	public ErrorResponse handleActiveTripRequired() {
 		return ErrorResponse.activeTripRequired();
+	}
+
+	@ExceptionHandler(PlaceNotFoundException.class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	public ErrorResponse handleNotFound() {
+		return ErrorResponse.resourceNotFound();
 	}
 }

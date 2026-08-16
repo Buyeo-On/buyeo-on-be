@@ -3,6 +3,7 @@ package com.buyeoon.place.repository;
 import com.buyeoon.place.entity.PlaceCategory;
 import com.buyeoon.place.entity.PlaceEntity;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -71,4 +72,14 @@ public interface PlaceQueryRepository extends JpaRepository<PlaceEntity, UUID> {
 	List<PlaceProjection> findAfterByCategory(@Param("category") PlaceCategory category,
 			@Param("latitude") double latitude, @Param("longitude") double longitude,
 			@Param("distanceMeters") double distanceMeters, @Param("placeId") UUID placeId, Pageable pageable);
+
+	@Query("""
+			SELECT new com.buyeoon.place.repository.PlaceProjection(p,
+			       ST_Distance(p.location,
+			           ST_SetSRID(ST_MakePoint(cast(:longitude as double), cast(:latitude as double)), 4326)))
+			FROM PlaceEntity p
+			WHERE p.id = :placeId
+			""")
+	Optional<PlaceProjection> findByIdWithDistance(@Param("placeId") UUID placeId, @Param("latitude") double latitude,
+			@Param("longitude") double longitude);
 }

@@ -3,6 +3,7 @@ package com.buyeoon.place.api;
 import com.buyeoon.common.api.SuccessResponse;
 import com.buyeoon.place.application.PlaceCursor;
 import com.buyeoon.place.application.PlaceQueryService;
+import com.buyeoon.place.application.PlaceQueryService.PlaceItemView;
 import com.buyeoon.place.application.PlaceQueryService.PlaceListView;
 import com.buyeoon.place.entity.PlaceCategory;
 import java.util.Objects;
@@ -10,6 +11,7 @@ import java.util.UUID;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -36,6 +38,13 @@ public class PlaceController {
 		}
 		return SuccessResponse.of(placeQueryService.list(memberId, parseCategory(category), latitude(latitude),
 				longitude(longitude), parseCursor(cursor), size));
+	}
+
+	@GetMapping("/places/{placeId}")
+	public SuccessResponse<PlaceItemView> getPlace(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID placeId,
+			@RequestParam String latitude, @RequestParam String longitude) {
+		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
+		return SuccessResponse.of(placeQueryService.get(memberId, placeId, latitude(latitude), longitude(longitude)));
 	}
 
 	private PlaceCategory parseCategory(String category) {
