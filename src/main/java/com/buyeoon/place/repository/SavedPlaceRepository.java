@@ -19,4 +19,8 @@ public interface SavedPlaceRepository extends JpaRepository<SavedPlaceEntity, Sa
 			  AND s.id.placeId IN :placeIds
 			""")
 	List<UUID> findSavedPlaceIds(@Param("memberId") UUID memberId, @Param("placeIds") Collection<UUID> placeIds);
+
+	default boolean existsByMemberIdAndPlaceId(UUID memberId, UUID placeId) {
+		return existsById(new SavedPlaceId(memberId, placeId));
+	}
 }
