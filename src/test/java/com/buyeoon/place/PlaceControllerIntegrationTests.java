@@ -1,9 +1,11 @@
 package com.buyeoon.place;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -12,7 +14,11 @@ import com.buyeoon.place.entity.PlaceCategory;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -281,6 +287,99 @@ class PlaceControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.items[0].walkingMinutes").exists());
 	}
 
+	/** 진행 중인 여행이 있는 회원이 존재하는 장소를 저장하면 200과 함께 저장 상태가 된다. */
+	@Test
+	@DisplayName("장소를 저장하면 200과 함께 저장 상태가 된다")
+	void savesPlaceAndReturns200() throws Exception {
+		startTrip(member.memberId());
+		UUID placeId = savePlace(PlaceCategory.HERITAGE, "장소", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+
+		mockMvc.perform(savePlaceRequest(placeId)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true));
+
+		assertSavedPlaceCount(member.memberId(), placeId, 1);
+	}
+
+	/** 이미 저장한 장소를 다시 저장해도 200이며 저장 관계는 하나만 유지된다. */
+	@Test
+	@DisplayName("이미 저장한 장소를 다시 저장해도 200이고 저장 관계는 하나만 유지된다")
+	void savingAlreadySavedPlaceStaysIdempotent() throws Exception {
+		startTrip(member.memberId());
+		UUID placeId = savePlace(PlaceCategory.HERITAGE, "장소", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+		savePlaceForMember(member.memberId(), placeId);
+
+		mockMvc.perform(savePlaceRequest(placeId)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true));
+
+		assertSavedPlaceCount(member.memberId(), placeId, 1);
+	}
+
+	/** 진행 중인 여행이 없는 회원이 저장을 요청하면 403을 반환한다. */
+	@Test
+	@DisplayName("진행 중인 여행이 없으면 저장 요청은 403을 받는다")
+	void returns403WhenSavingWithoutActiveTrip() throws Exception {
+		UUID placeId = savePlace(PlaceCategory.HERITAGE, "장소", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+
+		mockMvc.perform(savePlaceRequest(placeId)).andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.data.code").value("ACTIVE_TRIP_REQUIRED"));
+	}
+
+	/** 존재하지 않는 placeId로 저장을 요청하면 404를 반환한다. */
+	@Test
+	@DisplayName("존재하지 않는 장소를 저장하면 404를 받는다")
+	void returns404WhenSavingNonExistentPlace() throws Exception {
+		startTrip(member.memberId());
+
+		mockMvc.perform(savePlaceRequest(UUID.randomUUID())).andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.data.code").value("RESOURCE_NOT_FOUND"));
+	}
+
+	/** 로그인하지 않은 요청은 401을 반환한다. */
+	@Test
+	@DisplayName("인증하지 않으면 저장 요청은 401을 받는다")
+	void returns401WhenSavingUnauthenticated() throws Exception {
+		UUID placeId = savePlace(PlaceCategory.HERITAGE, "장소", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+
+		mockMvc.perform(put("/members/me/saved-places/{placeId}", placeId)).andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.data.code").value("UNAUTHORIZED"));
+	}
+
+	/** 같은 장소에 대한 동시 저장 요청 두 건 모두 200을 반환하고 저장 관계는 하나만 남는다. */
+	@Test
+	@DisplayName("같은 장소에 대한 동시 저장 요청은 모두 200이고 저장 관계는 하나만 남는다")
+	void concurrentSaveRequestsBothSucceedAndLeaveOneRow() throws Exception {
+		startTrip(member.memberId());
+		UUID placeId = savePlace(PlaceCategory.HERITAGE, "장소", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+		ExecutorService executor = Executors.newFixedThreadPool(2);
+		try {
+			List<Future<Integer>> results = executor
+					.invokeAll(List.of(() -> saveStatus(placeId), () -> saveStatus(placeId)));
+			for (Future<Integer> result : results) {
+				assertThat(result.get()).isEqualTo(200);
+			}
+		} finally {
+			executor.shutdown();
+		}
+
+		assertSavedPlaceCount(member.memberId(), placeId, 1);
+	}
+
+	private int saveStatus(UUID placeId) throws Exception {
+		return mockMvc.perform(savePlaceRequest(placeId)).andReturn().getResponse().getStatus();
+	}
+
+	private void assertSavedPlaceCount(UUID memberId, UUID placeId, int expectedCount) {
+		Integer count = jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM saved_places WHERE member_id = ? AND place_id = ?", Integer.class, memberId,
+				placeId);
+		assertThat(count).isEqualTo(expectedCount);
+	}
+
+	private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder savePlaceRequest(UUID placeId) {
+		return put("/members/me/saved-places/{placeId}", placeId).header("Authorization",
+				"Bearer " + member.accessToken());
+	}
+
 	/** 진행 중인 여행이 있는 회원은 존재하는 장소의 상세를 받는다. */
 	@Test
 	@DisplayName("유효한 위치·진행 중 여행으로 요청하면 200과 함께 장소 상세를 받는다")
@@ -294,8 +393,7 @@ class PlaceControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.placeId").value(placeId.toString()))
 				.andExpect(jsonPath("$.data.name").value("장소")).andExpect(jsonPath("$.data.category").value("HERITAGE"))
 				.andExpect(jsonPath("$.data.distanceMeters").exists())
-				.andExpect(jsonPath("$.data.walkingMinutes").exists())
-				.andExpect(jsonPath("$.data.saved").value(false));
+				.andExpect(jsonPath("$.data.walkingMinutes").exists()).andExpect(jsonPath("$.data.saved").value(false));
 	}
 
 	/** 요청 회원이 저장한 장소는 saved가 참으로 표시된다. */
