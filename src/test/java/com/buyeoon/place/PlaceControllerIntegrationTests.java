@@ -454,6 +454,129 @@ class PlaceControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.code").value("RESOURCE_NOT_FOUND"));
 	}
 
+	@Test
+	@DisplayName("위치 없이 저장한 장소를 조회하면 저장 시각 내림차순으로 반환하고 거리는 null이다")
+	void returnsSavedPlacesOrderedBySavedAtDescendingWithNullDistance() throws Exception {
+		UUID older = savePlace(PlaceCategory.HERITAGE, "먼저 저장", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+		UUID newer = savePlace(PlaceCategory.HERITAGE, "나중 저장", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+		Instant base = Instant.now();
+		savePlaceForMemberAt(member.memberId(), older, base);
+		savePlaceForMemberAt(member.memberId(), newer, base.plusSeconds(60));
+
+		mockMvc.perform(savedPlacesRequest()).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.items[0].placeId").value(newer.toString()))
+				.andExpect(jsonPath("$.data.items[1].placeId").value(older.toString()))
+				.andExpect(jsonPath("$.data.items[0].distanceMeters").doesNotExist())
+				.andExpect(jsonPath("$.data.items[0].walkingMinutes").doesNotExist())
+				.andExpect(jsonPath("$.data.page.hasNext").value(false));
+	}
+
+	@Test
+	@DisplayName("category로 필터링하면 해당 분류의 저장한 장소만 반환한다")
+	void returnsSavedPlacesFilteredByCategory() throws Exception {
+		UUID heritage = savePlace(PlaceCategory.HERITAGE, "유적지", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+		UUID cafe = savePlace(PlaceCategory.CAFE, "카페", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+		savePlaceForMember(member.memberId(), heritage);
+		savePlaceForMember(member.memberId(), cafe);
+
+		mockMvc.perform(savedPlacesRequest().param("category", "CAFE")).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.items.length()").value(1))
+				.andExpect(jsonPath("$.data.items[0].placeId").value(cafe.toString()));
+	}
+
+	@Test
+	@DisplayName("저장한 장소가 없으면 빈 배열과 hasNext:false를 반환한다")
+	void returnsEmptyListWhenNoSavedPlaces() throws Exception {
+		mockMvc.perform(savedPlacesRequest()).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.items.length()").value(0))
+				.andExpect(jsonPath("$.data.page.hasNext").value(false));
+	}
+
+	@Test
+	@DisplayName("커서로 다음 페이지를 요청하면 이전 페이지와 겹치거나 누락 없이 이어진다")
+	void returnsNextPageOfSavedPlacesUsingCursor() throws Exception {
+		UUID first = savePlace(PlaceCategory.HERITAGE, "장소1", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+		UUID second = savePlace(PlaceCategory.HERITAGE, "장소2", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+		UUID third = savePlace(PlaceCategory.HERITAGE, "장소3", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+		Instant base = Instant.now();
+		savePlaceForMemberAt(member.memberId(), first, base);
+		savePlaceForMemberAt(member.memberId(), second, base.plusSeconds(60));
+		savePlaceForMemberAt(member.memberId(), third, base.plusSeconds(120));
+
+		MvcResult firstPage = mockMvc.perform(savedPlacesRequest().param("size", "2")).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.items.length()").value(2))
+				.andExpect(jsonPath("$.data.page.hasNext").value(true)).andReturn();
+		String cursor = objectMapper.readTree(firstPage.getResponse().getContentAsString()).path("data").path("page")
+				.path("nextCursor").asString();
+
+		mockMvc.perform(savedPlacesRequest().param("size", "2").param("cursor", cursor)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.items.length()").value(1))
+				.andExpect(jsonPath("$.data.items[0].placeId").value(first.toString()))
+				.andExpect(jsonPath("$.data.page.hasNext").value(false));
+	}
+
+	@Test
+	@DisplayName("저장 시각이 동일한 항목이 커서 경계에 걸쳐도 누락이나 중복 없이 반환한다")
+	void returnsTiedSavedAtAcrossCursorBoundary() throws Exception {
+		UUID first = savePlace(PlaceCategory.HERITAGE, "동점1", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+		UUID second = savePlace(PlaceCategory.HERITAGE, "동점2", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+		UUID third = savePlace(PlaceCategory.HERITAGE, "동점3", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+		Instant tied = Instant.now();
+		savePlaceForMemberAt(member.memberId(), first, tied);
+		savePlaceForMemberAt(member.memberId(), second, tied);
+		savePlaceForMemberAt(member.memberId(), third, tied);
+
+		MvcResult firstPage = mockMvc.perform(savedPlacesRequest().param("size", "2")).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.items.length()").value(2))
+				.andExpect(jsonPath("$.data.page.hasNext").value(true)).andReturn();
+		String cursor = objectMapper.readTree(firstPage.getResponse().getContentAsString()).path("data").path("page")
+				.path("nextCursor").asString();
+
+		MvcResult secondPage = mockMvc.perform(savedPlacesRequest().param("size", "2").param("cursor", cursor))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.data.page.hasNext").value(false)).andReturn();
+
+		List<String> firstIds = extractPlaceIds(firstPage);
+		List<String> secondIds = extractPlaceIds(secondPage);
+		assertThat(firstIds).doesNotContainAnyElementsOf(secondIds);
+		List<String> combined = new java.util.ArrayList<>(firstIds);
+		combined.addAll(secondIds);
+		assertThat(combined).containsExactlyInAnyOrder(first.toString(), second.toString(), third.toString());
+	}
+
+	@Test
+	@DisplayName("미인증 요청은 401을 반환한다")
+	void returns401WhenListingSavedPlacesUnauthenticated() throws Exception {
+		mockMvc.perform(get("/members/me/saved-places")).andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.data.code").value("UNAUTHORIZED"));
+	}
+
+	@Test
+	@DisplayName("활성 여행이 없어도 저장한 장소 목록을 조회할 수 있다")
+	void listsSavedPlacesWithoutActiveTrip() throws Exception {
+		UUID placeId = savePlace(PlaceCategory.HERITAGE, "장소", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+		savePlaceForMember(member.memberId(), placeId);
+
+		mockMvc.perform(savedPlacesRequest()).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.items.length()").value(1));
+	}
+
+	@Test
+	@DisplayName("다른 회원이 저장한 장소는 목록에 나타나지 않는다")
+	void excludesSavedPlacesOfOtherMembers() throws Exception {
+		UUID placeId = savePlace(PlaceCategory.HERITAGE, "장소", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+		savePlaceForMember(insertAuthenticatedMember().memberId(), placeId);
+
+		mockMvc.perform(savedPlacesRequest()).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.items.length()").value(0));
+	}
+
+	private List<String> extractPlaceIds(MvcResult result) throws Exception {
+		var items = objectMapper.readTree(result.getResponse().getContentAsString()).path("data").path("items");
+		List<String> ids = new java.util.ArrayList<>();
+		items.forEach(item -> ids.add(item.path("placeId").asString()));
+		return ids;
+	}
+
 	private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder placeRequest() {
 		return get("/places").header("Authorization", "Bearer " + member.accessToken());
 	}
@@ -461,6 +584,10 @@ class PlaceControllerIntegrationTests {
 	private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder placeDetailRequest(
 			UUID placeId) {
 		return get("/places/" + placeId).header("Authorization", "Bearer " + member.accessToken());
+	}
+
+	private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder savedPlacesRequest() {
+		return get("/members/me/saved-places").header("Authorization", "Bearer " + member.accessToken());
 	}
 
 	private AuthenticatedMember insertAuthenticatedMember() {
@@ -477,6 +604,11 @@ class PlaceControllerIntegrationTests {
 
 	private void savePlaceForMember(UUID memberId, UUID placeId) {
 		jdbcTemplate.update("INSERT INTO saved_places (member_id, place_id) VALUES (?, ?)", memberId, placeId);
+	}
+
+	private void savePlaceForMemberAt(UUID memberId, UUID placeId, Instant savedAt) {
+		jdbcTemplate.update("INSERT INTO saved_places (member_id, place_id, saved_at) VALUES (?, ?, ?)", memberId,
+				placeId, Timestamp.from(savedAt));
 	}
 
 	private void startTrip(UUID memberId) {
