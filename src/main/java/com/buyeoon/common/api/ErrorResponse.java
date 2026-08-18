@@ -62,6 +62,10 @@ public record ErrorResponse(boolean success, ErrorData data) {
 		return new ErrorResponse(false, new ErrorData("LOCATION_VERIFICATION_FAILED", "위치 인증에 실패했습니다."));
 	}
 
+	public static ErrorResponse payloadTooLarge() {
+		return new ErrorResponse(false, new ErrorData("PAYLOAD_TOO_LARGE", "서버에 설정된 최대 업로드 크기를 초과했습니다."));
+	}
+
 	public record ErrorData(String code, String message) {
 	}
 }

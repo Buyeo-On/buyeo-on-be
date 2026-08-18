@@ -1,6 +1,9 @@
 package com.buyeoon.mission.api;
 
 import com.buyeoon.common.api.SuccessResponse;
+import com.buyeoon.mission.application.MissionPhotoUploadUrlService;
+import com.buyeoon.mission.application.MissionPhotoUploadUrlService.MissionPhotoUploadUrlCommand;
+import com.buyeoon.mission.application.MissionPhotoUploadUrlService.MissionPhotoUploadUrlView;
 import com.buyeoon.mission.application.MissionQueryService;
 import com.buyeoon.mission.application.MissionQueryService.MissionListView;
 import com.buyeoon.mission.application.MissionSubmissionService;
@@ -14,6 +17,8 @@ import java.time.format.DateTimeParseException;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,14 +33,18 @@ import tools.jackson.databind.JsonNode;
 @RestController
 public class MissionController {
 
+	private static final Set<String> ALLOWED_PHOTO_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "image/webp");
+
 	private final MissionQueryService missionQueryService;
 	private final MissionSubmissionService missionSubmissionService;
+	private final MissionPhotoUploadUrlService missionPhotoUploadUrlService;
 
 	@SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring 싱글턴 빈을 그대로 주입받아 저장한다.")
-	public MissionController(MissionQueryService missionQueryService,
-			MissionSubmissionService missionSubmissionService) {
+	public MissionController(MissionQueryService missionQueryService, MissionSubmissionService missionSubmissionService,
+			MissionPhotoUploadUrlService missionPhotoUploadUrlService) {
 		this.missionQueryService = missionQueryService;
 		this.missionSubmissionService = missionSubmissionService;
+		this.missionPhotoUploadUrlService = missionPhotoUploadUrlService;
 	}
 
 	@GetMapping("/missions/nearby")
@@ -64,22 +73,77 @@ public class MissionController {
 		return SuccessResponse.of(missionSubmissionService.submit(memberId, missionId, idempotencyKey, command));
 	}
 
+	@PostMapping("/mission-photos/presigned-url")
+	public ResponseEntity<SuccessResponse<MissionPhotoUploadUrlView>> createMissionPhotoUploadUrl(
+			@AuthenticationPrincipal Jwt jwt,
+			@RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+			@RequestBody JsonNode request) {
+		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
+		MissionPhotoUploadUrlCommand command = parsePhotoUploadUrlRequest(request);
+		MissionPhotoUploadUrlView view = missionPhotoUploadUrlService.createUploadUrl(memberId, idempotencyKey,
+				command);
+		return ResponseEntity.status(HttpStatus.CREATED).body(SuccessResponse.of(view));
+	}
+
+	private MissionPhotoUploadUrlCommand parsePhotoUploadUrlRequest(JsonNode request) {
+		Set<String> fields = Set.of("tripId", "missionId", "fileName", "contentType", "fileSizeBytes");
+		if (request == null || !request.isObject() || !hasOnlyProperties(request, fields)) {
+			throw new InvalidMissionRequestException();
+		}
+		UUID tripId = uuid(request.get("tripId"));
+		UUID missionId = uuid(request.get("missionId"));
+		String fileName = fileName(request.get("fileName"));
+		String contentType = photoContentType(request.get("contentType"));
+		long fileSizeBytes = fileSizeBytes(request.get("fileSizeBytes"));
+		return new MissionPhotoUploadUrlCommand(tripId, missionId, fileName, contentType, fileSizeBytes);
+	}
+
+	private String fileName(JsonNode node) {
+		String value = text(node);
+		if (value.isEmpty() || value.length() > 255) {
+			throw new InvalidMissionRequestException();
+		}
+		return value;
+	}
+
+	private String photoContentType(JsonNode node) {
+		String value = text(node);
+		if (!ALLOWED_PHOTO_CONTENT_TYPES.contains(value)) {
+			throw new InvalidMissionRequestException();
+		}
+		return value;
+	}
+
+	private long fileSizeBytes(JsonNode node) {
+		if (node == null || !node.isNumber()) {
+			throw new InvalidMissionRequestException();
+		}
+		long value = node.longValue();
+		if (value < 1) {
+			throw new InvalidMissionRequestException();
+		}
+		return value;
+	}
+
 	private MissionSubmissionCommand parseSubmission(JsonNode request) {
 		if (request == null || !request.isObject()) {
 			throw new InvalidMissionRequestException();
 		}
 		MissionType type = missionType(request.get("type"));
-		Set<String> fields = type == MissionType.MULTIPLE_CHOICE
-				? Set.of("tripId", "type", "choiceId", "location")
-				: Set.of("tripId", "type", "oxAnswer", "location");
+		Set<String> fields = switch (type) {
+			case MULTIPLE_CHOICE -> Set.of("tripId", "type", "choiceId", "location");
+			case OX -> Set.of("tripId", "type", "oxAnswer", "location");
+			case PHOTO -> Set.of("tripId", "type", "photoId", "location");
+		};
 		if (!hasOnlyProperties(request, fields)) {
 			throw new InvalidMissionRequestException();
 		}
 		UUID tripId = uuid(request.get("tripId"));
 		String choiceId = type == MissionType.MULTIPLE_CHOICE ? text(request.get("choiceId")) : null;
 		Boolean oxAnswer = type == MissionType.OX ? bool(request.get("oxAnswer")) : null;
+		UUID photoId = type == MissionType.PHOTO ? uuid(request.get("photoId")) : null;
 		LocationCommand location = location(request.get("location"));
-		return new MissionSubmissionCommand(tripId, type, choiceId, oxAnswer, location);
+		return new MissionSubmissionCommand(tripId, type, choiceId, oxAnswer, photoId, location);
 	}
 
 	private MissionType missionType(JsonNode node) {
@@ -89,6 +153,7 @@ public class MissionController {
 		return switch (node.stringValue()) {
 			case "MULTIPLE_CHOICE" -> MissionType.MULTIPLE_CHOICE;
 			case "OX" -> MissionType.OX;
+			case "PHOTO" -> MissionType.PHOTO;
 			default -> throw new InvalidMissionRequestException();
 		};
 	}

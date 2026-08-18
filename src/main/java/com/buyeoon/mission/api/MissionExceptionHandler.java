@@ -5,6 +5,8 @@ import com.buyeoon.member.application.IdempotencyKeyReusedException;
 import com.buyeoon.member.application.InvalidStateTransitionException;
 import com.buyeoon.mission.application.InvalidMissionSubmissionException;
 import com.buyeoon.mission.application.MissionNotFoundException;
+import com.buyeoon.mission.application.MissionPhotoNotFoundException;
+import com.buyeoon.mission.application.MissionPhotoTooLargeException;
 import com.buyeoon.mission.application.OutsideParticipationRadiusException;
 import com.buyeoon.mission.application.TripNotFoundException;
 import com.buyeoon.mission.application.TripNotInProgressException;
@@ -27,10 +29,17 @@ public class MissionExceptionHandler {
 		return ErrorResponse.invalidRequest();
 	}
 
-	@ExceptionHandler({TripNotFoundException.class, MissionNotFoundException.class})
+	@ExceptionHandler({TripNotFoundException.class, MissionNotFoundException.class,
+			MissionPhotoNotFoundException.class})
 	@ResponseStatus(HttpStatus.NOT_FOUND)
 	public ErrorResponse handleResourceNotFound() {
 		return ErrorResponse.resourceNotFound();
+	}
+
+	@ExceptionHandler(MissionPhotoTooLargeException.class)
+	@ResponseStatus(HttpStatus.PAYLOAD_TOO_LARGE)
+	public ErrorResponse handlePayloadTooLarge() {
+		return ErrorResponse.payloadTooLarge();
 	}
 
 	@ExceptionHandler(OutsideParticipationRadiusException.class)

@@ -3,17 +3,21 @@ package com.buyeoon.mission.application;
 import com.buyeoon.common.api.SuccessResponse;
 import com.buyeoon.common.entity.IdempotencyRequestEntity;
 import com.buyeoon.common.entity.IdempotencyRequestId;
+import com.buyeoon.common.storage.MissionPhotoObjectStore;
+import com.buyeoon.common.storage.MissionPhotoObjectStore.MissionPhotoObject;
 import com.buyeoon.member.application.IdempotencyKeyReusedException;
 import com.buyeoon.member.application.InvalidStateTransitionException;
 import com.buyeoon.mission.entity.MissionChoiceEntity;
 import com.buyeoon.mission.entity.MissionEntity;
 import com.buyeoon.mission.entity.MissionParticipationEntity;
+import com.buyeoon.mission.entity.MissionPhotoEntity;
 import com.buyeoon.mission.entity.MissionStatus;
 import com.buyeoon.mission.entity.MissionSubmissionEntity;
 import com.buyeoon.mission.entity.MissionType;
 import com.buyeoon.mission.repository.MissionChoiceRepository;
 import com.buyeoon.mission.repository.MissionIdempotencyRequestRepository;
 import com.buyeoon.mission.repository.MissionParticipationRepository;
+import com.buyeoon.mission.repository.MissionPhotoRepository;
 import com.buyeoon.mission.repository.MissionPlaceDistanceProjection;
 import com.buyeoon.mission.repository.MissionQueryRepository;
 import com.buyeoon.mission.repository.MissionSubmissionRepository;
@@ -35,6 +39,7 @@ import java.time.OffsetDateTime;
 import java.util.HexFormat;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcOperations;
@@ -54,6 +59,7 @@ public class MissionSubmissionService {
 	private static final String OPERATION = "SUBMIT_MISSION";
 	private static final Duration RETENTION = Duration.ofHours(24);
 	private static final int PARTICIPATION_RADIUS_METERS = 100;
+	private static final Set<String> ALLOWED_PHOTO_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "image/webp");
 
 	private final JdbcOperations jdbcOperations;
 	private final TransactionTemplate transactions;
@@ -62,6 +68,8 @@ public class MissionSubmissionService {
 	private final MissionChoiceRepository missionChoiceRepository;
 	private final MissionParticipationRepository missionParticipations;
 	private final MissionSubmissionRepository missionSubmissions;
+	private final MissionPhotoRepository missionPhotos;
+	private final MissionPhotoObjectStore missionPhotoObjectStore;
 	private final MissionIdempotencyRequestRepository idempotencyRequests;
 	private final VisitRecordService visitRecordService;
 	private final PointRewardService pointRewardService;
@@ -73,7 +81,8 @@ public class MissionSubmissionService {
 	public MissionSubmissionService(JdbcOperations jdbcOperations, PlatformTransactionManager transactionManager,
 			TripQueryService tripQueryService, MissionQueryRepository missionQueryRepository,
 			MissionChoiceRepository missionChoiceRepository, MissionParticipationRepository missionParticipations,
-			MissionSubmissionRepository missionSubmissions, MissionIdempotencyRequestRepository idempotencyRequests,
+			MissionSubmissionRepository missionSubmissions, MissionPhotoRepository missionPhotos,
+			MissionPhotoObjectStore missionPhotoObjectStore, MissionIdempotencyRequestRepository idempotencyRequests,
 			VisitRecordService visitRecordService, PointRewardService pointRewardService,
 			ApplicationEventPublisher events, ObjectMapper objectMapper) {
 		this.jdbcOperations = jdbcOperations;
@@ -83,6 +92,8 @@ public class MissionSubmissionService {
 		this.missionChoiceRepository = missionChoiceRepository;
 		this.missionParticipations = missionParticipations;
 		this.missionSubmissions = missionSubmissions;
+		this.missionPhotos = missionPhotos;
+		this.missionPhotoObjectStore = missionPhotoObjectStore;
 		this.idempotencyRequests = idempotencyRequests;
 		this.visitRecordService = visitRecordService;
 		this.pointRewardService = pointRewardService;
@@ -141,9 +152,12 @@ public class MissionSubmissionService {
 			throw new OutsideParticipationRadiusException();
 		}
 
+		UUID photoRecordId = command.type() == MissionType.PHOTO
+				? verifyAndRecordPhoto(memberId, command.tripId(), missionId, command.photoId())
+				: null;
 		boolean correct = determineCorrectness(command, mission, missionId);
 		participation.recordAttempt(correct, mission.getMaxAttempts(), occurredAt);
-		missionSubmissions.save(toSubmissionEntity(participation.getId(), command, correct));
+		missionSubmissions.save(toSubmissionEntity(participation.getId(), command, correct, photoRecordId));
 
 		int rewardPoints = 0;
 		long pointBalance = pointRewardService.currentBalance(memberId);
@@ -181,8 +195,29 @@ public class MissionSubmissionService {
 		return switch (command.type()) {
 			case MULTIPLE_CHOICE -> isCorrectChoice(missionId, command.choiceId());
 			case OX -> command.oxAnswer() != null && command.oxAnswer().equals(mission.getOxCorrectAnswer());
-			case PHOTO -> throw new InvalidMissionSubmissionException();
+			case PHOTO -> true;
 		};
+	}
+
+	/** 발급 요청 정보(소유자·크기·Content-Type)와 실제 업로드된 S3 객체를 대조하고, 통과하면 사진 기록을 생성한다. */
+	private UUID verifyAndRecordPhoto(UUID memberId, UUID tripId, UUID missionId, UUID photoId) {
+		if (photoId == null) {
+			throw new InvalidMissionSubmissionException();
+		}
+		String objectKey = MissionPhotoObjectKeys.key(tripId, missionId, photoId);
+		MissionPhotoObject object = missionPhotoObjectStore.head(objectKey)
+				.orElseThrow(MissionPhotoNotFoundException::new);
+		if (!object.ownerId().equals(memberId)) {
+			throw new MissionPhotoNotFoundException();
+		}
+		if (object.fileSizeBytes() != object.declaredFileSizeBytes()
+				|| !object.contentType().equals(object.declaredContentType())
+				|| !ALLOWED_PHOTO_CONTENT_TYPES.contains(object.contentType())) {
+			throw new InvalidMissionSubmissionException();
+		}
+		MissionPhotoEntity photo = missionPhotos.save(MissionPhotoEntity.create(memberId, tripId, missionId, objectKey,
+				object.contentType(), object.fileSizeBytes()));
+		return photo.getId();
 	}
 
 	private boolean isCorrectChoice(UUID missionId, String choiceId) {
@@ -202,12 +237,12 @@ public class MissionSubmissionService {
 	}
 
 	private MissionSubmissionEntity toSubmissionEntity(UUID participationId, MissionSubmissionCommand command,
-			boolean correct) {
+			boolean correct, UUID photoRecordId) {
 		return switch (command.type()) {
 			case MULTIPLE_CHOICE ->
 				MissionSubmissionEntity.multipleChoice(participationId, parseChoiceId(command.choiceId()), correct);
 			case OX -> MissionSubmissionEntity.ox(participationId, command.oxAnswer(), correct);
-			case PHOTO -> throw new InvalidMissionSubmissionException();
+			case PHOTO -> MissionSubmissionEntity.photo(participationId, photoRecordId);
 		};
 	}
 
@@ -247,6 +282,7 @@ public class MissionSubmissionService {
 			update(digest, command.type().name());
 			update(digest, command.choiceId() == null ? "null" : command.choiceId());
 			update(digest, command.oxAnswer() == null ? "null" : command.oxAnswer().toString());
+			update(digest, command.photoId() == null ? "null" : command.photoId().toString());
 			update(digest, Double.toHexString(command.location().latitude()));
 			update(digest, Double.toHexString(command.location().longitude()));
 			update(digest,
@@ -325,7 +361,7 @@ public class MissionSubmissionService {
 	}
 
 	public record MissionSubmissionCommand(UUID tripId, MissionType type, String choiceId, Boolean oxAnswer,
-			LocationCommand location) {
+			UUID photoId, LocationCommand location) {
 	}
 
 	public record LocationCommand(double latitude, double longitude, Double accuracyMeters, OffsetDateTime capturedAt) {
