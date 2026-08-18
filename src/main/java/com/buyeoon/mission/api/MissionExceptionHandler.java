@@ -1,6 +1,7 @@
 package com.buyeoon.mission.api;
 
 import com.buyeoon.common.api.ErrorResponse;
+import com.buyeoon.mission.application.MissionNotFoundException;
 import com.buyeoon.mission.application.TripNotFoundException;
 import com.buyeoon.mission.application.TripNotInProgressException;
 import org.springframework.http.HttpStatus;
@@ -20,9 +21,9 @@ public class MissionExceptionHandler {
 		return ErrorResponse.invalidRequest();
 	}
 
-	@ExceptionHandler(TripNotFoundException.class)
+	@ExceptionHandler({TripNotFoundException.class, MissionNotFoundException.class})
 	@ResponseStatus(HttpStatus.NOT_FOUND)
-	public ErrorResponse handleTripNotFound() {
+	public ErrorResponse handleResourceNotFound() {
 		return ErrorResponse.resourceNotFound();
 	}
 

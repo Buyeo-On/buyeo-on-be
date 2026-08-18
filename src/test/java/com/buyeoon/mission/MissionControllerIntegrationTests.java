@@ -331,6 +331,202 @@ class MissionControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.code").value("TRIP_NOT_IN_PROGRESS"));
 	}
 
+	/** 반올림 전 거리가 100m 이내인 객관식 미션은 문제와 정답 표시 없는 선택지를 포함한 전체 상세를 받는다. */
+	@Test
+	@DisplayName("100m 이내 객관식 미션은 문제와 선택지를 포함한 전체 상세를 받고 정답 값은 노출하지 않는다")
+	void returnsFullDetailWithChoicesForMultipleChoiceMissionWithin100m() throws Exception {
+		UUID tripId = startTrip(member.memberId());
+		UUID place = insertProjectedPlace("객관식 장소", 50);
+		UUID missionId = insertMultipleChoiceMission(place, "객관식 미션", 100, null);
+		insertChoice(missionId, "예", true, 0);
+		insertChoice(missionId, "아니요", false, 1);
+
+		mockMvc.perform(detailRequest(missionId, tripId)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.missionId").value(missionId.toString()))
+				.andExpect(jsonPath("$.data.description").value("설명"))
+				.andExpect(jsonPath("$.data.choices.length()").value(2))
+				.andExpect(jsonPath("$.data.choices[0].label").value("예"))
+				.andExpect(jsonPath("$.data.choices[1].label").value("아니요"))
+				.andExpect(jsonPath("$.data.choices[0].correct").doesNotExist())
+				.andExpect(jsonPath("$.data.choices[1].correct").doesNotExist());
+	}
+
+	/** 반올림 전 거리가 100m 이내인 OX 미션은 문제를 포함한 전체 상세를 받고 선택지 필드는 없다. */
+	@Test
+	@DisplayName("100m 이내 OX 미션은 문제를 포함한 전체 상세를 받고 정답 값은 노출하지 않는다")
+	void returnsFullDetailForOxMissionWithin100m() throws Exception {
+		UUID tripId = startTrip(member.memberId());
+		UUID place = insertProjectedPlace("OX 장소", 50);
+		UUID missionId = insertOxMission(place, "OX 미션", 100, null, true);
+
+		mockMvc.perform(detailRequest(missionId, tripId)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.description").value("설명"))
+				.andExpect(jsonPath("$.data.choices").doesNotExist())
+				.andExpect(jsonPath("$.data.oxCorrectAnswer").doesNotExist());
+	}
+
+	/** 반올림 전 거리가 100m 이내인 사진 인증 미션은 촬영 안내를 포함한 전체 상세를 받는다. */
+	@Test
+	@DisplayName("100m 이내 사진 미션은 촬영 안내를 포함한 전체 상세를 받는다")
+	void returnsFullDetailForPhotoMissionWithin100m() throws Exception {
+		UUID tripId = startTrip(member.memberId());
+		UUID place = insertProjectedPlace("사진 장소", 50);
+		UUID missionId = insertPhotoMission(place, "사진 미션", 150);
+
+		mockMvc.perform(detailRequest(missionId, tripId)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.description").value("설명"));
+	}
+
+	/** 실제 거리가 100m를 초과하면 문제와 선택지가 없는 제한 상세를 받는다. */
+	@Test
+	@DisplayName("100m를 초과하면 description과 choices가 없는 제한 상세를 받는다")
+	void returnsRestrictedDetailBeyond100m() throws Exception {
+		UUID tripId = startTrip(member.memberId());
+		UUID place = insertProjectedPlace("잠긴 장소", 100.1);
+		UUID missionId = insertMultipleChoiceMission(place, "객관식 미션", 100, null);
+		insertChoice(missionId, "예", true, 0);
+		insertChoice(missionId, "아니요", false, 1);
+
+		mockMvc.perform(detailRequest(missionId, tripId)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.missionId").value(missionId.toString()))
+				.andExpect(jsonPath("$.data.availability").value("LOCKED"))
+				.andExpect(jsonPath("$.data.description").doesNotExist())
+				.andExpect(jsonPath("$.data.choices").doesNotExist());
+	}
+
+	/** 500m 탐색 반경 밖의 존재하는 미션도 제한 상세로 200을 받는다. */
+	@Test
+	@DisplayName("500m 밖의 미션도 제한 상세 200으로 조회할 수 있다")
+	void returnsRestrictedDetailForMissionOutside500mRadius() throws Exception {
+		UUID tripId = startTrip(member.memberId());
+		UUID place = insertProjectedPlace("먼 장소", 600);
+		UUID missionId = insertOxMission(place, "먼 미션", 100, null, true);
+
+		mockMvc.perform(detailRequest(missionId, tripId)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.missionId").value(missionId.toString()))
+				.andExpect(jsonPath("$.data.description").doesNotExist());
+	}
+
+	/** 완료·기회 소진 미션도 100m 밖이면 상태와 남은 횟수는 유지하되 제한 상세만 받는다. */
+	@Test
+	@DisplayName("완료·소진 미션도 100m 밖이면 상태는 유지하되 제한 상세만 받는다")
+	void completedAndExhaustedMissionsBeyond100mReturnRestrictedDetailWithPreservedStatus() throws Exception {
+		UUID tripId = startTrip(member.memberId());
+		UUID place = insertProjectedPlace("먼 장소", 200);
+		UUID completedMission = insertOxMission(place, "완료 미션", 100, null, true);
+		UUID exhaustedMission = insertOxMission(place, "소진 미션", 100, 3, true);
+		insertParticipation(tripId, completedMission, "COMPLETED", 1);
+		insertParticipation(tripId, exhaustedMission, "EXHAUSTED", 3);
+
+		mockMvc.perform(detailRequest(completedMission, tripId)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.availability").value("COMPLETED"))
+				.andExpect(jsonPath("$.data.description").doesNotExist());
+		mockMvc.perform(detailRequest(exhaustedMission, tripId)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.availability").value("EXHAUSTED"))
+				.andExpect(jsonPath("$.data.remainingAttempts").value(0))
+				.andExpect(jsonPath("$.data.description").doesNotExist());
+	}
+
+	/** 목록과 상세의 장소명·좌표, 거리, 보상, 표시 상태, 참여 반경과 남은 횟수는 같은 규칙으로 계산된다. */
+	@Test
+	@DisplayName("목록과 상세의 공통 필드는 동일한 값을 반환한다")
+	void listAndDetailShareTheSameComputedFields() throws Exception {
+		UUID tripId = startTrip(member.memberId());
+		UUID place = insertProjectedPlace("공통 장소", 50);
+		UUID missionId = insertOxMission(place, "OX 미션", 100, null, true);
+
+		MvcResult listResult = mockMvc.perform(nearbyRequest(tripId)).andExpect(status().isOk()).andReturn();
+		JsonNode item = itemFor(listResult, missionId);
+
+		mockMvc.perform(detailRequest(missionId, tripId)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.placeName").value(item.get("placeName").stringValue()))
+				.andExpect(jsonPath("$.data.latitude").value(item.get("latitude").doubleValue()))
+				.andExpect(jsonPath("$.data.longitude").value(item.get("longitude").doubleValue()))
+				.andExpect(jsonPath("$.data.distanceMeters").value(item.get("distanceMeters").intValue()))
+				.andExpect(jsonPath("$.data.rewardPoints").value(item.get("rewardPoints").intValue()))
+				.andExpect(jsonPath("$.data.availability").value(item.get("availability").stringValue()))
+				.andExpect(jsonPath("$.data.participationRadiusMeters")
+						.value(item.get("participationRadiusMeters").intValue()));
+	}
+
+	/** 반복 상세 조회 전후 mission_participations를 포함한 DB 상태가 동일하다. */
+	@Test
+	@DisplayName("반복 상세 조회 전후 DB 상태가 동일하다")
+	void repeatedDetailRequestsDoNotChangeDbState() throws Exception {
+		UUID tripId = startTrip(member.memberId());
+		UUID place = insertProjectedPlace("장소", 50);
+		UUID missionId = insertOxMission(place, "OX", 100, null, true);
+
+		mockMvc.perform(detailRequest(missionId, tripId)).andExpect(status().isOk());
+		mockMvc.perform(detailRequest(missionId, tripId)).andExpect(status().isOk());
+
+		Integer participationCount = jdbcTemplate
+				.queryForObject("SELECT COUNT(*) FROM mission_participations WHERE trip_id = ?", Integer.class, tripId);
+		assertThat(participationCount).isZero();
+	}
+
+	/** 좌표, tripId, missionId 형식이 잘못되면 400을 받는다. */
+	@Test
+	@DisplayName("좌표, tripId, missionId 형식이 잘못되면 400을 받는다")
+	void returns400WhenDetailRequestParametersAreInvalid() throws Exception {
+		UUID tripId = startTrip(member.memberId());
+		UUID place = insertProjectedPlace("장소", 50);
+		UUID missionId = insertOxMission(place, "OX", 100, null, true);
+
+		mockMvc.perform(
+				get("/missions/{missionId}", "not-a-uuid").header("Authorization", "Bearer " + member.accessToken())
+						.param("latitude", String.valueOf(ORIGIN_LATITUDE))
+						.param("longitude", String.valueOf(ORIGIN_LONGITUDE)).param("tripId", tripId.toString()))
+				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.data.code").value("INVALID_REQUEST"));
+
+		mockMvc.perform(get("/missions/{missionId}", missionId)
+				.header("Authorization", "Bearer " + member.accessToken()).param("latitude", "abc")
+				.param("longitude", String.valueOf(ORIGIN_LONGITUDE)).param("tripId", tripId.toString()))
+				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.data.code").value("INVALID_REQUEST"));
+	}
+
+	/** 인증되지 않은 요청은 401을 받는다. */
+	@Test
+	@DisplayName("인증하지 않고 상세를 조회하면 401을 받는다")
+	void returns401WhenDetailRequestIsUnauthenticated() throws Exception {
+		mockMvc.perform(get("/missions/{missionId}", UUID.randomUUID())
+				.param("latitude", String.valueOf(ORIGIN_LATITUDE)).param("longitude", String.valueOf(ORIGIN_LONGITUDE))
+				.param("tripId", UUID.randomUUID().toString())).andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.data.code").value("UNAUTHORIZED"));
+	}
+
+	/** 존재하지 않거나 다른 회원의 여행은 존재 여부를 구분하지 않고 404를 받는다. */
+	@Test
+	@DisplayName("본인 소유가 아니거나 존재하지 않는 여행으로 상세를 조회하면 404를 받는다")
+	void returns404WhenTripIsNotOwnedOrMissingForDetailRequest() throws Exception {
+		mockMvc.perform(detailRequest(UUID.randomUUID(), UUID.randomUUID())).andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.data.code").value("RESOURCE_NOT_FOUND"));
+	}
+
+	/** 존재하지 않는 미션은 404를 받는다. */
+	@Test
+	@DisplayName("존재하지 않는 미션을 조회하면 404를 받는다")
+	void returns404WhenMissionDoesNotExist() throws Exception {
+		UUID tripId = startTrip(member.memberId());
+
+		mockMvc.perform(detailRequest(UUID.randomUUID(), tripId)).andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.data.code").value("RESOURCE_NOT_FOUND"));
+	}
+
+	/** 본인 여행이지만 종료·정산 상태면 409를 받는다. */
+	@Test
+	@DisplayName("본인 여행이 진행 중이 아니면 상세 조회도 409를 받는다")
+	void returns409WhenOwnTripIsNotInProgressForDetailRequest() throws Exception {
+		UUID place = insertProjectedPlace("장소", 50);
+		UUID missionId = insertOxMission(place, "OX", 100, null, true);
+		UUID endedTripId = UUID.randomUUID();
+		jdbcTemplate.update("INSERT INTO trips (id, member_id, status, ended_at) VALUES (?, ?, 'ENDED', now())",
+				endedTripId, member.memberId());
+
+		mockMvc.perform(detailRequest(missionId, endedTripId)).andExpect(status().isConflict())
+				.andExpect(jsonPath("$.data.code").value("TRIP_NOT_IN_PROGRESS"));
+	}
+
 	private JsonNode itemFor(MvcResult result, UUID missionId) throws Exception {
 		JsonNode items = objectMapper.readTree(result.getResponse().getContentAsString()).get("data").get("items");
 		for (JsonNode item : items) {
@@ -343,6 +539,12 @@ class MissionControllerIntegrationTests {
 
 	private MockHttpServletRequestBuilder nearbyRequest(UUID tripId) {
 		return get("/missions/nearby").header("Authorization", "Bearer " + member.accessToken())
+				.param("latitude", String.valueOf(ORIGIN_LATITUDE)).param("longitude", String.valueOf(ORIGIN_LONGITUDE))
+				.param("tripId", tripId.toString());
+	}
+
+	private MockHttpServletRequestBuilder detailRequest(UUID missionId, UUID tripId) {
+		return get("/missions/{missionId}", missionId).header("Authorization", "Bearer " + member.accessToken())
 				.param("latitude", String.valueOf(ORIGIN_LATITUDE)).param("longitude", String.valueOf(ORIGIN_LONGITUDE))
 				.param("tripId", tripId.toString());
 	}
@@ -406,6 +608,12 @@ class MissionControllerIntegrationTests {
 						+ "ox_correct_answer) VALUES (?, ?, ?::mission_type, ?, '설명', ?, ?, ?)",
 				id, placeId, type, title, rewardPoints, maxAttempts, oxCorrectAnswer);
 		return id;
+	}
+
+	private void insertChoice(UUID missionId, String label, boolean correct, int sortOrder) {
+		jdbcTemplate.update(
+				"INSERT INTO mission_choices (id, mission_id, label, correct, sort_order) VALUES (?, ?, ?, ?, ?)",
+				UUID.randomUUID(), missionId, label, correct, sortOrder);
 	}
 
 	private void insertParticipation(UUID tripId, UUID missionId, String status, int attemptCount) {

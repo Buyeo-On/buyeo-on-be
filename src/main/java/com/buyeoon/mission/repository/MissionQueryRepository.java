@@ -2,6 +2,7 @@ package com.buyeoon.mission.repository;
 
 import com.buyeoon.mission.entity.MissionEntity;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -28,4 +29,18 @@ public interface MissionQueryRepository extends JpaRepository<MissionEntity, UUI
 			""")
 	List<NearbyMissionProjection> findNearby(@Param("tripId") UUID tripId, @Param("latitude") double latitude,
 			@Param("longitude") double longitude);
+
+	@Query("""
+			SELECT new com.buyeoon.mission.repository.NearbyMissionProjection(m, p,
+			       ST_Distance(p.location,
+			           ST_SetSRID(ST_MakePoint(cast(:longitude as double), cast(:latitude as double)), 4326)),
+			       participation)
+			FROM MissionEntity m
+			JOIN PlaceEntity p ON p.id = m.placeId
+			LEFT JOIN MissionParticipationEntity participation
+			    ON participation.missionId = m.id AND participation.tripId = :tripId
+			WHERE m.id = :missionId
+			""")
+	Optional<NearbyMissionProjection> findDetail(@Param("missionId") UUID missionId, @Param("tripId") UUID tripId,
+			@Param("latitude") double latitude, @Param("longitude") double longitude);
 }
