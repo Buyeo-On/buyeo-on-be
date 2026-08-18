@@ -6,6 +6,7 @@ import com.buyeoon.place.application.PlaceCursor;
 import com.buyeoon.place.application.PlaceQueryService;
 import com.buyeoon.place.application.PlaceQueryService.PlaceItemView;
 import com.buyeoon.place.application.PlaceQueryService.PlaceListView;
+import com.buyeoon.place.application.SavedPlaceCursor;
 import com.buyeoon.place.entity.PlaceCategory;
 import java.util.Map;
 import java.util.Objects;
@@ -51,6 +52,18 @@ public class PlaceController {
 		}
 		return SuccessResponse.of(placeQueryService.list(memberId, parseCategory(category), latitude(latitude),
 				longitude(longitude), parseCursor(cursor), size));
+	}
+
+	@GetMapping("/members/me/saved-places")
+	public SuccessResponse<PlaceListView> getSavedPlaces(@AuthenticationPrincipal Jwt jwt,
+			@RequestParam(required = false) String category, @RequestParam(required = false) String cursor,
+			@RequestParam(defaultValue = "20") int size) {
+		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
+		if (size < MIN_SIZE || size > MAX_SIZE) {
+			throw new InvalidPlaceRequestException();
+		}
+		return SuccessResponse.of(
+				placeQueryService.listSaved(memberId, parseCategory(category), parseSavedPlaceCursor(cursor), size));
 	}
 
 	@GetMapping("/places/{placeId}")
@@ -105,6 +118,17 @@ public class PlaceController {
 		}
 		try {
 			return PlaceCursor.decode(cursor);
+		} catch (IllegalArgumentException exception) {
+			throw new InvalidPlaceRequestException();
+		}
+	}
+
+	private SavedPlaceCursor parseSavedPlaceCursor(String cursor) {
+		if (cursor == null) {
+			return null;
+		}
+		try {
+			return SavedPlaceCursor.decode(cursor);
 		} catch (IllegalArgumentException exception) {
 			throw new InvalidPlaceRequestException();
 		}
