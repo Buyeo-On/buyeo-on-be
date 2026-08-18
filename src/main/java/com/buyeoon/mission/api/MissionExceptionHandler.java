@@ -1,10 +1,15 @@
 package com.buyeoon.mission.api;
 
 import com.buyeoon.common.api.ErrorResponse;
+import com.buyeoon.member.application.IdempotencyKeyReusedException;
+import com.buyeoon.member.application.InvalidStateTransitionException;
+import com.buyeoon.mission.application.InvalidMissionSubmissionException;
 import com.buyeoon.mission.application.MissionNotFoundException;
+import com.buyeoon.mission.application.OutsideParticipationRadiusException;
 import com.buyeoon.mission.application.TripNotFoundException;
 import com.buyeoon.mission.application.TripNotInProgressException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -14,8 +19,9 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 @RestControllerAdvice(assignableTypes = MissionController.class)
 public class MissionExceptionHandler {
 
-	@ExceptionHandler({InvalidMissionRequestException.class, MissingServletRequestParameterException.class,
-			MethodArgumentTypeMismatchException.class})
+	@ExceptionHandler({InvalidMissionRequestException.class, InvalidMissionSubmissionException.class,
+			MissingServletRequestParameterException.class, MethodArgumentTypeMismatchException.class,
+			HttpMessageNotReadableException.class})
 	@ResponseStatus(HttpStatus.BAD_REQUEST)
 	public ErrorResponse handleInvalidRequest() {
 		return ErrorResponse.invalidRequest();
@@ -27,9 +33,27 @@ public class MissionExceptionHandler {
 		return ErrorResponse.resourceNotFound();
 	}
 
+	@ExceptionHandler(OutsideParticipationRadiusException.class)
+	@ResponseStatus(HttpStatus.FORBIDDEN)
+	public ErrorResponse handleOutsideParticipationRadius() {
+		return ErrorResponse.locationVerificationFailed();
+	}
+
 	@ExceptionHandler(TripNotInProgressException.class)
 	@ResponseStatus(HttpStatus.CONFLICT)
 	public ErrorResponse handleTripNotInProgress() {
 		return ErrorResponse.tripNotInProgress();
+	}
+
+	@ExceptionHandler(InvalidStateTransitionException.class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	public ErrorResponse handleInvalidStateTransition() {
+		return ErrorResponse.invalidStateTransition();
+	}
+
+	@ExceptionHandler(IdempotencyKeyReusedException.class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	public ErrorResponse handleIdempotencyKeyReused() {
+		return ErrorResponse.idempotencyKeyReused();
 	}
 }

@@ -43,4 +43,15 @@ public interface MissionQueryRepository extends JpaRepository<MissionEntity, UUI
 			""")
 	Optional<NearbyMissionProjection> findDetail(@Param("missionId") UUID missionId, @Param("tripId") UUID tripId,
 			@Param("latitude") double latitude, @Param("longitude") double longitude);
+
+	@Query("""
+			SELECT new com.buyeoon.mission.repository.MissionPlaceDistanceProjection(m, p,
+			       ST_Distance(p.location,
+			           ST_SetSRID(ST_MakePoint(cast(:longitude as double), cast(:latitude as double)), 4326)))
+			FROM MissionEntity m
+			JOIN PlaceEntity p ON p.id = m.placeId
+			WHERE m.id = :missionId
+			""")
+	Optional<MissionPlaceDistanceProjection> findWithDistance(@Param("missionId") UUID missionId,
+			@Param("latitude") double latitude, @Param("longitude") double longitude);
 }
