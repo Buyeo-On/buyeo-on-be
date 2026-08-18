@@ -13,6 +13,7 @@ import java.util.Objects;
 import java.util.UUID;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -38,6 +39,14 @@ public class PlaceController {
 			@PathVariable UUID placeId) {
 		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
 		placeCommandService.savePlace(memberId, placeId);
+		return SuccessResponse.of(Map.of());
+	}
+
+	@DeleteMapping("/members/me/saved-places/{placeId}")
+	public SuccessResponse<Map<String, Object>> deleteSavedPlace(@AuthenticationPrincipal Jwt jwt,
+			@PathVariable UUID placeId) {
+		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
+		placeCommandService.deleteSavedPlace(memberId, placeId);
 		return SuccessResponse.of(Map.of());
 	}
 

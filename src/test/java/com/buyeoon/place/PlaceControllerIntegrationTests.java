@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -366,6 +367,110 @@ class PlaceControllerIntegrationTests {
 
 	private int saveStatus(UUID placeId) throws Exception {
 		return mockMvc.perform(savePlaceRequest(placeId)).andReturn().getResponse().getStatus();
+	}
+
+	/** 저장한 장소를 삭제하면 200을 반환하고 저장 관계가 제거된다. */
+	@Test
+	@DisplayName("저장한 장소를 삭제하면 200과 함께 저장 관계가 제거된다")
+	void deletesSavedPlaceAndReturns200() throws Exception {
+		UUID placeId = savePlace(PlaceCategory.HERITAGE, "장소", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+		savePlaceForMember(member.memberId(), placeId);
+
+		mockMvc.perform(deleteSavedPlaceRequest(placeId)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true));
+
+		assertSavedPlaceCount(member.memberId(), placeId, 0);
+	}
+
+	/** 저장하지 않은 장소를 삭제해도 이미 목표 상태이므로 200을 반환한다(멱등). */
+	@Test
+	@DisplayName("저장하지 않은 장소를 삭제해도 200을 반환한다")
+	void deletingUnsavedPlaceStaysIdempotent() throws Exception {
+		UUID placeId = savePlace(PlaceCategory.HERITAGE, "장소", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+
+		mockMvc.perform(deleteSavedPlaceRequest(placeId)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true));
+	}
+
+	/** 저장한 장소를 삭제해도 장소 자체와 방문 기록은 유지된다. */
+	@Test
+	@DisplayName("저장한 장소를 삭제해도 장소 데이터는 유지된다")
+	void deletingSavedPlaceKeepsPlaceData() throws Exception {
+		UUID placeId = savePlace(PlaceCategory.HERITAGE, "장소", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+		savePlaceForMember(member.memberId(), placeId);
+
+		mockMvc.perform(deleteSavedPlaceRequest(placeId)).andExpect(status().isOk());
+
+		Integer placeCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM places WHERE id = ?", Integer.class,
+				placeId);
+		assertThat(placeCount).isEqualTo(1);
+	}
+
+	/** 진행 중인 여행이 없는 회원도 삭제할 수 있다(403 없음). */
+	@Test
+	@DisplayName("진행 중인 여행이 없어도 삭제 요청은 200을 받는다")
+	void deletesSavedPlaceWithoutActiveTrip() throws Exception {
+		UUID placeId = savePlace(PlaceCategory.HERITAGE, "장소", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+		savePlaceForMember(member.memberId(), placeId);
+
+		mockMvc.perform(deleteSavedPlaceRequest(placeId)).andExpect(status().isOk());
+	}
+
+	/** 다른 회원이 저장한 장소를 삭제 요청해도 요청자 자신의 저장 관계만 대상이 된다. */
+	@Test
+	@DisplayName("다른 회원의 저장 관계는 삭제되지 않는다")
+	void deletingSavedPlaceDoesNotAffectOtherMembers() throws Exception {
+		UUID placeId = savePlace(PlaceCategory.HERITAGE, "장소", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+		AuthenticatedMember otherMember = insertAuthenticatedMember();
+		savePlaceForMember(otherMember.memberId(), placeId);
+
+		mockMvc.perform(deleteSavedPlaceRequest(placeId)).andExpect(status().isOk());
+
+		assertSavedPlaceCount(otherMember.memberId(), placeId, 1);
+	}
+
+	/** 같은 장소에 대한 저장과 삭제가 동시에 요청되면 나중에 확정된 요청의 상태를 따른다. */
+	@Test
+	@DisplayName("동시 저장·삭제 요청 후 저장 관계 존재 여부는 둘 중 하나로 일관된다")
+	void concurrentSaveAndDeleteRequestsBothSucceedWithConsistentFinalState() throws Exception {
+		startTrip(member.memberId());
+		UUID placeId = savePlace(PlaceCategory.HERITAGE, "장소", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+		savePlaceForMember(member.memberId(), placeId);
+		ExecutorService executor = Executors.newFixedThreadPool(2);
+		try {
+			List<Future<Integer>> results = executor
+					.invokeAll(List.of(() -> saveStatus(placeId), () -> deleteStatus(placeId)));
+			for (Future<Integer> result : results) {
+				assertThat(result.get()).isEqualTo(200);
+			}
+		} finally {
+			executor.shutdown();
+		}
+
+		Integer count = jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM saved_places WHERE member_id = ? AND place_id = ?", Integer.class,
+				member.memberId(), placeId);
+		assertThat(count).isIn(0, 1);
+	}
+
+	/** 로그인하지 않은 삭제 요청은 401을 반환한다. */
+	@Test
+	@DisplayName("인증하지 않으면 삭제 요청은 401을 받는다")
+	void returns401WhenDeletingUnauthenticated() throws Exception {
+		UUID placeId = savePlace(PlaceCategory.HERITAGE, "장소", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+
+		mockMvc.perform(delete("/members/me/saved-places/{placeId}", placeId)).andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.data.code").value("UNAUTHORIZED"));
+	}
+
+	private int deleteStatus(UUID placeId) throws Exception {
+		return mockMvc.perform(deleteSavedPlaceRequest(placeId)).andReturn().getResponse().getStatus();
+	}
+
+	private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder deleteSavedPlaceRequest(
+			UUID placeId) {
+		return delete("/members/me/saved-places/{placeId}", placeId).header("Authorization",
+				"Bearer " + member.accessToken());
 	}
 
 	private void assertSavedPlaceCount(UUID memberId, UUID placeId, int expectedCount) {
