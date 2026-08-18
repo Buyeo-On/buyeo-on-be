@@ -1,6 +1,8 @@
 package com.buyeoon.trip;
 
+import com.buyeoon.trip.entity.TripEntity;
 import com.buyeoon.trip.entity.TripStatus;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,5 +20,10 @@ public class TripQueryService {
 
 	public boolean hasActiveTrip(UUID memberId) {
 		return tripRepository.findByMemberIdAndStatus(memberId, TripStatus.IN_PROGRESS).isPresent();
+	}
+
+	/** 요청 회원이 소유한 여행의 현재 상태를 조회한다. 소유한 여행이 없으면 빈 값을 반환한다. */
+	public Optional<TripStatus> findOwnedTripStatus(UUID memberId, UUID tripId) {
+		return tripRepository.findByIdAndMemberId(tripId, memberId).map(TripEntity::getStatus);
 	}
 }

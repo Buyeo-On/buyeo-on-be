@@ -54,6 +54,10 @@ public record ErrorResponse(boolean success, ErrorData data) {
 		return new ErrorResponse(false, new ErrorData("ACTIVE_TRIP_REQUIRED", "진행 중인 여행이 있어야 이용할 수 있습니다."));
 	}
 
+	public static ErrorResponse tripNotInProgress() {
+		return new ErrorResponse(false, new ErrorData("TRIP_NOT_IN_PROGRESS", "진행 중인 여행에서만 요청할 수 있습니다."));
+	}
+
 	public record ErrorData(String code, String message) {
 	}
 }
