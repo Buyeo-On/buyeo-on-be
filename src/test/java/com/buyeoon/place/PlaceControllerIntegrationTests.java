@@ -484,6 +484,80 @@ class PlaceControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.items[0].placeId").value(cafe.toString()));
 	}
 
+	/**
+	 * 가까운 장소를 먼저, 먼 장소를 나중에 저장해 거리순과 저장 시각순 결과가 서로 반대로 나오게 한다. 정렬이 실수로 거리순으로 바뀌면 이
+	 * 테스트가 실패해야 한다.
+	 */
+	@Test
+	@DisplayName("위치와 함께 조회하면 distanceMeters와 walkingMinutes가 채워지고 정렬은 저장 시각순을 유지한다")
+	void returnsSavedPlacesWithDistanceWhenLocationProvidedButOrderStaysBySavedAt() throws Exception {
+		UUID near = savePlace(PlaceCategory.HERITAGE, "가깝지만 먼저 저장", ORIGIN_LATITUDE + 0.001, ORIGIN_LONGITUDE + 0.001);
+		UUID far = savePlace(PlaceCategory.HERITAGE, "멀지만 나중 저장", ORIGIN_LATITUDE + 0.05, ORIGIN_LONGITUDE + 0.05);
+		Instant base = Instant.now();
+		savePlaceForMemberAt(member.memberId(), near, base);
+		savePlaceForMemberAt(member.memberId(), far, base.plusSeconds(60));
+
+		mockMvc.perform(savedPlacesRequest().param("latitude", String.valueOf(ORIGIN_LATITUDE)).param("longitude",
+				String.valueOf(ORIGIN_LONGITUDE))).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.items[0].placeId").value(far.toString()))
+				.andExpect(jsonPath("$.data.items[1].placeId").value(near.toString()))
+				.andExpect(jsonPath("$.data.items[0].distanceMeters", greaterThan(-1)))
+				.andExpect(jsonPath("$.data.items[1].distanceMeters", greaterThan(-1)));
+	}
+
+	@Test
+	@DisplayName("위치와 category를 함께 전달하면 해당 분류만 거리·도보 시간과 함께 반환한다")
+	void returnsSavedPlacesFilteredByCategoryWithDistance() throws Exception {
+		UUID heritage = savePlace(PlaceCategory.HERITAGE, "유적지", ORIGIN_LATITUDE + 0.001, ORIGIN_LONGITUDE + 0.001);
+		UUID cafe = savePlace(PlaceCategory.CAFE, "카페", ORIGIN_LATITUDE + 0.001, ORIGIN_LONGITUDE + 0.001);
+		savePlaceForMember(member.memberId(), heritage);
+		savePlaceForMember(member.memberId(), cafe);
+
+		mockMvc.perform(
+				savedPlacesRequest().param("category", "CAFE").param("latitude", String.valueOf(ORIGIN_LATITUDE))
+						.param("longitude", String.valueOf(ORIGIN_LONGITUDE)))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.data.items.length()").value(1))
+				.andExpect(jsonPath("$.data.items[0].placeId").value(cafe.toString()))
+				.andExpect(jsonPath("$.data.items[0].distanceMeters", greaterThan(-1)));
+	}
+
+	@Test
+	@DisplayName("위치와 함께 커서로 다음 페이지를 요청해도 저장 시각순으로 이어진다")
+	void returnsNextPageOfSavedPlacesWithLocationOrderedBySavedAt() throws Exception {
+		UUID first = savePlace(PlaceCategory.HERITAGE, "장소1", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+		UUID second = savePlace(PlaceCategory.HERITAGE, "장소2", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+		UUID third = savePlace(PlaceCategory.HERITAGE, "장소3", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
+		Instant base = Instant.now();
+		savePlaceForMemberAt(member.memberId(), first, base);
+		savePlaceForMemberAt(member.memberId(), second, base.plusSeconds(60));
+		savePlaceForMemberAt(member.memberId(), third, base.plusSeconds(120));
+
+		MvcResult firstPage = mockMvc
+				.perform(savedPlacesRequest().param("latitude", String.valueOf(ORIGIN_LATITUDE))
+						.param("longitude", String.valueOf(ORIGIN_LONGITUDE)).param("size", "2"))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.data.items.length()").value(2))
+				.andExpect(jsonPath("$.data.page.hasNext").value(true)).andReturn();
+		String cursor = objectMapper.readTree(firstPage.getResponse().getContentAsString()).path("data").path("page")
+				.path("nextCursor").asString();
+
+		mockMvc.perform(savedPlacesRequest().param("latitude", String.valueOf(ORIGIN_LATITUDE))
+				.param("longitude", String.valueOf(ORIGIN_LONGITUDE)).param("size", "2").param("cursor", cursor))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.data.items.length()").value(1))
+				.andExpect(jsonPath("$.data.items[0].placeId").value(first.toString()))
+				.andExpect(jsonPath("$.data.items[0].distanceMeters", greaterThan(-1)))
+				.andExpect(jsonPath("$.data.page.hasNext").value(false));
+	}
+
+	@Test
+	@DisplayName("latitude/longitude 중 하나만 전달되면 400을 반환한다")
+	void returns400WhenOnlyOneCoordinateProvidedForSavedPlaces() throws Exception {
+		mockMvc.perform(savedPlacesRequest().param("latitude", String.valueOf(ORIGIN_LATITUDE)))
+				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.data.code").value("INVALID_REQUEST"));
+
+		mockMvc.perform(savedPlacesRequest().param("longitude", String.valueOf(ORIGIN_LONGITUDE)))
+				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.data.code").value("INVALID_REQUEST"));
+	}
+
 	@Test
 	@DisplayName("저장한 장소가 없으면 빈 배열과 hasNext:false를 반환한다")
 	void returnsEmptyListWhenNoSavedPlaces() throws Exception {

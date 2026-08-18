@@ -13,8 +13,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /**
- * 카테고리 지정 여부와 커서 유무를 각각 다른 쿼리로 나눠 둔다. nullable 파라미터를 {@code IS NULL OR ...}로
- * 합치면 PostgreSQL이 파라미터 타입을 정하지 못해 실패한다.
+ * 카테고리 지정 여부, 커서 유무, 위치 전달 여부를 각각 다른 쿼리로 나눠 둔다. nullable 파라미터를
+ * {@code IS NULL OR ...}로 합치면 PostgreSQL이 파라미터 타입을 정하지 못해 실패한다. 위치가 있어도 정렬은 항상
+ * 저장 시각순이며 거리는 표시용으로만 SELECT에 추가된다.
  */
 public interface SavedPlaceRepository extends JpaRepository<SavedPlaceEntity, SavedPlaceId> {
 
@@ -76,4 +77,62 @@ public interface SavedPlaceRepository extends JpaRepository<SavedPlaceEntity, Sa
 	List<SavedPlaceProjection> findAfterByCategory(@Param("memberId") UUID memberId,
 			@Param("category") PlaceCategory category, @Param("savedAt") Instant savedAt,
 			@Param("placeId") UUID placeId, Pageable pageable);
+
+	@Query("""
+			SELECT new com.buyeoon.place.repository.SavedPlaceProjection(p, s.savedAt,
+			       ST_Distance(p.location,
+			           ST_SetSRID(ST_MakePoint(cast(:longitude as double), cast(:latitude as double)), 4326)))
+			FROM SavedPlaceEntity s
+			JOIN PlaceEntity p ON p.id = s.id.placeId
+			WHERE s.id.memberId = :memberId
+			ORDER BY s.savedAt DESC, p.id ASC
+			""")
+	List<SavedPlaceProjection> findFromStartWithDistance(@Param("memberId") UUID memberId,
+			@Param("latitude") double latitude, @Param("longitude") double longitude, Pageable pageable);
+
+	@Query("""
+			SELECT new com.buyeoon.place.repository.SavedPlaceProjection(p, s.savedAt,
+			       ST_Distance(p.location,
+			           ST_SetSRID(ST_MakePoint(cast(:longitude as double), cast(:latitude as double)), 4326)))
+			FROM SavedPlaceEntity s
+			JOIN PlaceEntity p ON p.id = s.id.placeId
+			WHERE s.id.memberId = :memberId
+			  AND p.category = :category
+			ORDER BY s.savedAt DESC, p.id ASC
+			""")
+	List<SavedPlaceProjection> findFromStartByCategoryWithDistance(@Param("memberId") UUID memberId,
+			@Param("category") PlaceCategory category, @Param("latitude") double latitude,
+			@Param("longitude") double longitude, Pageable pageable);
+
+	@Query("""
+			SELECT new com.buyeoon.place.repository.SavedPlaceProjection(p, s.savedAt,
+			       ST_Distance(p.location,
+			           ST_SetSRID(ST_MakePoint(cast(:longitude as double), cast(:latitude as double)), 4326)))
+			FROM SavedPlaceEntity s
+			JOIN PlaceEntity p ON p.id = s.id.placeId
+			WHERE s.id.memberId = :memberId
+			  AND (s.savedAt < :savedAt
+			       OR (s.savedAt = :savedAt AND p.id > :placeId))
+			ORDER BY s.savedAt DESC, p.id ASC
+			""")
+	List<SavedPlaceProjection> findAfterWithDistance(@Param("memberId") UUID memberId,
+			@Param("savedAt") Instant savedAt, @Param("placeId") UUID placeId, @Param("latitude") double latitude,
+			@Param("longitude") double longitude, Pageable pageable);
+
+	@Query("""
+			SELECT new com.buyeoon.place.repository.SavedPlaceProjection(p, s.savedAt,
+			       ST_Distance(p.location,
+			           ST_SetSRID(ST_MakePoint(cast(:longitude as double), cast(:latitude as double)), 4326)))
+			FROM SavedPlaceEntity s
+			JOIN PlaceEntity p ON p.id = s.id.placeId
+			WHERE s.id.memberId = :memberId
+			  AND p.category = :category
+			  AND (s.savedAt < :savedAt
+			       OR (s.savedAt = :savedAt AND p.id > :placeId))
+			ORDER BY s.savedAt DESC, p.id ASC
+			""")
+	List<SavedPlaceProjection> findAfterByCategoryWithDistance(@Param("memberId") UUID memberId,
+			@Param("category") PlaceCategory category, @Param("savedAt") Instant savedAt,
+			@Param("placeId") UUID placeId, @Param("latitude") double latitude, @Param("longitude") double longitude,
+			Pageable pageable);
 }
