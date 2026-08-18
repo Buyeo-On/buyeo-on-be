@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -26,6 +27,14 @@ public class MissionController {
 		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
 		return SuccessResponse
 				.of(missionQueryService.listNearby(memberId, tripId, latitude(latitude), longitude(longitude)));
+	}
+
+	@GetMapping("/missions/{missionId}")
+	public SuccessResponse<Object> getMission(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID missionId,
+			@RequestParam String latitude, @RequestParam String longitude, @RequestParam UUID tripId) {
+		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
+		return SuccessResponse.of(
+				missionQueryService.getMission(memberId, missionId, tripId, latitude(latitude), longitude(longitude)));
 	}
 
 	private double latitude(String value) {
