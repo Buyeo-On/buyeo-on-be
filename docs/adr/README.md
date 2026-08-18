@@ -14,3 +14,4 @@
 - [ADR-009: 운영 관측성은 CloudWatch로 통합한다](./adr-009-cloudwatch-observability.md)
 - [ADR-008: 이미지는 Private S3와 Presigned URL로 제공한다](./adr-008-private-mission-photos.md)
 - [ADR-011: iOS 단일 출시를 Flutter 기능 중심 구조로 구현한다](./adr-011-flutter-ios-architecture.md)
+- [ADR-013: 장소 데이터는 관리자 API로 TourAPI를 동기화한다](./adr-013-tourapi-place-sync.md)

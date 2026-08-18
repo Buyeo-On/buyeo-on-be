@@ -41,7 +41,7 @@ iOS Flutter
 - 배지는 Spring 내부의 메트릭 Provider와 데이터 조건으로 판정한다.
 - FCM은 Firebase Admin SDK로 Spring이 직접 발송하며 실패가 본 업무를 롤백하지 않는다.
 - 고아 사진 삭제와 포인트 만료 같은 내부 정기 작업은 멱등한 Spring Scheduler 작업으로 실행한다.
-- 관광공사 데이터는 사용자 요청 전에 내부 DB로 동기화한다. 주기·실행 주체·재시도·갱신 정책은 **TBD**다.
+- 관광공사(TourAPI) 데이터는 사용자 요청 전에 내부 DB로 동기화한다. 관리자 전용 API가 부여 지역 목록(`areaBasedList2`)과 항목별 상세(`detailCommon2`, `detailIntro2`)를 호출해 `places`를 `external_id` 기준으로 upsert하며, 항목 단위 실패는 건너뛰고 계속 진행한다. 자세한 내용은 [ADR-013](./adr/adr-013-tourapi-place-sync.md)을 참고한다.
 - 지도 렌더링·마커·현재 위치는 Flutter의 Kakao Map SDK가 담당한다. 서버용 지오코딩이 필요할 때만 Spring이 Kakao REST API를 호출한다.
 - 부여 행정구역은 국토교통부 법정구역정보의 시군구(`SIG`) 전체 데이터에서 부여군 코드 `44760`을 추출한 버전 관리 GeoJSON과 출처·추출일·SHA-256 메타데이터로 고정하고, 군민증 생성과 여행 시작 위치를 서버에서 point-in-polygon 방식으로 검증한다.
 - Redis, 별도 비동기 워커와 API Gateway·Lambda 기반 배지 판정은 보류한다.
@@ -111,8 +111,8 @@ iOS Flutter
 - Docker `HEALTHCHECK`는 Actuator liveness를 확인한다.
 - 공개 헬스 응답은 내부 구성과 DB 상세정보를 노출하지 않는다.
 ## 미정·보류
-- 관광공사 데이터 동기화 주기·실행 방식·재시도 정책
-- 예시 시드를 대체할 정식 운영 장소·미션 콘텐츠 관리·갱신 절차
+- 관광공사 데이터 자동 재시딩 주기(현재는 관리자가 수동 호출)
+- 예시 시드를 대체할 정식 운영 미션 콘텐츠 관리·갱신 절차
 - iOS 서명·TestFlight·App Store 배포 자동화
 - EC2·RDS 인스턴스 크기
 - Multi-AZ·다중 리전
