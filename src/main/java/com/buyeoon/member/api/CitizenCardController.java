@@ -5,6 +5,7 @@ import com.buyeoon.member.application.CitizenCardCreationService.CitizenCardComm
 import com.buyeoon.member.application.CitizenCardCreationService.CitizenCardView;
 import com.buyeoon.member.application.CitizenCardCreationService.LocationCommand;
 import com.buyeoon.member.application.CitizenCardCreator;
+import com.buyeoon.member.application.CitizenCardLocationVerifier;
 import com.buyeoon.member.application.CitizenCardQueryService;
 import com.buyeoon.member.application.CitizenCardQueryService.BarcodeView;
 import com.buyeoon.member.application.CitizenCardQueryService.CitizenCardOptionsView;
@@ -29,15 +30,24 @@ public class CitizenCardController {
 
 	private final CitizenCardQueryService citizenCards;
 	private final CitizenCardCreator citizenCardCreation;
+	private final CitizenCardLocationVerifier locationVerifier;
 
-	public CitizenCardController(CitizenCardQueryService citizenCards, CitizenCardCreator citizenCardCreation) {
+	public CitizenCardController(CitizenCardQueryService citizenCards, CitizenCardCreator citizenCardCreation,
+			CitizenCardLocationVerifier locationVerifier) {
 		this.citizenCards = citizenCards;
 		this.citizenCardCreation = citizenCardCreation;
+		this.locationVerifier = locationVerifier;
 	}
 
 	@GetMapping("/citizen-cards/options")
 	public SuccessResponse<CitizenCardOptionsView> getOptions() {
 		return SuccessResponse.of(citizenCards.getOptions());
+	}
+
+	@PostMapping("/citizen-cards/location-verification")
+	public SuccessResponse<LocationVerificationView> verifyLocation(@RequestBody JsonNode request) {
+		locationVerifier.verify(location(request));
+		return SuccessResponse.of(new LocationVerificationView(true));
 	}
 
 	@GetMapping("/citizen-cards/me")
@@ -71,6 +81,9 @@ public class CitizenCardController {
 		UUID themeId = uuid(request.get("themeId"));
 		LocationCommand location = location(request.get("location"));
 		return new CitizenCardCommand(displayName, characterId, themeId, location);
+	}
+
+	public record LocationVerificationView(boolean withinBuyeo) {
 	}
 
 	private String normalizedDisplayName(JsonNode node) {
