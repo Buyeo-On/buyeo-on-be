@@ -58,6 +58,10 @@ public record ErrorResponse(boolean success, ErrorData data) {
 		return new ErrorResponse(false, new ErrorData("TRIP_NOT_IN_PROGRESS", "진행 중인 여행에서만 요청할 수 있습니다."));
 	}
 
+	public static ErrorResponse locationVerificationFailed() {
+		return new ErrorResponse(false, new ErrorData("LOCATION_VERIFICATION_FAILED", "위치 인증에 실패했습니다."));
+	}
+
 	public record ErrorData(String code, String message) {
 	}
 }

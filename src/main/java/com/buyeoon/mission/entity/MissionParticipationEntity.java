@@ -46,4 +46,22 @@ public class MissionParticipationEntity {
 		participation.missionId = missionId;
 		return participation;
 	}
+
+	/** 도전 가능한 상태에서만 호출할 수 있으며 정답이면 완료로, 스페셜 퀴즈의 기회를 모두 소진하면 소진으로 전이한다. */
+	public void recordAttempt(boolean correct, Integer maxAttempts, Instant occurredAt) {
+		if (status != MissionStatus.AVAILABLE) {
+			throw new IllegalStateException("도전 가능한 상태에서만 제출할 수 있습니다.");
+		}
+		attemptCount += 1;
+		if (correct) {
+			status = MissionStatus.COMPLETED;
+			completedAt = occurredAt;
+		} else if (maxAttempts != null && attemptCount >= maxAttempts) {
+			status = MissionStatus.EXHAUSTED;
+		}
+	}
+
+	public boolean isCompleted() {
+		return status == MissionStatus.COMPLETED;
+	}
 }
