@@ -1746,7 +1746,7 @@ components:
           minimum: 0
     TermType:
       type: string
-      enum: [SERVICE, PRIVACY, MARKETING]
+      enum: [SERVICE, PRIVACY, LOCATION, MARKETING]
     Term:
       type: object
       description: 약관 종류별로 시행 시각이 현재 시각 이하인 버전 중 가장 최근 버전이다.
@@ -1778,7 +1778,7 @@ components:
         consents:
           type: array
           minItems: 1
-          maxItems: 3
+          maxItems: 4
           items:
             $ref: '#/components/schemas/TermConsentItem'
     TermConsentItem:
