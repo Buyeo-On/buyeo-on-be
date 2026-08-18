@@ -65,3 +65,5 @@ application-local.properties
 *.log
 *.tmp
 temp/
+
+_workspace/
