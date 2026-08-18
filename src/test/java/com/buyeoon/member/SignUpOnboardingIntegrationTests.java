@@ -125,7 +125,7 @@ class SignUpOnboardingIntegrationTests {
 		UUID memberId = UUID.fromString(loginData.get("member").get("memberId").stringValue());
 
 		MvcResult termsResponse = mockMvc.perform(get("/terms")).andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.items.length()").value(3)).andReturn();
+				.andExpect(jsonPath("$.data.items.length()").value(4)).andReturn();
 		String consentRequest = consentRequest(responseData(termsResponse).get("items"));
 		mockMvc.perform(put("/members/me/term-consents").header("Authorization", bearer(accessToken))
 				.header("Idempotency-Key", "uc02-terms-key").contentType(MediaType.APPLICATION_JSON)
@@ -152,7 +152,7 @@ class SignUpOnboardingIntegrationTests {
 		assertThat(count("social_accounts")).isEqualTo(1);
 		assertThat(count("member_settings")).isEqualTo(1);
 		assertThat(count("auth_sessions")).isEqualTo(1);
-		assertThat(count("term_consents")).isEqualTo(3);
+		assertThat(count("term_consents")).isEqualTo(4);
 		assertThat(count("member_profiles")).isEqualTo(1);
 		assertThat(count("citizen_cards")).isEqualTo(1);
 		assertThat(count("idempotency_requests")).isEqualTo(2);
@@ -190,6 +190,7 @@ class SignUpOnboardingIntegrationTests {
 		Instant effectiveAt = Instant.parse("2026-08-01T00:00:00Z");
 		insertTerm("SERVICE", true, effectiveAt);
 		insertTerm("PRIVACY", true, effectiveAt);
+		insertTerm("LOCATION", true, effectiveAt);
 		insertTerm("MARKETING", false, effectiveAt);
 	}
 
