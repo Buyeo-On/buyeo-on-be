@@ -56,14 +56,20 @@ public class PlaceController {
 
 	@GetMapping("/members/me/saved-places")
 	public SuccessResponse<PlaceListView> getSavedPlaces(@AuthenticationPrincipal Jwt jwt,
-			@RequestParam(required = false) String category, @RequestParam(required = false) String cursor,
+			@RequestParam(required = false) String category, @RequestParam(required = false) String latitude,
+			@RequestParam(required = false) String longitude, @RequestParam(required = false) String cursor,
 			@RequestParam(defaultValue = "20") int size) {
 		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
 		if (size < MIN_SIZE || size > MAX_SIZE) {
 			throw new InvalidPlaceRequestException();
 		}
-		return SuccessResponse.of(
-				placeQueryService.listSaved(memberId, parseCategory(category), parseSavedPlaceCursor(cursor), size));
+		if ((latitude == null) != (longitude == null)) {
+			throw new InvalidPlaceRequestException();
+		}
+		Double parsedLatitude = latitude == null ? null : latitude(latitude);
+		Double parsedLongitude = longitude == null ? null : longitude(longitude);
+		return SuccessResponse.of(placeQueryService.listSaved(memberId, parseCategory(category), parsedLatitude,
+				parsedLongitude, parseSavedPlaceCursor(cursor), size));
 	}
 
 	@GetMapping("/places/{placeId}")

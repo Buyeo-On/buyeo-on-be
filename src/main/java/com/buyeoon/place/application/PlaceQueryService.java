@@ -51,12 +51,15 @@ public class PlaceQueryService {
 		return new PlaceListView(items, new PageInfoView(nextCursor, hasNext));
 	}
 
-	public PlaceListView listSaved(UUID memberId, PlaceCategory category, SavedPlaceCursor cursor, int size) {
-		List<SavedPlaceProjection> rows = findSavedRows(memberId, category, cursor, size);
+	public PlaceListView listSaved(UUID memberId, PlaceCategory category, Double latitude, Double longitude,
+			SavedPlaceCursor cursor, int size) {
+		List<SavedPlaceProjection> rows = findSavedRows(memberId, category, latitude, longitude, cursor, size);
 		boolean hasNext = rows.size() > size;
 		List<SavedPlaceProjection> page = hasNext ? rows.subList(0, size) : rows;
-		String nextCursor = hasNext ? new SavedPlaceCursor(page.getLast().savedAt(), page.getLast().place().getId()).encode() : null;
-		List<PlaceItemView> items = page.stream().map(row -> toView(row.place(), true)).toList();
+		String nextCursor = hasNext
+				? new SavedPlaceCursor(page.getLast().savedAt(), page.getLast().place().getId()).encode()
+				: null;
+		List<PlaceItemView> items = page.stream().map(this::toSavedView).toList();
 		return new PlaceListView(items, new PageInfoView(nextCursor, hasNext));
 	}
 
@@ -94,18 +97,41 @@ public class PlaceQueryService {
 						cursor.placeId(), pageRequest);
 	}
 
-	private List<SavedPlaceProjection> findSavedRows(UUID memberId, PlaceCategory category, SavedPlaceCursor cursor,
-			int size) {
+	private List<SavedPlaceProjection> findSavedRows(UUID memberId, PlaceCategory category, Double latitude,
+			Double longitude, SavedPlaceCursor cursor, int size) {
 		PageRequest pageRequest = PageRequest.of(0, size + 1);
+		boolean hasLocation = latitude != null;
 		if (cursor == null) {
+			if (!hasLocation) {
+				return category == null
+						? savedPlaceRepository.findFromStart(memberId, pageRequest)
+						: savedPlaceRepository.findFromStartByCategory(memberId, category, pageRequest);
+			}
 			return category == null
-					? savedPlaceRepository.findFromStart(memberId, pageRequest)
-					: savedPlaceRepository.findFromStartByCategory(memberId, category, pageRequest);
+					? savedPlaceRepository.findFromStartWithDistance(memberId, latitude, longitude, pageRequest)
+					: savedPlaceRepository.findFromStartByCategoryWithDistance(memberId, category, latitude, longitude,
+							pageRequest);
+		}
+		if (!hasLocation) {
+			return category == null
+					? savedPlaceRepository.findAfter(memberId, cursor.savedAt(), cursor.placeId(), pageRequest)
+					: savedPlaceRepository.findAfterByCategory(memberId, category, cursor.savedAt(), cursor.placeId(),
+							pageRequest);
 		}
 		return category == null
-				? savedPlaceRepository.findAfter(memberId, cursor.savedAt(), cursor.placeId(), pageRequest)
-				: savedPlaceRepository.findAfterByCategory(memberId, category, cursor.savedAt(), cursor.placeId(),
-						pageRequest);
+				? savedPlaceRepository.findAfterWithDistance(memberId, cursor.savedAt(), cursor.placeId(), latitude,
+						longitude, pageRequest)
+				: savedPlaceRepository.findAfterByCategoryWithDistance(memberId, category, cursor.savedAt(),
+						cursor.placeId(), latitude, longitude, pageRequest);
+	}
+
+	private PlaceItemView toSavedView(SavedPlaceProjection row) {
+		if (row.distanceMeters() == null) {
+			return toView(row.place(), true);
+		}
+		int distanceMeters = (int) Math.round(row.distanceMeters());
+		int walkingMinutes = (int) Math.ceil(row.distanceMeters() / WALKING_METERS_PER_MINUTE);
+		return toView(row.place(), distanceMeters, walkingMinutes, true);
 	}
 
 	private PlaceItemView toView(PlaceProjection row, Set<UUID> savedPlaceIds) {
