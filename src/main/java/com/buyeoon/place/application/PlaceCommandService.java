@@ -1,6 +1,7 @@
 package com.buyeoon.place.application;
 
 import com.buyeoon.place.entity.SavedPlaceEntity;
+import com.buyeoon.place.entity.SavedPlaceId;
 import com.buyeoon.place.repository.PlaceQueryRepository;
 import com.buyeoon.place.repository.SavedPlaceRepository;
 import com.buyeoon.trip.TripQueryService;
@@ -37,5 +38,10 @@ public class PlaceCommandService {
 		} catch (DataIntegrityViolationException alreadySaved) {
 			// 회원-장소 유니크 제약 위반은 이미 저장된 상태라는 뜻이므로 성공으로 흡수한다.
 		}
+	}
+
+	@Transactional
+	public void deleteSavedPlace(UUID memberId, UUID placeId) {
+		savedPlaceRepository.deleteById(new SavedPlaceId(memberId, placeId));
 	}
 }

@@ -469,8 +469,6 @@ paths:
           $ref: '#/components/responses/EmptySuccess'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
   /missions/nearby:
     get:
       tags: [Missions]
