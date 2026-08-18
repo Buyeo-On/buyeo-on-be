@@ -32,6 +32,7 @@ dependencies {
     implementation 'org.flywaydb:flyway-database-postgresql'
     implementation 'org.hibernate.orm:hibernate-spatial'
     implementation 'software.amazon.awssdk:s3:2.47.3'
+    compileOnly 'com.github.spotbugs:spotbugs-annotations:4.10.3'
     compileOnly 'org.projectlombok:lombok'
     runtimeOnly 'com.h2database:h2'
     runtimeOnly 'org.postgresql:postgresql'

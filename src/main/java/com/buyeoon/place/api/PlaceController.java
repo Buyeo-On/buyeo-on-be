@@ -8,6 +8,7 @@ import com.buyeoon.place.application.PlaceQueryService.PlaceItemView;
 import com.buyeoon.place.application.PlaceQueryService.PlaceListView;
 import com.buyeoon.place.application.SavedPlaceCursor;
 import com.buyeoon.place.entity.PlaceCategory;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -29,6 +30,7 @@ public class PlaceController {
 	private final PlaceQueryService placeQueryService;
 	private final PlaceCommandService placeCommandService;
 
+	@SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring 싱글턴 빈을 그대로 주입받아 저장한다.")
 	public PlaceController(PlaceQueryService placeQueryService, PlaceCommandService placeCommandService) {
 		this.placeQueryService = placeQueryService;
 		this.placeCommandService = placeCommandService;
