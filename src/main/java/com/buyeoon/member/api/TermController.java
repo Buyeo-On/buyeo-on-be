@@ -49,7 +49,7 @@ public class TermController {
 			throw new InvalidTermConsentRequestException();
 		}
 		JsonNode consents = request.get("consents");
-		if (consents == null || !consents.isArray() || consents.size() < 1 || consents.size() > 3) {
+		if (consents == null || !consents.isArray() || consents.size() < 1 || consents.size() > 4) {
 			throw new InvalidTermConsentRequestException();
 		}
 

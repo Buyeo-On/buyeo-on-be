@@ -82,7 +82,7 @@ class TermConsentIntegrationTests {
 		CurrentTerms terms = insertCurrentTerms();
 
 		// 실제 JWT 인증 HTTP 요청으로 필수 동의와 선택 거부를 함께 저장한다.
-		MvcResult response = performConsent(member, "consent-key-0001", request(terms, true, true, false))
+		MvcResult response = performConsent(member, "consent-key-0001", request(terms, true, true, true, false))
 				.andExpect(status().isOk()).andExpect(jsonPath("$.success").value(true))
 				.andExpect(jsonPath("$.data.requiredTermsAgreed").value(true))
 				.andExpect(jsonPath("$.data.agreedAt").isString()).andReturn();
@@ -106,7 +106,7 @@ class TermConsentIntegrationTests {
 				WHERE member_id = ? AND term_id = ?
 				""", Boolean.class, member.memberId(), terms.marketingId())).isFalse();
 		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM term_consents WHERE member_id = ?", Long.class,
-				member.memberId())).isEqualTo(4L);
+				member.memberId())).isEqualTo(5L);
 
 		mockMvc.perform(get("/members/me").header("Authorization", "Bearer " + member.accessToken()))
 				.andExpect(status().isOk()).andExpect(jsonPath("$.data.requiredTermsAgreed").value(true));
@@ -120,7 +120,7 @@ class TermConsentIntegrationTests {
 		CurrentTerms terms = insertCurrentTerms();
 		String missing = requestWithoutMarketing(terms);
 		String duplicate = requestWithDuplicateService(terms);
-		String rejectedRequired = request(terms, false, true, false);
+		String rejectedRequired = request(terms, false, true, true, false);
 
 		// 실패 요청은 성공 멱등성 기록이나 일부 동의를 남기지 않는다.
 		for (String body : new String[]{missing, duplicate, rejectedRequired}) {
@@ -140,7 +140,7 @@ class TermConsentIntegrationTests {
 		insertTerm("SERVICE", "2.0", true, Instant.now().minus(1, ChronoUnit.HOURS));
 
 		// 조회 이후 현재 버전이 바뀐 상황을 HTTP 409로 검증한다.
-		performConsent(member, "outdated-key-01", request(viewedTerms, true, true, false))
+		performConsent(member, "outdated-key-01", request(viewedTerms, true, true, true, false))
 				.andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("TERM_VERSION_OUTDATED"));
 		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM term_consents", Long.class)).isZero();
 		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM idempotency_requests", Long.class)).isZero();
@@ -154,7 +154,7 @@ class TermConsentIntegrationTests {
 
 		// 인증 헤더가 없는 공개 HTTP 요청은 보안 필터에서 거부한다.
 		mockMvc.perform(put("/members/me/term-consents").header("Idempotency-Key", "unauth-key-0001")
-				.contentType(MediaType.APPLICATION_JSON).content(request(terms, true, true, false)))
+				.contentType(MediaType.APPLICATION_JSON).content(request(terms, true, true, true, false)))
 				.andExpect(status().isUnauthorized()).andExpect(jsonPath("$.data.code").value("UNAUTHORIZED"));
 		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM term_consents", Long.class)).isZero();
 	}
@@ -165,7 +165,7 @@ class TermConsentIntegrationTests {
 	void idempotencyHeaderAndJsonContractAreValidated() throws Exception {
 		AuthenticatedMember member = insertAuthenticatedMember();
 		CurrentTerms terms = insertCurrentTerms();
-		String body = request(terms, true, true, false);
+		String body = request(terms, true, true, true, false);
 
 		// OpenAPI의 필수 헤더 길이와 additionalProperties false를 검증한다.
 		mockMvc.perform(put("/members/me/term-consents").header("Authorization", "Bearer " + member.accessToken())
@@ -185,14 +185,14 @@ class TermConsentIntegrationTests {
 	void newRequiredTermVersionRequiresConsentAgain() throws Exception {
 		AuthenticatedMember member = insertAuthenticatedMember();
 		CurrentTerms terms = insertCurrentTerms();
-		performConsent(member, "new-version-key", request(terms, true, true, false)).andExpect(status().isOk());
+		performConsent(member, "new-version-key", request(terms, true, true, true, false)).andExpect(status().isOk());
 		insertTerm("SERVICE", "2.0", true, Instant.now().minus(1, ChronoUnit.HOURS));
 
 		// 과거 버전 동의 행은 남지만 현재 필수 버전에 대한 동의가 없으므로 false다.
 		mockMvc.perform(get("/members/me").header("Authorization", "Bearer " + member.accessToken()))
 				.andExpect(status().isOk()).andExpect(jsonPath("$.data.requiredTermsAgreed").value(false));
 		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM term_consents WHERE member_id = ?", Long.class,
-				member.memberId())).isEqualTo(3L);
+				member.memberId())).isEqualTo(4L);
 	}
 
 	/** 같은 키와 같은 결정은 배열 순서가 달라도 최초 성공 응답을 그대로 반환한다. */
@@ -204,13 +204,13 @@ class TermConsentIntegrationTests {
 		String key = "retry-key-00001";
 
 		// termId 순서가 달라도 같은 요청으로 정규화되는지 공개 HTTP 응답으로 검증한다.
-		String firstResponse = performConsent(member, key, request(terms, true, true, false)).andExpect(status().isOk())
-				.andReturn().getResponse().getContentAsString();
-		String retriedResponse = performConsent(member, key, reversedRequest(terms, true, true, false))
+		String firstResponse = performConsent(member, key, request(terms, true, true, true, false))
+				.andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+		String retriedResponse = performConsent(member, key, reversedRequest(terms, true, true, true, false))
 				.andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
 
 		assertThat(retriedResponse).isEqualTo(firstResponse);
-		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM term_consents", Long.class)).isEqualTo(3L);
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM term_consents", Long.class)).isEqualTo(4L);
 		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM idempotency_requests", Long.class)).isEqualTo(1L);
 	}
 
@@ -221,10 +221,10 @@ class TermConsentIntegrationTests {
 		AuthenticatedMember member = insertAuthenticatedMember();
 		CurrentTerms terms = insertCurrentTerms();
 		String key = "reused-key-0001";
-		performConsent(member, key, request(terms, true, true, false)).andExpect(status().isOk());
+		performConsent(member, key, request(terms, true, true, true, false)).andExpect(status().isOk());
 
 		// 마케팅 결정을 바꾼 두 번째 요청은 기존 성공을 덮어쓰지 않는다.
-		performConsent(member, key, request(terms, true, true, true)).andExpect(status().isConflict())
+		performConsent(member, key, request(terms, true, true, true, true)).andExpect(status().isConflict())
 				.andExpect(jsonPath("$.data.code").value("IDEMPOTENCY_KEY_REUSED"));
 		assertThat(jdbcTemplate.queryForObject("SELECT agreed FROM term_consents WHERE term_id = ?", Boolean.class,
 				terms.marketingId())).isFalse();
@@ -237,7 +237,7 @@ class TermConsentIntegrationTests {
 	void concurrentSameRequestsAreCommittedOnce() throws Exception {
 		AuthenticatedMember member = insertAuthenticatedMember();
 		CurrentTerms terms = insertCurrentTerms();
-		String body = request(terms, true, true, false);
+		String body = request(terms, true, true, true, false);
 		CountDownLatch ready = new CountDownLatch(2);
 		CountDownLatch start = new CountDownLatch(1);
 		ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -258,7 +258,7 @@ class TermConsentIntegrationTests {
 			executor.shutdownNow();
 		}
 
-		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM term_consents", Long.class)).isEqualTo(3L);
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM term_consents", Long.class)).isEqualTo(4L);
 		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM idempotency_requests", Long.class)).isEqualTo(1L);
 	}
 
@@ -269,7 +269,7 @@ class TermConsentIntegrationTests {
 		AuthenticatedMember member = insertAuthenticatedMember();
 		CurrentTerms terms = insertCurrentTerms();
 		String key = "expired-key-001";
-		performConsent(member, key, request(terms, true, true, false)).andExpect(status().isOk());
+		performConsent(member, key, request(terms, true, true, true, false)).andExpect(status().isOk());
 		jdbcTemplate.update("""
 				UPDATE idempotency_requests
 				SET created_at = clock_timestamp() - INTERVAL '25 hours',
@@ -278,7 +278,7 @@ class TermConsentIntegrationTests {
 				""", member.memberId(), key);
 
 		// 만료 후에는 같은 키로 바뀐 마케팅 결정을 새로 확정할 수 있다.
-		performConsent(member, key, request(terms, true, true, true)).andExpect(status().isOk());
+		performConsent(member, key, request(terms, true, true, true, true)).andExpect(status().isOk());
 		assertThat(jdbcTemplate.queryForObject("SELECT agreed FROM term_consents WHERE term_id = ?", Boolean.class,
 				terms.marketingId())).isTrue();
 		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM idempotency_requests", Long.class)).isEqualTo(1L);
@@ -310,9 +310,8 @@ class TermConsentIntegrationTests {
 
 		try {
 			// 세 번째 마케팅 동의 저장 실패가 앞선 두 필수 동의까지 되돌리는지 확인한다.
-			assertThatThrownBy(
-					() -> performConsent(member, "rollback-key-001", request(terms, true, true, false)).andReturn())
-					.isInstanceOf(Exception.class);
+			assertThatThrownBy(() -> performConsent(member, "rollback-key-001", request(terms, true, true, true, false))
+					.andReturn()).isInstanceOf(Exception.class);
 			assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM term_consents", Long.class)).isZero();
 			assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM idempotency_requests", Long.class)).isZero();
 		} finally {
@@ -352,7 +351,8 @@ class TermConsentIntegrationTests {
 	private CurrentTerms insertCurrentTerms() {
 		Instant effectiveAt = Instant.parse("2026-08-01T00:00:00Z");
 		return new CurrentTerms(insertTerm("SERVICE", "1.0", true, effectiveAt),
-				insertTerm("PRIVACY", "1.0", true, effectiveAt), insertTerm("MARKETING", "1.0", false, effectiveAt));
+				insertTerm("PRIVACY", "1.0", true, effectiveAt), insertTerm("LOCATION", "1.0", true, effectiveAt),
+				insertTerm("MARKETING", "1.0", false, effectiveAt));
 	}
 
 	private UUID insertTerm(String type, String version, boolean required, Instant effectiveAt) {
@@ -364,31 +364,36 @@ class TermConsentIntegrationTests {
 		return termId;
 	}
 
-	private String request(CurrentTerms terms, boolean service, boolean privacy, boolean marketing) {
+	private String request(CurrentTerms terms, boolean service, boolean privacy, boolean location, boolean marketing) {
 		return ("{\"consents\":[{\"termId\":\"%s\",\"version\":\"1.0\",\"agreed\":%s},"
 				+ "{\"termId\":\"%s\",\"version\":\"1.0\",\"agreed\":%s},"
-				+ "{\"termId\":\"%s\",\"version\":\"1.0\",\"agreed\":%s}]}")
-				.formatted(terms.serviceId(), service, terms.privacyId(), privacy, terms.marketingId(), marketing);
+				+ "{\"termId\":\"%s\",\"version\":\"1.0\",\"agreed\":%s},"
+				+ "{\"termId\":\"%s\",\"version\":\"1.0\",\"agreed\":%s}]}").formatted(terms.serviceId(), service,
+						terms.privacyId(), privacy, terms.locationId(), location, terms.marketingId(), marketing);
 	}
 
-	private String reversedRequest(CurrentTerms terms, boolean service, boolean privacy, boolean marketing) {
+	private String reversedRequest(CurrentTerms terms, boolean service, boolean privacy, boolean location,
+			boolean marketing) {
 		return ("{\"consents\":[{\"termId\":\"%s\",\"version\":\"1.0\",\"agreed\":%s},"
 				+ "{\"termId\":\"%s\",\"version\":\"1.0\",\"agreed\":%s},"
-				+ "{\"termId\":\"%s\",\"version\":\"1.0\",\"agreed\":%s}]}")
-				.formatted(terms.marketingId(), marketing, terms.privacyId(), privacy, terms.serviceId(), service);
+				+ "{\"termId\":\"%s\",\"version\":\"1.0\",\"agreed\":%s},"
+				+ "{\"termId\":\"%s\",\"version\":\"1.0\",\"agreed\":%s}]}").formatted(terms.marketingId(), marketing,
+						terms.locationId(), location, terms.privacyId(), privacy, terms.serviceId(), service);
 	}
 
 	private String requestWithoutMarketing(CurrentTerms terms) {
 		return ("{\"consents\":[{\"termId\":\"%s\",\"version\":\"1.0\",\"agreed\":true},"
+				+ "{\"termId\":\"%s\",\"version\":\"1.0\",\"agreed\":true},"
 				+ "{\"termId\":\"%s\",\"version\":\"1.0\",\"agreed\":true}]}")
-				.formatted(terms.serviceId(), terms.privacyId());
+				.formatted(terms.serviceId(), terms.privacyId(), terms.locationId());
 	}
 
 	private String requestWithDuplicateService(CurrentTerms terms) {
 		return ("{\"consents\":[{\"termId\":\"%s\",\"version\":\"1.0\",\"agreed\":true},"
 				+ "{\"termId\":\"%s\",\"version\":\"1.0\",\"agreed\":true},"
+				+ "{\"termId\":\"%s\",\"version\":\"1.0\",\"agreed\":true},"
 				+ "{\"termId\":\"%s\",\"version\":\"1.0\",\"agreed\":true}]}")
-				.formatted(terms.serviceId(), terms.privacyId(), terms.serviceId());
+				.formatted(terms.serviceId(), terms.privacyId(), terms.marketingId(), terms.serviceId());
 	}
 
 	@DynamicPropertySource
@@ -405,6 +410,6 @@ class TermConsentIntegrationTests {
 	private record AuthenticatedMember(UUID memberId, String accessToken) {
 	}
 
-	private record CurrentTerms(UUID serviceId, UUID privacyId, UUID marketingId) {
+	private record CurrentTerms(UUID serviceId, UUID privacyId, UUID locationId, UUID marketingId) {
 	}
 }

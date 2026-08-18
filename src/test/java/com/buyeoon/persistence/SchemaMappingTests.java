@@ -31,6 +31,8 @@ class SchemaMappingTests {
 			.of("src/main/resources/db/migration/V7__add_citizen_card_constraints.sql");
 	private static final Path MEMBER_PURGE_MIGRATION = Path
 			.of("src/main/resources/db/migration/V8__track_member_data_purge.sql");
+	private static final Path LOCATION_TERM_MIGRATION = Path
+			.of("src/main/resources/db/migration/V9__add_location_term_type.sql");
 	private static final Pattern CREATE_TABLE = Pattern.compile("CREATE TABLE ([a-z_]+) ");
 
 	/** 초기 스키마에 후속 마이그레이션을 적용한 정의가 기준 DB 스키마와 같음을 보장한다. */
@@ -39,6 +41,8 @@ class SchemaMappingTests {
 	void canonicalSchemaMatchesMigrationChain() throws IOException {
 		String baseline = Files.readString(INITIAL_MIGRATION, StandardCharsets.UTF_8);
 		String canonicalSchema = Files.readString(SCHEMA_SOURCE, StandardCharsets.UTF_8);
+		String legacyTermType = "CREATE TYPE term_type AS ENUM ('SERVICE', 'PRIVACY', 'MARKETING');";
+		String currentTermType = "CREATE TYPE term_type AS ENUM ('SERVICE', 'PRIVACY', 'LOCATION', 'MARKETING');";
 		String legacyMissionStatus = "CREATE TYPE mission_status AS ENUM ('LOCKED', 'AVAILABLE', 'EXHAUSTED', 'COMPLETED');";
 		String currentMissionStatus = "CREATE TYPE mission_status AS ENUM ('AVAILABLE', 'EXHAUSTED', 'COMPLETED');";
 		String placeSourceColumns = String.join("\n", "    source_name text, -- 관광데이터 제공처",
@@ -106,10 +110,13 @@ class SchemaMappingTests {
 				.replace(authSessionIndex, memberPurgeIndexes);
 
 		assertThat(baseline).contains(placeSourceColumns).contains(placeLocationIndex).contains(legacyMissionStatus)
-				.contains(legacyMissionConstraints);
+				.contains(legacyMissionConstraints).contains(legacyTermType);
 		assertThat(publicImageKeySchema.replace(placeSourceColumns, placeExternalIdentityColumns)
 				.replace(placeLocationIndex, placeIndexes).replace(legacyMissionStatus, currentMissionStatus)
-				.replace(legacyMissionConstraints, currentMissionConstraints)).isEqualTo(canonicalSchema);
+				.replace(legacyMissionConstraints, currentMissionConstraints).replace(legacyTermType, currentTermType))
+				.isEqualTo(canonicalSchema);
+		assertThat(Files.readString(LOCATION_TERM_MIGRATION, StandardCharsets.UTF_8))
+				.contains("ALTER TYPE term_type ADD VALUE 'LOCATION' AFTER 'PRIVACY'");
 	}
 
 	/** 탈퇴 회원 파기 완료 상태와 대상 조회 인덱스가 기준 스키마와 업그레이드 경로에 함께 존재하는지 검증한다. */
