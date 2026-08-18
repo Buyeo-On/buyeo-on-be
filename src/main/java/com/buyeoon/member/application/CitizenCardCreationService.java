@@ -1,7 +1,6 @@
 package com.buyeoon.member.application;
 
 import com.buyeoon.common.api.SuccessResponse;
-import com.buyeoon.common.location.BuyeoBoundary;
 import com.buyeoon.common.storage.PublicImageUrlService;
 import com.buyeoon.member.api.InvalidCitizenCardRequestException;
 import com.buyeoon.member.application.CitizenCardQueryService.CardOptionView;
@@ -39,16 +38,16 @@ public final class CitizenCardCreationService implements CitizenCardCreator {
 
 	private final JdbcOperations jdbcOperations;
 	private final TransactionTemplate transactions;
-	private final BuyeoBoundary boundary;
+	private final CitizenCardLocationVerifier locationVerifier;
 	private final PublicImageUrlService imageUrls;
 	private final ObjectReader objectReader;
 	private final ObjectWriter objectWriter;
 
 	public CitizenCardCreationService(JdbcOperations jdbcOperations, PlatformTransactionManager transactionManager,
-			BuyeoBoundary boundary, PublicImageUrlService imageUrls, ObjectMapper objectMapper) {
+			CitizenCardLocationVerifier locationVerifier, PublicImageUrlService imageUrls, ObjectMapper objectMapper) {
 		this.jdbcOperations = jdbcOperations;
 		this.transactions = new TransactionTemplate(transactionManager);
-		this.boundary = boundary;
+		this.locationVerifier = locationVerifier;
 		this.imageUrls = imageUrls;
 		this.objectReader = objectMapper.reader();
 		this.objectWriter = objectMapper.writer();
@@ -57,9 +56,7 @@ public final class CitizenCardCreationService implements CitizenCardCreator {
 	@Override
 	public CitizenCardView create(UUID memberId, String idempotencyKey, CitizenCardCommand command) {
 		validateIdempotencyKey(idempotencyKey);
-		if (!boundary.covers(command.location().latitude(), command.location().longitude())) {
-			throw new OutsideBuyeoException();
-		}
+		locationVerifier.verify(command.location());
 		String requestHash = hash(command);
 		return Objects.requireNonNull(
 				transactions.execute(status -> createInTransaction(memberId, idempotencyKey, requestHash, command)),
