@@ -1,6 +1,7 @@
 package com.buyeoon.badge;
 
 import com.buyeoon.badge.application.BadgeMetricProviderRegistry;
+import com.buyeoon.badge.application.BadgeMetricSnapshot;
 import com.buyeoon.badge.entity.BadgeConditionEntity;
 import com.buyeoon.badge.entity.BadgeEntity;
 import com.buyeoon.badge.repository.BadgeConditionRepository;
@@ -62,13 +63,14 @@ public class BadgeEvaluationService {
 				.findByIdBadgeIdIn(candidates.stream().map(BadgeEntity::getId).toList()).stream()
 				.collect(Collectors.groupingBy(condition -> condition.getId().badgeId()));
 
-		Map<BadgeMetric, Long> metricValues = new EnumMap<>(BadgeMetric.class);
+		Map<BadgeMetric, BadgeMetricSnapshot> metricSnapshots = new EnumMap<>(BadgeMetric.class);
 		List<AwardedBadgeResult> awarded = new ArrayList<>();
 		for (BadgeEntity badge : candidates) {
 			List<BadgeConditionEntity> conditions = conditionsByBadgeId.getOrDefault(badge.getId(), List.of());
 			boolean achieved = !conditions.isEmpty() && conditions.stream().allMatch(condition -> {
 				BadgeMetric metric = BadgeMetric.valueOf(condition.getId().metricKey());
-				long value = metricValues.computeIfAbsent(metric, m -> providerRegistry.get(m).calculate(memberId));
+				long value = metricSnapshots.computeIfAbsent(metric, m -> providerRegistry.get(m).calculate(memberId))
+						.value();
 				return value >= condition.getThreshold();
 			});
 			if (!achieved) {
