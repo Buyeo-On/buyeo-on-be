@@ -48,4 +48,10 @@ public class TripEntity {
 		trip.memberId = memberId;
 		return trip;
 	}
+
+	/** 진행 중인 여행을 종료 상태로 전이하고 종료 시각을 기록한다. */
+	public void end(Instant endedAt) {
+		this.status = TripStatus.ENDED;
+		this.endedAt = endedAt;
+	}
 }

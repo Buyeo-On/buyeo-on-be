@@ -19,4 +19,8 @@ public interface TripRepository extends JpaRepository<TripEntity, UUID> {
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("SELECT t FROM TripEntity t WHERE t.memberId = :memberId AND t.status = :status")
 	Optional<TripEntity> lockByMemberIdAndStatus(@Param("memberId") UUID memberId, @Param("status") TripStatus status);
+
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("SELECT t FROM TripEntity t WHERE t.id = :id AND t.memberId = :memberId")
+	Optional<TripEntity> lockByIdAndMemberId(@Param("id") UUID id, @Param("memberId") UUID memberId);
 }

@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -23,9 +24,11 @@ import tools.jackson.databind.JsonNode;
 public class TripController {
 
 	private final TripStarter tripStart;
+	private final TripEnder tripEnd;
 
-	public TripController(TripStarter tripStart) {
+	public TripController(TripStarter tripStart, TripEnder tripEnd) {
 		this.tripStart = tripStart;
+		this.tripEnd = tripEnd;
 	}
 
 	@PostMapping("/trips")
@@ -35,6 +38,14 @@ public class TripController {
 		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
 		TripView trip = tripStart.start(memberId, idempotencyKey, parseRequest(request));
 		return ResponseEntity.status(HttpStatus.CREATED).body(SuccessResponse.of(trip));
+	}
+
+	@PostMapping("/trips/{tripId}/end")
+	public ResponseEntity<SuccessResponse<TripView>> end(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID tripId,
+			@RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey) {
+		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
+		TripView trip = tripEnd.end(memberId, tripId, idempotencyKey);
+		return ResponseEntity.ok(SuccessResponse.of(trip));
 	}
 
 	private TripStartCommand parseRequest(JsonNode request) {
