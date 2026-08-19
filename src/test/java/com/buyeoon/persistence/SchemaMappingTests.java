@@ -33,6 +33,8 @@ class SchemaMappingTests {
 			.of("src/main/resources/db/migration/V8__track_member_data_purge.sql");
 	private static final Path LOCATION_TERM_MIGRATION = Path
 			.of("src/main/resources/db/migration/V9.1__add_location_term_type.sql");
+	private static final Path POINT_SETTLEMENT_EXPIRATION_MIGRATION = Path
+			.of("src/main/resources/db/migration/V12__track_point_settlement_expiration.sql");
 	private static final Pattern CREATE_TABLE = Pattern.compile("CREATE TABLE ([a-z_]+) ");
 
 	/** 초기 스키마에 후속 마이그레이션을 적용한 정의가 기준 DB 스키마와 같음을 보장한다. */
@@ -138,6 +140,25 @@ class SchemaMappingTests {
 				.contains("purged_at IS NULL");
 		assertThat(migration).contains("ADD COLUMN purged_at timestamptz").contains("members_lifecycle_ck")
 				.contains("members_due_purge_idx").contains("mission_photos_object_key_prefix_ck");
+	}
+
+	/** 이월 포인트 만료 처리 시각과 만료 대상 조회 인덱스가 기준 스키마와 업그레이드 경로에 함께 존재하는지 검증한다. */
+	@Test
+	@DisplayName("이월 포인트 만료 처리 시각은 기준 스키마와 마이그레이션에 정의되어 있다")
+	void pointSettlementExpirationIsDefinedInSchemaAndMigration() throws IOException {
+		String canonicalSchema = Files.readString(SCHEMA_SOURCE, StandardCharsets.UTF_8);
+		String migration = Files.readString(POINT_SETTLEMENT_EXPIRATION_MIGRATION, StandardCharsets.UTF_8);
+
+		assertThat(canonicalSchema).contains("expired_at timestamptz, -- 이월 포인트 만료 처리를 실제로 확정한 시각")
+				.contains("AND (expired_at IS NULL OR expired_at >= expires_at)")
+				.contains("CREATE INDEX point_settlements_due_expiration_idx")
+				.contains("ON point_settlements (expires_at, id)")
+				.contains("WHERE choice = 'CARRY_OVER' AND expired_at IS NULL;");
+		assertThat(migration).contains("ADD COLUMN expired_at timestamptz")
+				.contains("AND (expired_at IS NULL OR expired_at >= expires_at)")
+				.contains("CREATE INDEX point_settlements_due_expiration_idx")
+				.contains("ON point_settlements (expires_at, id)")
+				.contains("WHERE choice = 'CARRY_OVER' AND expired_at IS NULL;");
 	}
 
 	/** 미션 상태와 시도 횟수 제약이 신규 설치용 스키마와 기존 DB 업그레이드에 모두 반영됐는지 검증한다. */
