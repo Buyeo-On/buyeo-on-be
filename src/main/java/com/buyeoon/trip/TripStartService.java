@@ -24,6 +24,7 @@ import java.time.ZonedDateTime;
 import java.util.HexFormat;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.stereotype.Service;
@@ -42,6 +43,7 @@ public class TripStartService implements TripStarter {
 	private static final String OPERATION = "START_TRIP";
 	private static final Duration RETENTION = Duration.ofHours(24);
 	private static final ZoneId ASIA_SEOUL = ZoneId.of("Asia/Seoul");
+	private static final Set<TripStatus> START_BLOCKING_STATUSES = Set.of(TripStatus.IN_PROGRESS, TripStatus.ENDED);
 
 	private final JdbcOperations jdbcOperations;
 	private final TransactionTemplate transactions;
@@ -102,7 +104,7 @@ public class TripStartService implements TripStarter {
 		if (!citizenCards.existsByMemberId(memberId)) {
 			throw new CitizenCardNotIssuedException();
 		}
-		if (trips.lockByMemberIdAndStatus(memberId, TripStatus.IN_PROGRESS).isPresent()) {
+		if (trips.existsByMemberIdAndStatusIn(memberId, START_BLOCKING_STATUSES)) {
 			throw new InvalidStateTransitionException();
 		}
 
