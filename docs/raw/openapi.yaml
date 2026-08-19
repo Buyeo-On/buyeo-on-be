@@ -1120,6 +1120,12 @@ components:
               remainingBalance: 500
               expiresAt: null
               settledAt: '2026-08-06T15:35:00+09:00'
+              newlyAwardedBadges:
+                - badgeId: 550e8400-e29b-41d4-a716-446655440020
+                  name: 부여 나눔 여행자
+                  imageUrl: null
+                  condition: 부여에 포인트 남기기 1회
+                  earnedAt: '2026-08-06T15:35:00+09:00'
     TravelStatisticsSuccess:
       description: 여행 통계
       content:
@@ -1305,6 +1311,12 @@ components:
               pointBalance: 1200
               visitRecorded: true
               visitId: 550e8400-e29b-41d4-a716-446655440010
+              newlyAwardedBadges:
+                - badgeId: 550e8400-e29b-41d4-a716-446655440020
+                  name: 부소산성 탐험가
+                  imageUrl: https://buyeoon-prod-images.s3.ap-northeast-2.amazonaws.com/public/badges/example.png?X-Amz-Expires=600
+                  condition: 부소산성 방문 기록 1회
+                  earnedAt: '2026-08-06T11:20:00+09:00'
     PointSummarySuccess:
       description: 포인트 잔액
       content:
@@ -1978,7 +1990,7 @@ components:
           $ref: '#/components/schemas/SettlementChoice'
     TripSettlementData:
       type: object
-      required: [tripId, choice, settledPoints, remainingBalance, settledAt]
+      required: [tripId, choice, settledPoints, remainingBalance, settledAt, newlyAwardedBadges]
       properties:
         tripId:
           type: string
@@ -2000,6 +2012,11 @@ components:
         settledAt:
           type: string
           format: date-time
+        newlyAwardedBadges:
+          type: array
+          description: 이번 정산에서 처음 지급된 배지. badgeId 오름차순이며 없으면 빈 배열이다.
+          items:
+            $ref: '#/components/schemas/AwardedBadge'
     PlaceCategory:
       type: string
       enum: [HERITAGE, RESTAURANT, CAFE]
@@ -2320,7 +2337,7 @@ components:
           PHOTO: '#/components/schemas/PhotoMissionSubmissionRequest'
     MissionSubmissionData:
       type: object
-      required: [missionId, completed, rewardPoints, pointBalance, visitRecorded]
+      required: [missionId, completed, rewardPoints, pointBalance, visitRecorded, newlyAwardedBadges]
       properties:
         missionId:
           type: string
@@ -2343,6 +2360,11 @@ components:
           type: [string, 'null']
           format: uuid
           description: 새 방문 기록을 생성한 경우의 ID. 이미 같은 여행에 방문 기록이 있으면 null이다.
+        newlyAwardedBadges:
+          type: array
+          description: 이번 제출에서 처음 지급된 배지. badgeId 오름차순이며 없으면 빈 배열이다.
+          items:
+            $ref: '#/components/schemas/AwardedBadge'
     PointExpiration:
       type: object
       required: [points, expiresAt]
@@ -2399,6 +2421,24 @@ components:
     BadgeMetric:
       type: string
       enum: [MISSION_COMPLETED_COUNT, HERITAGE_VISITED_COUNT, POINT_DONATION_COUNT]
+    AwardedBadge:
+      type: object
+      required: [badgeId, name, imageUrl, condition, earnedAt]
+      properties:
+        badgeId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        imageUrl:
+          type: [string, 'null']
+          format: uri
+          description: 10분 유효한 S3 Presigned GET URL. 이미지가 없으면 null이다. Idempotency replay에서도 새로 생성하므로 최초 응답과 URL이 다를 수 있다.
+        condition:
+          type: string
+        earnedAt:
+          type: string
+          format: date-time
     BadgeCondition:
       type: object
       required: [metricKey, progress, threshold, achieved]
