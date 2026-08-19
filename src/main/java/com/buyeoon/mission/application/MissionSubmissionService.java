@@ -1,10 +1,14 @@
 package com.buyeoon.mission.application;
 
+import com.buyeoon.badge.BadgeEvaluationService;
+import com.buyeoon.badge.BadgeEvaluationService.AwardedBadgeResult;
+import com.buyeoon.badge.BadgeMetric;
 import com.buyeoon.common.api.SuccessResponse;
 import com.buyeoon.common.entity.IdempotencyRequestEntity;
 import com.buyeoon.common.entity.IdempotencyRequestId;
 import com.buyeoon.common.storage.MissionPhotoObjectStore;
 import com.buyeoon.common.storage.MissionPhotoObjectStore.MissionPhotoObject;
+import com.buyeoon.common.storage.PublicImageUrlService;
 import com.buyeoon.member.application.IdempotencyKeyReusedException;
 import com.buyeoon.member.application.InvalidStateTransitionException;
 import com.buyeoon.mission.entity.MissionChoiceEntity;
@@ -36,7 +40,10 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -73,6 +80,8 @@ public class MissionSubmissionService {
 	private final MissionIdempotencyRequestRepository idempotencyRequests;
 	private final VisitRecordService visitRecordService;
 	private final PointRewardService pointRewardService;
+	private final BadgeEvaluationService badgeEvaluationService;
+	private final PublicImageUrlService publicImageUrlService;
 	private final ApplicationEventPublisher events;
 	private final ObjectReader objectReader;
 	private final ObjectWriter objectWriter;
@@ -84,6 +93,7 @@ public class MissionSubmissionService {
 			MissionSubmissionRepository missionSubmissions, MissionPhotoRepository missionPhotos,
 			MissionPhotoObjectStore missionPhotoObjectStore, MissionIdempotencyRequestRepository idempotencyRequests,
 			VisitRecordService visitRecordService, PointRewardService pointRewardService,
+			BadgeEvaluationService badgeEvaluationService, PublicImageUrlService publicImageUrlService,
 			ApplicationEventPublisher events, ObjectMapper objectMapper) {
 		this.jdbcOperations = jdbcOperations;
 		this.transactions = new TransactionTemplate(transactionManager);
@@ -97,6 +107,8 @@ public class MissionSubmissionService {
 		this.idempotencyRequests = idempotencyRequests;
 		this.visitRecordService = visitRecordService;
 		this.pointRewardService = pointRewardService;
+		this.badgeEvaluationService = badgeEvaluationService;
+		this.publicImageUrlService = publicImageUrlService;
 		this.events = events;
 		this.objectReader = objectMapper.reader();
 		this.objectWriter = objectMapper.writer();
@@ -106,13 +118,14 @@ public class MissionSubmissionService {
 			MissionSubmissionCommand command) {
 		validateIdempotencyKey(idempotencyKey);
 		String requestHash = hash(missionId, command);
-		return Objects.requireNonNull(
+		MissionSubmissionResult result = Objects.requireNonNull(
 				transactions.execute(
 						status -> submitInTransaction(memberId, missionId, idempotencyKey, requestHash, command)),
 				"미션 제출 트랜잭션 결과가 없습니다.");
+		return toView(result);
 	}
 
-	private MissionSubmissionView submitInTransaction(UUID memberId, UUID missionId, String idempotencyKey,
+	private MissionSubmissionResult submitInTransaction(UUID memberId, UUID missionId, String idempotencyKey,
 			String requestHash, MissionSubmissionCommand command) {
 		TripStatus tripStatus = tripQueryService.findOwnedTripStatus(memberId, command.tripId())
 				.orElseThrow(TripNotFoundException::new);
@@ -163,6 +176,7 @@ public class MissionSubmissionService {
 		long pointBalance = pointRewardService.currentBalance(memberId);
 		boolean visitRecorded = false;
 		UUID visitId = null;
+		List<AwardedBadgeResult> newlyAwardedBadges = List.of();
 
 		if (participation.isCompleted()) {
 			PlaceEntity place = detail.place();
@@ -177,11 +191,17 @@ public class MissionSubmissionService {
 
 			events.publishEvent(
 					new MissionCompleted(memberId, command.tripId(), missionId, participation.getId(), occurredAt));
+
+			// badge Provider query가 방금 완료한 mission participation을 포함하도록 flush한 뒤
+			// 판정한다(ADR-003).
+			missionParticipations.flush();
+			newlyAwardedBadges = badgeEvaluationService.award(memberId, command.tripId(),
+					EnumSet.of(BadgeMetric.MISSION_COMPLETED_COUNT));
 		}
 
 		Integer remainingAttempts = remainingAttempts(mission.getMaxAttempts(), participation);
-		MissionSubmissionView result = new MissionSubmissionView(missionId, participation.isCompleted(),
-				remainingAttempts, rewardPoints, pointBalance, visitRecorded, visitId);
+		MissionSubmissionResult result = new MissionSubmissionResult(missionId, participation.isCompleted(),
+				remainingAttempts, rewardPoints, pointBalance, visitRecorded, visitId, newlyAwardedBadges);
 
 		String responseBody = writeResponse(result);
 		IdempotencyRequestEntity idempotencyRequest = IdempotencyRequestEntity.create(memberId, idempotencyKey,
@@ -253,7 +273,7 @@ public class MissionSubmissionService {
 		return participation.getStatus() == MissionStatus.AVAILABLE ? maxAttempts - participation.getAttemptCount() : 0;
 	}
 
-	private MissionSubmissionView replay(IdempotencyRequestEntity request, String requestHash) {
+	private MissionSubmissionResult replay(IdempotencyRequestEntity request, String requestHash) {
 		if (!OPERATION.equals(request.getOperation()) || !requestHash.equals(request.getRequestHash())) {
 			throw new IdempotencyKeyReusedException();
 		}
@@ -302,7 +322,7 @@ public class MissionSubmissionService {
 		digest.update(bytes);
 	}
 
-	private String writeResponse(MissionSubmissionView result) {
+	private String writeResponse(MissionSubmissionResult result) {
 		try {
 			return objectWriter.writeValueAsString(SuccessResponse.of(result));
 		} catch (JacksonException exception) {
@@ -310,16 +330,42 @@ public class MissionSubmissionService {
 		}
 	}
 
-	private MissionSubmissionView readResponse(String responseBody) {
+	private MissionSubmissionResult readResponse(String responseBody) {
 		try {
 			JsonNode data = required(objectReader.readTree(responseBody), "data");
-			return new MissionSubmissionView(UUID.fromString(requiredText(data, "missionId")),
+			return new MissionSubmissionResult(UUID.fromString(requiredText(data, "missionId")),
 					requiredBoolean(data, "completed"), nullableInt(data, "remainingAttempts"),
 					requiredInt(data, "rewardPoints"), requiredLong(data, "pointBalance"),
-					requiredBoolean(data, "visitRecorded"), nullableUuid(data, "visitId"));
+					requiredBoolean(data, "visitRecorded"), nullableUuid(data, "visitId"),
+					readBadges(required(data, "newlyAwardedBadges")));
 		} catch (JacksonException | IllegalArgumentException exception) {
 			throw new IllegalStateException("저장된 미션 제출 응답을 읽을 수 없습니다.", exception);
 		}
+	}
+
+	private List<AwardedBadgeResult> readBadges(JsonNode node) {
+		if (!node.isArray()) {
+			throw new IllegalStateException("저장된 미션 제출 응답의 배지 목록이 배열이 아닙니다.");
+		}
+		List<AwardedBadgeResult> badges = new ArrayList<>(node.size());
+		for (int index = 0; index < node.size(); index++) {
+			JsonNode badge = node.get(index);
+			badges.add(new AwardedBadgeResult(UUID.fromString(requiredText(badge, "badgeId")),
+					requiredText(badge, "name"), nullableText(badge, "imageKey"), requiredText(badge, "condition"),
+					Instant.parse(requiredText(badge, "earnedAt"))));
+		}
+		return badges;
+	}
+
+	/** 새로 획득한 배지의 image key를 요청 시점마다 새로 서명한 Presigned URL로 바꿔 최종 응답을 만든다. */
+	private MissionSubmissionView toView(MissionSubmissionResult result) {
+		List<AwardedBadgeView> badges = result.newlyAwardedBadges().stream()
+				.map(badge -> new AwardedBadgeView(badge.badgeId(), badge.name(),
+						badge.imageKey() != null ? publicImageUrlService.create(badge.imageKey()) : null,
+						badge.condition(), badge.earnedAt()))
+				.toList();
+		return new MissionSubmissionView(result.missionId(), result.completed(), result.remainingAttempts(),
+				result.rewardPoints(), result.pointBalance(), result.visitRecorded(), result.visitId(), badges);
 	}
 
 	private JsonNode required(JsonNode node, String field) {
@@ -360,6 +406,11 @@ public class MissionSubmissionService {
 		return value == null || value.isNull() ? null : UUID.fromString(value.stringValue());
 	}
 
+	private String nullableText(JsonNode node, String field) {
+		JsonNode value = node.get(field);
+		return value == null || value.isNull() ? null : value.stringValue();
+	}
+
 	public record MissionSubmissionCommand(UUID tripId, MissionType type, String choiceId, Boolean oxAnswer,
 			UUID photoId, LocationCommand location) {
 	}
@@ -367,7 +418,23 @@ public class MissionSubmissionService {
 	public record LocationCommand(double latitude, double longitude, Double accuracyMeters, OffsetDateTime capturedAt) {
 	}
 
+	/** 멱등성 레코드에 저장하는 semantic result다. 배지 image key는 만료되는 URL 대신 그대로 저장한다. */
+	private record MissionSubmissionResult(UUID missionId, boolean completed, Integer remainingAttempts,
+			int rewardPoints, long pointBalance, boolean visitRecorded, UUID visitId,
+			List<AwardedBadgeResult> newlyAwardedBadges) {
+		private MissionSubmissionResult {
+			newlyAwardedBadges = List.copyOf(newlyAwardedBadges);
+		}
+	}
+
 	public record MissionSubmissionView(UUID missionId, boolean completed, Integer remainingAttempts, int rewardPoints,
-			long pointBalance, boolean visitRecorded, UUID visitId) {
+			long pointBalance, boolean visitRecorded, UUID visitId, List<AwardedBadgeView> newlyAwardedBadges) {
+		public MissionSubmissionView {
+			newlyAwardedBadges = List.copyOf(newlyAwardedBadges);
+		}
+	}
+
+	/** 요청마다 새로 서명한 10분 유효 Presigned URL을 담은 응답용 배지 뷰다. */
+	public record AwardedBadgeView(UUID badgeId, String name, String imageUrl, String condition, Instant earnedAt) {
 	}
 }
