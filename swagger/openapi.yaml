@@ -345,6 +345,23 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /trips/{tripId}/settlement-preview:
+    get:
+      tags: [Trips, Points]
+      summary: 여행 포인트 정산 미리보기
+      description: 종료되고 아직 정산하지 않은 여행에서 적립한 정산 대상 포인트와 이월 가능 기간을 조회한다.
+      operationId: getTripPointSettlementPreview
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      responses:
+        '200':
+          $ref: '#/components/responses/TripSettlementPreviewSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /trips/{tripId}/statistics:
     get:
       tags: [Trips]
@@ -938,6 +955,19 @@ components:
               startedAt: '2026-08-06T10:00:00+09:00'
               endedAt: '2026-08-06T15:30:00+09:00'
               settledAt: null
+    TripSettlementPreviewSuccess:
+      description: 여행 포인트 정산 미리보기
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/TripSettlementPreviewEnvelope'
+          example:
+            success: true
+            data:
+              tripId: 550e8400-e29b-41d4-a716-446655440000
+              settleablePoints: 300
+              currentBalance: 800
+              carryOverDurationHours: 240
     TripSettlementSuccess:
       description: 여행 포인트 정산 결과
       content:
@@ -1675,13 +1705,36 @@ components:
           format: date-time
     SettlementChoice:
       type: string
+      enum: [LEAVE_TO_BUYEO, CARRY_OVER, NO_POINTS]
+    PositivePointSettlementChoice:
+      type: string
       enum: [LEAVE_TO_BUYEO, CARRY_OVER]
     TripSettlementRequest:
       type: object
-      required: [choice]
+      additionalProperties: false
+      description: 정산 대상 포인트가 양수면 choice가 필수이고, 0이면 choice를 보내지 않는다.
       properties:
         choice:
-          $ref: '#/components/schemas/SettlementChoice'
+          $ref: '#/components/schemas/PositivePointSettlementChoice'
+    TripSettlementPreviewData:
+      type: object
+      required: [tripId, settleablePoints, currentBalance, carryOverDurationHours]
+      properties:
+        tripId:
+          type: string
+          format: uuid
+        settleablePoints:
+          type: integer
+          minimum: 0
+          description: 이 여행의 EARN 내역 합계. 다른 여행의 이월 포인트와 ADJUST 내역은 포함하지 않는다.
+        currentBalance:
+          type: integer
+          minimum: 0
+          description: 만료 도래 이월분을 먼저 반영한 회원의 현재 전체 포인트 잔액
+        carryOverDurationHours:
+          type: integer
+          const: 240
+          description: CARRY_OVER 선택 시 정산 완료 시각부터 유지되는 시간
     TripSettlementData:
       type: object
       required: [tripId, choice, settledPoints, remainingBalance, settledAt, newlyAwardedBadges]
@@ -1702,7 +1755,7 @@ components:
         expiresAt:
           type: [string, 'null']
           format: date-time
-          description: CARRY_OVER 선택 시 이번 여행 적립 포인트의 만료 시각이며 정산 완료 시각부터 10×24시간 뒤다. LEAVE_TO_BUYEO이면 null이다.
+          description: CARRY_OVER 선택 시 이번 여행 적립 포인트의 만료 시각이며 정산 완료 시각부터 10×24시간 뒤다. LEAVE_TO_BUYEO 또는 NO_POINTS이면 null이다.
         settledAt:
           type: string
           format: date-time
@@ -2359,6 +2412,13 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/Trip'
+    TripSettlementPreviewEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/TripSettlementPreviewData'
     TripSettlementEnvelope:
       allOf:
         - $ref: '#/components/schemas/SuccessEnvelope'

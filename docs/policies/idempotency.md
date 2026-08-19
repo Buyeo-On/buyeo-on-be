@@ -19,3 +19,4 @@
 9. 회원 탈퇴는 `Idempotency-Key`를 요구하지 않는다. 성공 즉시 모든 인증 세션이 폐기되므로 회원 행 잠금과 단방향 상태 전이로 중복 처리를 막고, 성공 후 같은 자격 증명으로 재요청하면 인증 단계에서 `401`을 반환한다.
 10. 미션 완료와 포인트 정산의 성공 response에는 최초 처리에서 새로 지급된 배지만 `newlyAwardedBadges`로 저장한다. 같은 key의 replay는 현재 획득 상태를 다시 계산하지 않고 최초 처리의 semantic result를 반환한다.
 11. `newlyAwardedBadges.imageUrl` 같은 만료되는 Presigned URL은 idempotency response에 저장하지 않는다. 최초 응답과 replay마다 저장한 image key로 새 URL을 생성하므로 URL 문자열과 만료 시각은 달라질 수 있다.
+12. Activity와 성공 semantic result를 확정한 뒤 Presigned URL 생성만 실패해도 확정된 결과는 되돌리지 않는다. 같은 키 replay는 semantic result를 재사용하고 URL 생성을 다시 시도한다.

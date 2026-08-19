@@ -8,7 +8,7 @@ CREATE TYPE trip_status AS ENUM ('IN_PROGRESS', 'ENDED', 'SETTLED');
 CREATE TYPE place_category AS ENUM ('HERITAGE', 'RESTAURANT', 'CAFE');
 CREATE TYPE mission_type AS ENUM ('MULTIPLE_CHOICE', 'OX', 'PHOTO');
 CREATE TYPE mission_status AS ENUM ('AVAILABLE', 'EXHAUSTED', 'COMPLETED');
-CREATE TYPE settlement_choice AS ENUM ('LEAVE_TO_BUYEO', 'CARRY_OVER');
+CREATE TYPE settlement_choice AS ENUM ('LEAVE_TO_BUYEO', 'CARRY_OVER', 'NO_POINTS');
 CREATE TYPE point_transaction_type AS ENUM ('EARN', 'LEAVE_TO_BUYEO', 'EXPIRE', 'ADJUST');
 CREATE TYPE badge_category AS ENUM ('EXPLORATION', 'QUIZ', 'RECORD', 'ASSET', 'SPECIAL');
 CREATE TYPE notification_type AS ENUM ('POINT', 'BADGE', 'NEARBY_QUIZ', 'DISCOUNT', 'CITIZEN_CARD', 'BUYEO_NEWS');
@@ -288,9 +288,26 @@ CREATE TABLE point_settlements (
     settled_points bigint NOT NULL CHECK (settled_points >= 0), -- 이번 여행에서 정산한 포인트
     expires_at timestamptz, -- 이월 포인트 만료 시각
     settled_at timestamptz NOT NULL DEFAULT now(), -- 정산 완료 시각
+    expired_at timestamptz, -- 이월 포인트 만료 처리를 실제로 확정한 시각
     CHECK (
-        (choice = 'LEAVE_TO_BUYEO' AND expires_at IS NULL)
-        OR (choice = 'CARRY_OVER' AND expires_at = settled_at + INTERVAL '240 hours')
+        (
+            choice = 'LEAVE_TO_BUYEO'
+            AND settled_points > 0
+            AND expires_at IS NULL
+            AND expired_at IS NULL
+        )
+        OR (
+            choice = 'CARRY_OVER'
+            AND settled_points > 0
+            AND expires_at = settled_at + INTERVAL '240 hours'
+            AND (expired_at IS NULL OR expired_at >= expires_at)
+        )
+        OR (
+            choice = 'NO_POINTS'
+            AND settled_points = 0
+            AND expires_at IS NULL
+            AND expired_at IS NULL
+        )
     )
 );
 
@@ -363,6 +380,9 @@ CREATE INDEX missions_place_idx ON missions (place_id);
 CREATE INDEX mission_participations_trip_idx ON mission_participations (trip_id, status);
 CREATE INDEX visit_records_trip_idx ON visit_records (trip_id, visited_at);
 CREATE INDEX point_transactions_member_idx ON point_transactions (member_id, occurred_at DESC);
+CREATE INDEX point_settlements_due_expiration_idx
+    ON point_settlements (expires_at, id)
+    WHERE choice = 'CARRY_OVER' AND expired_at IS NULL;
 CREATE INDEX badge_conditions_metric_idx ON badge_conditions (metric_key);
 CREATE INDEX member_badges_trip_idx ON member_badges (trip_id, earned_at);
 CREATE INDEX notifications_member_idx ON notifications (member_id, occurred_at DESC);
