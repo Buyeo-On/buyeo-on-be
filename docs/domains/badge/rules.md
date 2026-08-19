@@ -48,6 +48,7 @@ Spring이 계산하는 메트릭과 달성 임계값의 조합이다. 배지는 
 15. Reconciliation 지급은 실행 시각을 획득 시각으로 기록하고 조건에 기여한 가장 최근 활동의 여행에 연결하며, 실시간 지급과 같은 알림을 만든다.
 16. 지급 가능한 배지는 하나 이상의 조건을 가져야 하며 모든 metric에 지원 Provider가 있어야 한다. 애플리케이션은 startup에 이를 검증하고 잘못된 catalog가 있으면 시작하지 않는다.
 17. Idempotency replay는 최초 처리의 신규 획득 결과를 재사용하되 Presigned image URL은 저장하지 않고 응답마다 새로 생성한다.
+18. 실시간 배지의 획득 시각은 지급을 유발한 activity가 확정된 시각이며, source application service가 이 시각을 배지의 공개 application service에 전달한다.
 
 ## 상태 전이
 

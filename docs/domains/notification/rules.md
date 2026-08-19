@@ -33,6 +33,8 @@
 15. 배지 획득 알림의 제목은 `새로운 배지를 획득했어요!`, 본문은 `{badgeName} 배지를 획득했어요.` 형식을 사용한다.
 16. 실시간 획득과 reconciliation 지급은 같은 배지 알림 규칙을 적용한다.
 17. MVP의 배지 획득 알림은 persistent 알림만 생성하고 FCM push는 발송하지 않는다.
+18. MVP의 이월 포인트 만료는 persistent 알림과 FCM push를 생성하지 않고 `EXPIRE` 포인트 내역과 잔액으로 확인한다.
+19. 실시간 배지 알림의 발생 시각은 배지 지급을 유발한 activity가 확정된 시각이며, 배지 도메인이 이 시각을 알림의 공개 application service에 전달한다.
 
 ## 관련 정책과 ADR
 
