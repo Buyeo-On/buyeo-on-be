@@ -5,6 +5,7 @@ import com.buyeoon.member.application.IdempotencyKeyReusedException;
 import com.buyeoon.member.application.InvalidStateTransitionException;
 import com.buyeoon.member.application.OutsideBuyeoException;
 import com.buyeoon.member.application.RequiredTermsNotAgreedException;
+import com.buyeoon.member.application.ResourceNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -48,5 +49,11 @@ public class TripExceptionHandler {
 	@ResponseStatus(HttpStatus.CONFLICT)
 	public ErrorResponse handleIdempotencyKeyReused() {
 		return ErrorResponse.idempotencyKeyReused();
+	}
+
+	@ExceptionHandler(ResourceNotFoundException.class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	public ErrorResponse handleResourceNotFound() {
+		return ErrorResponse.resourceNotFound();
 	}
 }
