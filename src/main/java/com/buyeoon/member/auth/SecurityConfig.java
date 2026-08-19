@@ -1,5 +1,6 @@
 package com.buyeoon.member.auth;
 
+import com.buyeoon.common.security.AdminApiKeyFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -30,6 +31,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 public class SecurityConfig {
@@ -70,13 +72,20 @@ public class SecurityConfig {
 	}
 
 	@Bean
-	SecurityFilterChain securityFilterChain(HttpSecurity http, AuthenticationEntryPoint entryPoint) throws Exception {
+	AdminApiKeyFilter adminApiKeyFilter(@Value("${admin.api-key}") String adminApiKey) {
+		return new AdminApiKeyFilter(adminApiKey);
+	}
+
+	@Bean
+	SecurityFilterChain securityFilterChain(HttpSecurity http, AuthenticationEntryPoint entryPoint,
+			AdminApiKeyFilter adminApiKeyFilter) throws Exception {
 		return http.csrf(AbstractHttpConfigurer::disable)
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(requests -> requests.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 						.requestMatchers("/auth/social-login", "/auth/refresh", "/terms", "/actuator/health")
-						.permitAll().anyRequest().authenticated())
+						.permitAll().requestMatchers("/admin/**").permitAll().anyRequest().authenticated())
 				.exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(entryPoint))
+				.addFilterBefore(adminApiKeyFilter, UsernamePasswordAuthenticationFilter.class)
 				.oauth2ResourceServer(resourceServer -> resourceServer.jwt(Customizer.withDefaults())
 						.authenticationEntryPoint(entryPoint))
 				.build();

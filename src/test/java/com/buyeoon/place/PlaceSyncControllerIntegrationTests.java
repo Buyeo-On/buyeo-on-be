@@ -1,0 +1,199 @@
+package com.buyeoon.place;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.buyeoon.place.sync.TourApiAreaItem;
+import com.buyeoon.place.sync.TourApiClient;
+import com.buyeoon.place.sync.TourApiPlaceDetail;
+import java.sql.Time;
+import java.time.LocalTime;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
+import org.testcontainers.utility.DockerImageName;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+@Testcontainers
+class PlaceSyncControllerIntegrationTests {
+
+	private static final String APPLICATION_USERNAME = "buyeoon_app";
+	private static final String APPLICATION_PASSWORD = "application-test-password";
+	private static final String VALID_API_KEY = "test-admin-api-key";
+
+	@Container
+	private static final PostgreSQLContainer POSTGIS = new PostgreSQLContainer(
+			DockerImageName.parse("postgis/postgis:17-3.5").asCompatibleSubstituteFor("postgres"))
+			.withDatabaseName("buyeoon_test").withUsername("buyeoon_admin").withPassword("admin-test-password")
+			.withInitScript("db/test-postgis-init.sql");
+
+	@Autowired
+	private MockMvc mockMvc;
+
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
+
+	@MockitoBean
+	private TourApiClient tourApiClient;
+
+	@BeforeAll
+	static void configureAwsCredentials() {
+		System.setProperty("aws.accessKeyId", "test-access-key");
+		System.setProperty("aws.secretAccessKey", "test-secret-key");
+	}
+
+	@AfterAll
+	static void clearAwsCredentials() {
+		System.clearProperty("aws.accessKeyId");
+		System.clearProperty("aws.secretAccessKey");
+	}
+
+	@AfterEach
+	void cleanUp() {
+		jdbcTemplate.update("DELETE FROM places WHERE source_name = 'TOUR_API'");
+	}
+
+	/** 신규 contentId는 새 장소로 삽입되고, 관람시간 파싱에 성공하면 구조화 필드가 채워진다. */
+	@Test
+	@DisplayName("유효한 API Key로 호출하면 신규 장소가 삽입되고 관람시간이 파싱된다")
+	void syncsNewPlaceWithParsedOperatingHours() throws Exception {
+		TourApiAreaItem item = new TourApiAreaItem("1001", "12", null);
+		given(tourApiClient.fetchAreaItems()).willReturn(List.of(item));
+		given(tourApiClient.fetchPlaceDetail(item)).willReturn(new TourApiPlaceDetail("1001", "부소산성", "백제의 마지막 왕성",
+				"충남 부여군 부여읍", "https://tourapi.example.com/image.jpg", 36.2754, 126.9098, "09:00~18:00", "무료"));
+
+		mockMvc.perform(syncRequest()).andExpect(status().isOk()).andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.data.successCount").value(1))
+				.andExpect(jsonPath("$.data.failureCount").value(0));
+
+		Map<String, Object> row = jdbcTemplate.queryForMap(
+				"SELECT name, category::text, opens_at, closes_at, admission_fee, operating_hours_raw, source_image_href "
+						+ "FROM places WHERE source_name = 'TOUR_API' AND external_id = '1001'");
+		assertThat(row.get("name")).isEqualTo("부소산성");
+		assertThat(row.get("category")).isEqualTo("HERITAGE");
+		assertThat(row.get("opens_at")).isEqualTo(Time.valueOf(LocalTime.of(9, 0)));
+		assertThat(row.get("closes_at")).isEqualTo(Time.valueOf(LocalTime.of(18, 0)));
+		assertThat(row.get("admission_fee")).isEqualTo(0);
+		assertThat(row.get("operating_hours_raw")).isEqualTo("09:00~18:00");
+		assertThat(row.get("source_image_href")).isEqualTo("https://tourapi.example.com/image.jpg");
+	}
+
+	/** 기존 external_id를 가진 장소는 새로 삽입되지 않고 모든 필드가 최신값으로 덮어써진다. */
+	@Test
+	@DisplayName("기존 장소는 갱신되고 새로 삽입되지 않는다")
+	void updatesExistingPlaceInstial() throws Exception {
+		jdbcTemplate.update("""
+				INSERT INTO places (id, category, name, address, location, source_name, external_id)
+				VALUES (gen_random_uuid(), 'HERITAGE', '옛 이름', '옛 주소',
+				        ST_SetSRID(ST_MakePoint(126.0, 36.0), 4326)::geography, 'TOUR_API', '2002')
+				""");
+
+		TourApiAreaItem item = new TourApiAreaItem("2002", "12", null);
+		given(tourApiClient.fetchAreaItems()).willReturn(List.of(item));
+		given(tourApiClient.fetchPlaceDetail(item))
+				.willReturn(new TourApiPlaceDetail("2002", "새 이름", "새 설명", "새 주소", null, 36.5, 126.5, null, null));
+
+		mockMvc.perform(syncRequest()).andExpect(status().isOk()).andExpect(jsonPath("$.data.successCount").value(1));
+
+		Integer count = jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM places WHERE source_name = 'TOUR_API' AND external_id = '2002'", Integer.class);
+		assertThat(count).isEqualTo(1);
+		Map<String, Object> row = jdbcTemplate.queryForMap(
+				"SELECT name, address FROM places WHERE source_name = 'TOUR_API' AND external_id = '2002'");
+		assertThat(row.get("name")).isEqualTo("새 이름");
+		assertThat(row.get("address")).isEqualTo("새 주소");
+	}
+
+	/** 관람시간 파싱에 실패해도 원문은 저장되고 나머지 필드는 정상 upsert된다. */
+	@Test
+	@DisplayName("관람시간 파싱 실패 시 원문은 저장되고 구조화 필드는 비어 있다")
+	void keepsRawTextWhenOperatingHoursParsingFails() throws Exception {
+		TourApiAreaItem item = new TourApiAreaItem("3003", "14", null);
+		given(tourApiClient.fetchAreaItems()).willReturn(List.of(item));
+		given(tourApiClient.fetchPlaceDetail(item)).willReturn(
+				new TourApiPlaceDetail("3003", "박물관", "설명", "주소", null, 36.3, 126.3, "매주 월요일 휴관, 문의 요망", null));
+
+		mockMvc.perform(syncRequest()).andExpect(status().isOk()).andExpect(jsonPath("$.data.successCount").value(1));
+
+		Map<String, Object> row = jdbcTemplate
+				.queryForMap("SELECT opens_at, closes_at, operating_hours_raw FROM places "
+						+ "WHERE source_name = 'TOUR_API' AND external_id = '3003'");
+		assertThat(row.get("opens_at")).isNull();
+		assertThat(row.get("closes_at")).isNull();
+		assertThat(row.get("operating_hours_raw")).isEqualTo("매주 월요일 휴관, 문의 요망");
+	}
+
+	/** 특정 항목 호출이 실패해도 나머지 항목은 계속 진행되고 실패한 contentId가 응답에 포함된다. */
+	@Test
+	@DisplayName("일부 항목이 실패해도 나머지는 계속 진행되고 실패 목록에 포함된다")
+	void continuesAfterPartialFailureAndReportsFailedContentIds() throws Exception {
+		TourApiAreaItem okItem = new TourApiAreaItem("4004", "12", null);
+		TourApiAreaItem failingItem = new TourApiAreaItem("4005", "12", null);
+		given(tourApiClient.fetchAreaItems()).willReturn(List.of(okItem, failingItem));
+		given(tourApiClient.fetchPlaceDetail(okItem))
+				.willReturn(new TourApiPlaceDetail("4004", "정림사지", "설명", "주소", null, 36.1, 126.1, null, null));
+		willThrow(new IllegalStateException("TourAPI 호출 실패")).given(tourApiClient).fetchPlaceDetail(failingItem);
+
+		mockMvc.perform(syncRequest()).andExpect(status().isOk()).andExpect(jsonPath("$.data.successCount").value(1))
+				.andExpect(jsonPath("$.data.failureCount").value(1))
+				.andExpect(jsonPath("$.data.failedContentIds[0]").value("4005"));
+
+		Integer count = jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM places WHERE source_name = 'TOUR_API' AND external_id = '4004'", Integer.class);
+		assertThat(count).isEqualTo(1);
+	}
+
+	/** API Key가 없으면 401을 반환한다. */
+	@Test
+	@DisplayName("API Key가 없으면 401을 받는다")
+	void returns401WhenApiKeyMissing() throws Exception {
+		mockMvc.perform(post("/admin/places/sync")).andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.data.code").value("UNAUTHORIZED"));
+	}
+
+	/** API Key가 틀리면 401을 반환한다. */
+	@Test
+	@DisplayName("API Key가 틀리면 401을 받는다")
+	void returns401WhenApiKeyIncorrect() throws Exception {
+		mockMvc.perform(post("/admin/places/sync").header("X-Admin-Api-Key", "wrong-key"))
+				.andExpect(status().isUnauthorized()).andExpect(jsonPath("$.data.code").value("UNAUTHORIZED"));
+	}
+
+	private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder syncRequest() {
+		return post("/admin/places/sync").header("X-Admin-Api-Key", VALID_API_KEY);
+	}
+
+	@DynamicPropertySource
+	static void registerProperties(DynamicPropertyRegistry registry) {
+		registry.add("spring.datasource.url", POSTGIS::getJdbcUrl);
+		registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
+		registry.add("spring.datasource.username", () -> APPLICATION_USERNAME);
+		registry.add("spring.datasource.password", () -> APPLICATION_PASSWORD);
+		registry.add("spring.flyway.enabled", () -> true);
+		registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
+		registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.PostgreSQLDialect");
+		registry.add("storage.images.bucket", () -> "buyeoon-test-images");
+		registry.add("storage.images.region", () -> "ap-northeast-2");
+		registry.add("admin.api-key", () -> VALID_API_KEY);
+	}
+}

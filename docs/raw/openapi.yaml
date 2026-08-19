@@ -24,6 +24,7 @@ tags:
   - name: Points
   - name: Badges
   - name: Notifications
+  - name: Admin
 security:
   - bearerAuth: []
 paths:
@@ -426,6 +427,21 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+  /admin/places/sync:
+    post:
+      tags: [Admin]
+      summary: TourAPI 부여 장소 동기화
+      description: |
+        TourAPI(한국관광공사)에서 부여 지역 장소 데이터를 가져와 `places`를 upsert한다.
+        항목 단위 실패를 허용하며 응답은 전체 동기화가 끝난 뒤 반환하는 동기식이다.
+      operationId: syncPlacesFromTourApi
+      security:
+        - apiKeyAuth: []
+      responses:
+        '200':
+          $ref: '#/components/responses/PlaceSyncSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /members/me/saved-places:
     get:
       tags: [Places]
@@ -730,6 +746,11 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: JWT의 sub는 회원 ID, sid는 인증 세션 ID다. 서버는 인증 요청마다 세션의 만료·폐기 여부를 확인한다.
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Admin-Api-Key
+      description: 회원 인증과 별개인 관리자 전용 API Key. Parameter Store에서 로드한 값과 비교해 검증한다.
   parameters:
     IdempotencyKey:
       name: Idempotency-Key
@@ -1163,6 +1184,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/PlaceEnvelope'
+    PlaceSyncSuccess:
+      description: TourAPI 장소 동기화 결과
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PlaceSyncEnvelope'
     MissionListSuccess:
       description: 미션 목록
       content:
@@ -2599,6 +2626,28 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/PlaceListData'
+    PlaceSyncData:
+      type: object
+      required: [successCount, failureCount, failedContentIds]
+      properties:
+        successCount:
+          type: integer
+          minimum: 0
+        failureCount:
+          type: integer
+          minimum: 0
+        failedContentIds:
+          type: array
+          items:
+            type: string
+    PlaceSyncEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/PlaceSyncData'
     PlaceEnvelope:
       allOf:
         - $ref: '#/components/schemas/SuccessEnvelope'

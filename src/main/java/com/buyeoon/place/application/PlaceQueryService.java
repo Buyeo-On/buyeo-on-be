@@ -150,7 +150,9 @@ public class PlaceQueryService {
 	}
 
 	private PlaceItemView toView(PlaceEntity place, Integer distanceMeters, Integer walkingMinutes, boolean saved) {
-		String imageUrl = place.getImageKey() == null ? null : imageUrls.create(place.getImageKey());
+		String imageUrl = place.getImageKey() != null
+				? imageUrls.create(place.getImageKey())
+				: place.getSourceImageHref();
 
 		return new PlaceItemView(place.getId(), place.getCategory(), place.getName(), place.getSummary(),
 				place.getDescription(), place.getAddress(), imageUrl, place.getLocation().getY(),
