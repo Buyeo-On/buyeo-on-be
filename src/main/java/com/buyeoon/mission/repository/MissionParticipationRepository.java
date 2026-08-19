@@ -1,6 +1,7 @@
 package com.buyeoon.mission.repository;
 
 import com.buyeoon.mission.entity.MissionParticipationEntity;
+import com.buyeoon.mission.entity.MissionStatus;
 import jakarta.persistence.LockModeType;
 import java.util.Optional;
 import java.util.UUID;
@@ -21,4 +22,12 @@ public interface MissionParticipationRepository extends JpaRepository<MissionPar
 	@Query("SELECT p FROM MissionParticipationEntity p WHERE p.tripId = :tripId AND p.missionId = :missionId")
 	Optional<MissionParticipationEntity> lockByTripIdAndMissionId(@Param("tripId") UUID tripId,
 			@Param("missionId") UUID missionId);
+
+	/**
+	 * 회원이 전체 여행에서 완료한 mission participation 수를 센다({@code MISSION_COMPLETED_COUNT},
+	 * ADR-003).
+	 */
+	@Query("SELECT COUNT(p) FROM MissionParticipationEntity p JOIN TripEntity t ON t.id = p.tripId "
+			+ "WHERE t.memberId = :memberId AND p.status = :status")
+	long countByMemberIdAndStatus(@Param("memberId") UUID memberId, @Param("status") MissionStatus status);
 }
