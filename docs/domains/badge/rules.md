@@ -22,16 +22,32 @@ Spring이 계산하는 메트릭과 달성 임계값의 조합이다. 배지는 
 
 회원이 모든 조건을 충족해 받은 배지와 획득 시각의 이력이다. 배지를 처음 획득한 여행과 연결한다.
 
+### 신규 획득 배지
+
+한 활동의 처리 결과로 이번에 처음 지급된 배지다. Activity response에는 배지 ID, 이름, 이미지 URL, 표시 조건과 획득 시각을 제공한다.
+
 ## 규칙
 
 1. 배지는 하나 이상의 메트릭 조건을 가지며 모든 조건을 충족하면 지급한다.
-2. 메트릭은 미션 완료 수, 방문한 고유 문화재 수와 포인트 기부 정산 횟수를 지원한다.
+2. 메트릭은 회원의 전체 여행 활동을 누적하며 다음 값을 지원한다.
+   - `MISSION_COMPLETED_COUNT`: 완료한 mission participation 수. 다른 여행에서 같은 mission을 다시 완료하면 다시 센다.
+   - `HERITAGE_VISITED_COUNT`: 방문한 고유 문화재 수.
+   - `POINT_DONATION_COUNT`: `LEAVE_TO_BUYEO`를 선택하고 `settled_points > 0`인 여행 정산 수.
 3. 진행도와 상태는 원본 활동 데이터 및 배지 획득 이력으로 계산한다.
 4. 같은 배지는 한 회원에게 한 번만 지급하고 획득 상태는 되돌리지 않는다.
 5. 지급이 중단된 배지는 새로 지급하지 않지만 기존 획득 이력은 유지한다.
 6. 미획득 배지도 각 조건과 현재 진행도를 조회할 수 있다.
 7. 배지는 탐험, 퀴즈, 기록, 재화, 특별 분야로 구분한다.
 8. 배지를 획득하면 획득을 유발한 여행 ID를 함께 저장하며 이후 다른 여행에서 같은 배지를 다시 연결하지 않는다.
+9. 배지 판정은 activity를 처리하는 application service가 source 변경을 같은 transaction에서 query할 수 있게 flush한 뒤 badge의 공개 application service를 동기 호출하며, 변경된 metric에 관련된 미획득 배지만 판정한다.
+10. 하나의 미션 완료에서 mission 완료와 방문 기록 생성이 함께 발생하면 변경된 두 metric을 한 번에 판정한다.
+11. Activity, 새 배지 획득과 persistent `BADGE` 알림은 하나의 transaction으로 확정한다.
+12. `BADGE` 알림은 새로 획득한 배지마다 한 건 만들며 `target_type`은 `BADGE`, `target_id`는 badge ID다.
+13. Activity response의 `newlyAwardedBadges`는 새로 획득한 배지를 badge ID 오름차순으로 반환하고, 없으면 빈 배열을 반환한다.
+14. 매일 `03:00 Asia/Seoul`에 활성 회원의 미획득 배지를 원본 활동 데이터로 reconciliation한다. 회원별 transaction은 member row를 lock하고 `ACTIVE` 상태를 다시 확인한다.
+15. Reconciliation 지급은 실행 시각을 획득 시각으로 기록하고 조건에 기여한 가장 최근 활동의 여행에 연결하며, 실시간 지급과 같은 알림을 만든다.
+16. 지급 가능한 배지는 하나 이상의 조건을 가져야 하며 모든 metric에 지원 Provider가 있어야 한다. 애플리케이션은 startup에 이를 검증하고 잘못된 catalog가 있으면 시작하지 않는다.
+17. Idempotency replay는 최초 처리의 신규 획득 결과를 재사용하되 Presigned image URL은 저장하지 않고 응답마다 새로 생성한다.
 
 ## 상태 전이
 
@@ -43,6 +59,9 @@ Spring이 계산하는 메트릭과 달성 임계값의 조합이다. 배지는 
 
 - [중복 요청과 멱등성](../../policies/idempotency.md)
 - [날짜와 시간대](../../policies/date-time.md)
+- [사용자 권한](../../policies/authorization.md)
 - [동시 요청](../../policies/concurrency.md)
 - [트랜잭션과 롤백](../../policies/transactions.md)
 - [ADR-003 배지 메트릭 Provider](../../adr/adr-003-badge-metric-provider.md)
+- [ADR-004 명시적 생명주기 상태](../../adr/adr-004-explicit-lifecycle-status.md)
+- [ADR-010 모듈러 모놀리스와 인프로세스 작업](../../adr/adr-010-modular-monolith.md)
