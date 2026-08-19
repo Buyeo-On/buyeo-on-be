@@ -1,7 +1,11 @@
 package com.buyeoon.trip;
 
+import com.buyeoon.member.application.ResourceNotFoundException;
 import com.buyeoon.trip.entity.TripEntity;
 import com.buyeoon.trip.entity.TripStatus;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -13,9 +17,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class TripQueryService {
 
 	private final TripRepository tripRepository;
+	private final VisitRecordRepository visitRecordRepository;
 
-	public TripQueryService(TripRepository tripRepository) {
+	@SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring 싱글턴 빈을 그대로 주입받아 저장한다.")
+	public TripQueryService(TripRepository tripRepository, VisitRecordRepository visitRecordRepository) {
 		this.tripRepository = tripRepository;
+		this.visitRecordRepository = visitRecordRepository;
 	}
 
 	public boolean hasActiveTrip(UUID memberId) {
@@ -25,5 +32,18 @@ public class TripQueryService {
 	/** 요청 회원이 소유한 여행의 현재 상태를 조회한다. 소유한 여행이 없으면 빈 값을 반환한다. */
 	public Optional<TripStatus> findOwnedTripStatus(UUID memberId, UUID tripId) {
 		return tripRepository.findByIdAndMemberId(tripId, memberId).map(TripEntity::getStatus);
+	}
+
+	/** 요청 회원이 소유한 여행의 통계를 계산한다. 소유하지 않았거나 존재하지 않으면 404 예외를 던진다. */
+	public TripStatisticsView getStatistics(UUID memberId, UUID tripId) {
+		TripEntity trip = tripRepository.findByIdAndMemberId(tripId, memberId)
+				.orElseThrow(ResourceNotFoundException::new);
+		Instant until = trip.getStatus() == TripStatus.IN_PROGRESS ? Instant.now() : trip.getEndedAt();
+		long durationMinutes = Duration.between(trip.getStartedAt(), until).toMinutes();
+		long visitedPlaceCount = visitRecordRepository.countByTripId(tripId);
+		return new TripStatisticsView(tripId, visitedPlaceCount, durationMinutes);
+	}
+
+	public record TripStatisticsView(UUID tripId, long visitedPlaceCount, long durationMinutes) {
 	}
 }

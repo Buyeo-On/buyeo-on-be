@@ -67,3 +67,5 @@ application-local.properties
 temp/
 
 _workspace/
+
+.omc/

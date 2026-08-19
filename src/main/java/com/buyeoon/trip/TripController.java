@@ -1,6 +1,7 @@
 package com.buyeoon.trip;
 
 import com.buyeoon.common.api.SuccessResponse;
+import com.buyeoon.trip.TripQueryService.TripStatisticsView;
 import com.buyeoon.trip.TripStartService.LocationCommand;
 import com.buyeoon.trip.TripStartService.TripStartCommand;
 import com.buyeoon.trip.TripStartService.TripView;
@@ -13,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -25,10 +27,12 @@ public class TripController {
 
 	private final TripStarter tripStart;
 	private final TripEnder tripEnd;
+	private final TripQueryService tripQuery;
 
-	public TripController(TripStarter tripStart, TripEnder tripEnd) {
+	public TripController(TripStarter tripStart, TripEnder tripEnd, TripQueryService tripQuery) {
 		this.tripStart = tripStart;
 		this.tripEnd = tripEnd;
+		this.tripQuery = tripQuery;
 	}
 
 	@PostMapping("/trips")
@@ -46,6 +50,23 @@ public class TripController {
 		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
 		TripView trip = tripEnd.end(memberId, tripId, idempotencyKey);
 		return ResponseEntity.ok(SuccessResponse.of(trip));
+	}
+
+	@GetMapping("/trips/{tripId}/statistics")
+	public ResponseEntity<SuccessResponse<TripStatisticsResponse>> statistics(@AuthenticationPrincipal Jwt jwt,
+			@PathVariable UUID tripId) {
+		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
+		TripStatisticsView statistics = tripQuery.getStatistics(memberId, tripId);
+		return ResponseEntity.ok(SuccessResponse.of(TripStatisticsResponse.from(statistics)));
+	}
+
+	/** 이동 거리·소모 칼로리는 MVP에서 계산하지 않으므로 항상 null이다. */
+	private record TripStatisticsResponse(UUID tripId, Double distanceKm, long visitedPlaceCount, long durationMinutes,
+			Integer caloriesKcal) {
+		static TripStatisticsResponse from(TripStatisticsView statistics) {
+			return new TripStatisticsResponse(statistics.tripId(), null, statistics.visitedPlaceCount(),
+					statistics.durationMinutes(), null);
+		}
 	}
 
 	private TripStartCommand parseRequest(JsonNode request) {
