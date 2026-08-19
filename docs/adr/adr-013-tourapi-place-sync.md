@@ -14,7 +14,7 @@
 - 응답은 동기식이다. 호출자는 전체 동기화가 끝날 때까지 기다려 성공·실패 개수를 받는다.
 - 방문자 키워드 태그, `detailImage2`(추가 이미지), `searchFestival2`(축제)는 이번 동기화 범위에서 제외한다.
 ## 결과
-- `places` 스키마에 `operating_hours_raw`, `opens_at`, `closes_at`, `admission_fee` 컬럼이 추가된다(`V9__add_place_operating_info.sql`).
+- `places` 스키마에 `operating_hours_raw`, `opens_at`, `closes_at`, `admission_fee` 컬럼이 추가된다(`V10__add_place_operating_info.sql`).
 - 자동 재시딩 주기는 정하지 않는다 — 필요할 때 운영자가 수동으로 호출한다(`docs/architecture.md` 미정·보류 참고).
 - 회원 권한 체계와 무관하게 별도 API Key로 보호되므로, 인증 도메인(A)의 인가 범위 확장 없이 바로 구현할 수 있다.
 - 부여 지역 규모(수백 건 이내)에서는 동기 호출로도 응답 시간이 감당 가능하다고 가정한다. 지역이 늘어나 호출량이 커지면 비동기 처리를 재검토해야 한다.

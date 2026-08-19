@@ -39,6 +39,7 @@
 17. 회원이 미션을 처음 완료하면 해당 여행에 연결된 문화재의 방문 기록을 생성한다.
 18. 같은 여행에서 같은 문화재에 연결된 여러 미션을 완료해도 방문 기록은 한 번만 생성한다.
 19. MVP에서는 DB에 저장된 모든 미션 정의를 게시된 상태로 간주하며 초안, 비활성화와 게시 기간을 구분하지 않는다.
+20. 미션을 완료하면 배지 판정을 위해 `MissionCompleted` 이벤트를 발행한다. 리스너가 없어도 발행 자체는 완료 처리에 영향을 주지 않는다.
 
 ## 상태 전이
 
@@ -55,4 +56,5 @@
 - [동시 요청](../../policies/concurrency.md)
 - [트랜잭션과 롤백](../../policies/transactions.md)
 - [ADR-002 장소 위치는 PostGIS geography로 저장한다](../../adr/adr-002-postgis-geography.md)
+- [ADR-003 배지 메트릭 Provider](../../adr/adr-003-badge-metric-provider.md)
 - [ADR-008 비공개 미션 사진](../../adr/adr-008-private-mission-photos.md)

@@ -19,8 +19,9 @@ description: 사용자가 명시적으로 요청했을 때 GitHub Sub-issue와 P
 1. `tdd` 스킬을 사용해 인수 조건을 한 개씩 red → green으로 구현한다.
 2. 기존 패키지 경계와 공개 인터페이스를 우선 재사용한다.
 3. 관련 테스트를 자주 실행한다.
-4. OpenAPI나 DB 계약을 변경했다면 원본 문서, 소유 도메인의 `api.md`와 구현을 함께 맞춘다.
-5. 구현이 끝나면 `scripts/test`의 검증 스크립트를 순서대로 실행한다.
+4. 메서드, 클래스마다 한글로 의도와 설명을 주석으로 작성한다. 
+5. OpenAPI나 DB 계약을 변경했다면 원본 문서, 소유 도메인의 `api.md`와 구현을 함께 맞춘다.
+6. 구현이 끝나면 `scripts/test`의 검증 스크립트를 순서대로 실행한다.
    - `./scripts/test/format.sh`
    - `./scripts/test/static-check.sh`
    - `./scripts/test/test.sh`

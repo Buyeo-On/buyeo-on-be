@@ -37,6 +37,7 @@
 11. 활동 내역에서는 포인트 적립, 사진, 여행 통계와 배지 현황을 조회할 수 있다.
 12. 발자취는 여행이 종료되고 포인트 정산을 마친 후 조회할 수 있다.
 13. 여행 기록이 없으면 발자취가 없는 상태를 제공한다.
+14. 방문 기록을 새로 생성하면 배지 판정을 위해 `VisitRecorded` 이벤트를 발행한다. 리스너가 없어도 발행 자체는 방문 기록 생성에 영향을 주지 않는다.
 
 ## 상태 전이
 
@@ -51,3 +52,4 @@
 - [위치 인증](../../policies/location-verification.md)
 - [동시 요청](../../policies/concurrency.md)
 - [트랜잭션과 롤백](../../policies/transactions.md)
+- [ADR-003 배지 메트릭 Provider](../../adr/adr-003-badge-metric-provider.md)
