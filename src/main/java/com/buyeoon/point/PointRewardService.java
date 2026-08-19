@@ -2,6 +2,7 @@ package com.buyeoon.point;
 
 import com.buyeoon.point.entity.PointTransactionEntity;
 import com.buyeoon.point.entity.PointTransactionType;
+import com.buyeoon.point.repository.PointTransactionRepository;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -11,6 +12,7 @@ public class PointRewardService {
 
 	private final PointTransactionRepository pointTransactions;
 
+	/** 포인트 내역 저장과 잔액 조회를 담당하는 통합 repository를 주입받는다. */
 	public PointRewardService(PointTransactionRepository pointTransactions) {
 		this.pointTransactions = pointTransactions;
 	}
@@ -22,7 +24,8 @@ public class PointRewardService {
 		return currentBalance(memberId);
 	}
 
+	/** 회원의 현재 포인트 잔액을 포인트 내역 합계로 계산한다. */
 	public long currentBalance(UUID memberId) {
-		return pointTransactions.sumByMemberId(memberId);
+		return pointTransactions.sumAmountByMemberId(memberId);
 	}
 }
