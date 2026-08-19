@@ -195,8 +195,11 @@ public class MissionSubmissionService {
 			// badge Provider query가 방금 완료한 mission participation을 포함하도록 flush한 뒤
 			// 판정한다(ADR-003).
 			missionParticipations.flush();
-			newlyAwardedBadges = badgeEvaluationService.award(memberId, command.tripId(),
-					EnumSet.of(BadgeMetric.MISSION_COMPLETED_COUNT));
+			Set<BadgeMetric> affectedMetrics = EnumSet.of(BadgeMetric.MISSION_COMPLETED_COUNT);
+			if (visitRecorded) {
+				affectedMetrics.add(BadgeMetric.HERITAGE_VISITED_COUNT);
+			}
+			newlyAwardedBadges = badgeEvaluationService.award(memberId, command.tripId(), affectedMetrics);
 		}
 
 		Integer remainingAttempts = remainingAttempts(mission.getMaxAttempts(), participation);
