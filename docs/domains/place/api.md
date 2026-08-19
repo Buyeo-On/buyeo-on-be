@@ -9,3 +9,4 @@ API 계약의 원본은 [`docs/raw/openapi.yaml`](../../raw/openapi.yaml)이다.
 | `getSavedPlaces` | GET | `/members/me/saved-places` |
 | `savePlace` | PUT | `/members/me/saved-places/{placeId}` |
 | `deleteSavedPlace` | DELETE | `/members/me/saved-places/{placeId}` |
+| `syncPlacesFromTourApi` | POST | `/admin/places/sync` |

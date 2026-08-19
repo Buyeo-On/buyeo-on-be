@@ -82,4 +82,6 @@ public interface PlaceQueryRepository extends JpaRepository<PlaceEntity, UUID> {
 			""")
 	Optional<PlaceProjection> findByIdWithDistance(@Param("placeId") UUID placeId, @Param("latitude") double latitude,
 			@Param("longitude") double longitude);
+
+	Optional<PlaceEntity> findBySourceNameAndExternalId(String sourceName, String externalId);
 }
