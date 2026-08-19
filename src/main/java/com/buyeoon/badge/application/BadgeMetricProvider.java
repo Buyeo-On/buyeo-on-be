@@ -8,6 +8,8 @@ public interface BadgeMetricProvider {
 
 	BadgeMetric metric();
 
-	/** 회원의 전체 여행 활동을 기준으로 현재 메트릭값을 계산한다. */
-	long calculate(UUID memberId);
+	/**
+	 * 회원의 전체 여행 활동을 기준으로 현재 메트릭값과 가장 최근 기여 활동의 여행·시각을 계산한다.
+	 */
+	BadgeMetricSnapshot calculate(UUID memberId);
 }

@@ -2,6 +2,7 @@ package com.buyeoon.badge.application;
 
 import com.buyeoon.badge.BadgeMetric;
 import com.buyeoon.mission.MissionCompletionMetricQuery;
+import com.buyeoon.mission.MissionCompletionMetricSnapshot;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
@@ -24,7 +25,8 @@ public class MissionCompletedCountProvider implements BadgeMetricProvider {
 	}
 
 	@Override
-	public long calculate(UUID memberId) {
-		return missionCompletionMetricQuery.countCompletedByMemberId(memberId);
+	public BadgeMetricSnapshot calculate(UUID memberId) {
+		MissionCompletionMetricSnapshot snapshot = missionCompletionMetricQuery.snapshot(memberId);
+		return new BadgeMetricSnapshot(snapshot.count(), snapshot.latestTripId(), snapshot.latestCompletedAt());
 	}
 }

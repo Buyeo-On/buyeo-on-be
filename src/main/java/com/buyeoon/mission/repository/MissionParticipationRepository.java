@@ -3,8 +3,10 @@ package com.buyeoon.mission.repository;
 import com.buyeoon.mission.entity.MissionParticipationEntity;
 import com.buyeoon.mission.entity.MissionStatus;
 import jakarta.persistence.LockModeType;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -30,4 +32,13 @@ public interface MissionParticipationRepository extends JpaRepository<MissionPar
 	@Query("SELECT COUNT(p) FROM MissionParticipationEntity p JOIN TripEntity t ON t.id = p.tripId "
 			+ "WHERE t.memberId = :memberId AND p.status = :status")
 	long countByMemberIdAndStatus(@Param("memberId") UUID memberId, @Param("status") MissionStatus status);
+
+	/**
+	 * 회원이 완료한 mission participation을 완료 시각 내림차순, 여행 ID 오름차순으로 조회한다. Reconciliation의
+	 * 최근 기여 trip tie-breaker(ADR-003)에 사용하며 {@code pageable}로 최근 1건만 조회한다.
+	 */
+	@Query("SELECT p FROM MissionParticipationEntity p JOIN TripEntity t ON t.id = p.tripId "
+			+ "WHERE t.memberId = :memberId AND p.status = :status " + "ORDER BY p.completedAt DESC, p.tripId ASC")
+	List<MissionParticipationEntity> findByMemberIdAndStatusOrderByCompletedAtDescTripIdAsc(
+			@Param("memberId") UUID memberId, @Param("status") MissionStatus status, Pageable pageable);
 }

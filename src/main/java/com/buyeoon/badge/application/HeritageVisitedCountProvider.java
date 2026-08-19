@@ -2,6 +2,7 @@ package com.buyeoon.badge.application;
 
 import com.buyeoon.badge.BadgeMetric;
 import com.buyeoon.trip.HeritageVisitMetricQuery;
+import com.buyeoon.trip.HeritageVisitMetricSnapshot;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
@@ -24,7 +25,8 @@ public class HeritageVisitedCountProvider implements BadgeMetricProvider {
 	}
 
 	@Override
-	public long calculate(UUID memberId) {
-		return heritageVisitMetricQuery.countUniquePlacesVisitedByMemberId(memberId);
+	public BadgeMetricSnapshot calculate(UUID memberId) {
+		HeritageVisitMetricSnapshot snapshot = heritageVisitMetricQuery.snapshot(memberId);
+		return new BadgeMetricSnapshot(snapshot.count(), snapshot.latestTripId(), snapshot.latestVisitedAt());
 	}
 }
