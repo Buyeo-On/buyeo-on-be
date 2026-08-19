@@ -10,6 +10,9 @@ import org.springframework.data.repository.query.Param;
 
 public interface BadgeRepository extends JpaRepository<BadgeEntity, UUID> {
 
+	/** 지급이 중단되지 않아 startup catalog 검증 대상인 배지를 조회한다. */
+	List<BadgeEntity> findByRetiredAtIsNull();
+
 	/**
 	 * 지급이 중단되지 않았고 주어진 메트릭 중 하나 이상을 조건으로 가지며 회원이 아직 획득하지 않은 배지를 badge ID 오름차순으로
 	 * 조회한다.
