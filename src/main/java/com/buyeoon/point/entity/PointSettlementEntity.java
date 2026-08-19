@@ -41,15 +41,17 @@ public class PointSettlementEntity {
 	@Column(name = "settled_at", nullable = false, updatable = false)
 	private Instant settledAt;
 
-	public static PointSettlementEntity create(
-			UUID tripId, SettlementChoice choice, long settledPoints, Instant settledAt) {
+	@Column(name = "expired_at")
+	private Instant expiredAt;
+
+	public static PointSettlementEntity create(UUID tripId, SettlementChoice choice, long settledPoints,
+			Instant settledAt) {
 		PointSettlementEntity settlement = new PointSettlementEntity();
 		settlement.tripId = tripId;
 		settlement.choice = choice;
 		settlement.settledPoints = settledPoints;
 		settlement.settledAt = settledAt;
-		settlement.expiresAt =
-				choice == SettlementChoice.CARRY_OVER ? settledAt.plus(Duration.ofHours(240)) : null;
+		settlement.expiresAt = choice == SettlementChoice.CARRY_OVER ? settledAt.plus(Duration.ofHours(240)) : null;
 		return settlement;
 	}
 }
