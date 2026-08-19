@@ -13,4 +13,6 @@ public interface VisitRecordRepository extends JpaRepository<VisitRecordEntity, 
 			+ "ON CONFLICT (trip_id, place_id) DO NOTHING RETURNING id", nativeQuery = true)
 	Optional<UUID> insertIfAbsent(@Param("tripId") UUID tripId, @Param("missionId") UUID missionId,
 			@Param("placeId") UUID placeId);
+
+	long countByTripId(UUID tripId);
 }
