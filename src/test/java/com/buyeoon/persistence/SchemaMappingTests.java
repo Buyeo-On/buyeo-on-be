@@ -32,7 +32,7 @@ class SchemaMappingTests {
 	private static final Path MEMBER_PURGE_MIGRATION = Path
 			.of("src/main/resources/db/migration/V8__track_member_data_purge.sql");
 	private static final Path LOCATION_TERM_MIGRATION = Path
-			.of("src/main/resources/db/migration/V9__add_location_term_type.sql");
+			.of("src/main/resources/db/migration/V9.1__add_location_term_type.sql");
 	private static final Pattern CREATE_TABLE = Pattern.compile("CREATE TABLE ([a-z_]+) ");
 
 	/** 초기 스키마에 후속 마이그레이션을 적용한 정의가 기준 DB 스키마와 같음을 보장한다. */
@@ -50,6 +50,14 @@ class SchemaMappingTests {
 		String placeExternalIdentityColumns = String.join("\n", "    source_name text, -- 관광데이터 제공처",
 				"    external_id text, -- 제공처가 부여한 장소 식별자", "    source_url text, -- 관광데이터 원문 URL",
 				"    CHECK (external_id IS NULL OR source_name IS NOT NULL)", "");
+		String placeOperatingInfoColumns = String.join("\n", "    source_name text, -- 관광데이터 제공처",
+				"    external_id text, -- 제공처가 부여한 장소 식별자", "    source_url text, -- 관광데이터 원문 URL",
+				"    source_image_href text, -- 외부 출처의 대표이미지 URL(S3 객체 키가 아님)",
+				"    operating_hours_raw text, -- 관람시간 원문(TourAPI usetime 등, 파싱 실패 시 UI 표시용)",
+				"    opens_at time, -- 파싱에 성공한 경우의 관람 시작 시각", "    closes_at time, -- 파싱에 성공한 경우의 관람 종료 시각",
+				"    admission_fee integer, -- 입장료(원), 무료는 0",
+				"    CHECK (external_id IS NULL OR source_name IS NOT NULL),",
+				"    CHECK (admission_fee IS NULL OR admission_fee >= 0)", "");
 		String placeLocationIndex = "CREATE INDEX places_location_gix ON places USING GIST (location);";
 		String placeIndexes = String.join("\n", "CREATE INDEX places_location_gix ON places USING GIST (location);",
 				"CREATE UNIQUE INDEX places_source_external_id_uq", "    ON places (source_name, external_id)",
@@ -113,8 +121,8 @@ class SchemaMappingTests {
 				.contains(legacyMissionConstraints).contains(legacyTermType);
 		assertThat(publicImageKeySchema.replace(placeSourceColumns, placeExternalIdentityColumns)
 				.replace(placeLocationIndex, placeIndexes).replace(legacyMissionStatus, currentMissionStatus)
-				.replace(legacyMissionConstraints, currentMissionConstraints).replace(legacyTermType, currentTermType))
-				.isEqualTo(canonicalSchema);
+				.replace(legacyMissionConstraints, currentMissionConstraints).replace(legacyTermType, currentTermType)
+				.replace(placeExternalIdentityColumns, placeOperatingInfoColumns)).isEqualTo(canonicalSchema);
 		assertThat(Files.readString(LOCATION_TERM_MIGRATION, StandardCharsets.UTF_8))
 				.contains("ALTER TYPE term_type ADD VALUE 'LOCATION' AFTER 'PRIVACY'");
 	}
