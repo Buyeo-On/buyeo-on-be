@@ -142,6 +142,38 @@ class TripStartIntegrationTests {
 				member.memberId())).isEqualTo(1L);
 	}
 
+	/** 종료했지만 정산하지 않은 여행이 있으면 새 여행과 성공 멱등성 결과를 만들지 않는다. */
+	@Test
+	@DisplayName("미정산 여행이 있으면 새 여행 시작을 거부한다")
+	void unsettledEndedTripIsRejected() throws Exception {
+		AuthenticatedMember member = readyMember();
+		insertPastTrip(member.memberId(), "ENDED");
+
+		performStart(member, "unsettled-trip-key", request(36.27, 126.91)).andExpect(status().isConflict())
+				.andExpect(jsonPath("$.data.code").value("INVALID_STATE_TRANSITION"));
+
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM trips WHERE member_id = ?", Long.class,
+				member.memberId())).isEqualTo(1L);
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM idempotency_requests WHERE member_id = ?",
+				Long.class, member.memberId())).isZero();
+	}
+
+	/** 이전 여행의 정산을 마친 회원은 새 여행을 시작할 수 있다. */
+	@Test
+	@DisplayName("정산 완료된 여행은 새 여행 시작을 막지 않는다")
+	void settledTripAllowsNewStart() throws Exception {
+		AuthenticatedMember member = readyMember();
+		insertPastTrip(member.memberId(), "SETTLED");
+
+		performStart(member, "settled-trip-key", request(36.27, 126.91)).andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.status").value("IN_PROGRESS"));
+
+		assertThat(
+				jdbcTemplate.queryForObject("SELECT count(*) FROM trips WHERE member_id = ? AND status = 'IN_PROGRESS'",
+						Long.class, member.memberId()))
+				.isEqualTo(1L);
+	}
+
 	/** 같은 키와 같은 본문의 재요청은 최초 성공 응답을 그대로 반환한다. */
 	@Test
 	@DisplayName("동일한 멱등성 요청은 최초 응답을 재사용한다")
@@ -309,6 +341,17 @@ class TripStartIntegrationTests {
 				INSERT INTO citizen_cards (member_id, theme_id, barcode_value)
 				VALUES (?, ?, ?)
 				""", memberId, themeId, UUID.randomUUID().toString());
+	}
+
+	/** 종료 또는 정산 완료된 과거 여행 테스트 데이터를 저장한다. */
+	private void insertPastTrip(UUID memberId, String status) {
+		Instant endedAt = Instant.parse("2026-08-12T09:00:00Z");
+		Timestamp settledAt = "SETTLED".equals(status) ? Timestamp.from(endedAt.plus(1, ChronoUnit.HOURS)) : null;
+		jdbcTemplate.update("""
+				INSERT INTO trips (id, member_id, status, started_at, ended_at, settled_at)
+				VALUES (?, ?, ?::trip_status, ?, ?, ?)
+				""", UUID.randomUUID(), memberId, status, Timestamp.from(endedAt.minus(1, ChronoUnit.HOURS)),
+				Timestamp.from(endedAt), settledAt);
 	}
 
 	private String request(double latitude, double longitude) {

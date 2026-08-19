@@ -278,7 +278,7 @@ paths:
     post:
       tags: [Trips]
       summary: 여행 시작
-      description: 필수 약관에 동의하고 디지털 군민증을 발급받은 회원이 부여 안에서 여행을 시작한다.
+      description: 필수 약관에 동의하고 디지털 군민증을 발급받은 회원이 진행 중이거나 종료 후 미정산인 여행이 없을 때 부여 안에서 여행을 시작한다.
       operationId: startTrip
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -1054,7 +1054,7 @@ components:
                   code: OUTSIDE_BUYEO
                   message: 부여 안에서만 여행을 시작할 수 있습니다.
     TripStartConflict:
-      description: 멱등성 키 재사용 또는 이미 진행 중인 여행이 있는 상태
+      description: 멱등성 키 재사용, 이미 진행 중인 여행 또는 종료 후 미정산인 여행이 있는 상태
       content:
         application/json:
           schema:
@@ -1068,7 +1068,7 @@ components:
                   code: IDEMPOTENCY_KEY_REUSED
                   message: 같은 멱등성 키를 다른 요청에 재사용할 수 없습니다.
             invalidStateTransition:
-              summary: 이미 진행 중인 여행이 있음
+              summary: 이미 진행 중이거나 종료 후 미정산인 여행이 있음
               value:
                 success: false
                 data:
