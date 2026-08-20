@@ -112,8 +112,8 @@ class BadgeReconciliationIntegrationTests {
 	}
 
 	@Test
-	@DisplayName("CARRY_OVER와 0 point settlement는 포인트 기부 조건에 포함되지 않는다")
-	void excludesCarryOverAndZeroPointSettlements() {
+	@DisplayName("CARRY_OVER와 NO_POINTS 정산은 포인트 기부 조건에 포함되지 않는다")
+	void excludesCarryOverAndNoPointsSettlements() {
 		UUID memberId = insertActiveMember();
 		UUID badgeId = insertBadge("기부천사");
 		insertCondition(badgeId, "POINT_DONATION_COUNT", 1);
@@ -121,7 +121,7 @@ class BadgeReconciliationIntegrationTests {
 		UUID carryOverTrip = insertTrip(memberId);
 		insertSettlement(carryOverTrip, "CARRY_OVER", 100, Instant.now().minus(2, ChronoUnit.DAYS));
 		UUID zeroTrip = insertTrip(memberId);
-		insertSettlement(zeroTrip, "LEAVE_TO_BUYEO", 0, Instant.now().minus(1, ChronoUnit.DAYS));
+		insertSettlement(zeroTrip, "NO_POINTS", 0, Instant.now().minus(1, ChronoUnit.DAYS));
 
 		reconciliationService.reconcile();
 

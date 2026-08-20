@@ -17,6 +17,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -222,6 +223,63 @@ class PostgresSchemaIntegrationTests {
 		}
 	}
 
+	/** V12가 허용했던 0포인트 양수 선택을 최신 계약의 NO_POINTS로 보존하는지 검증한다. */
+	@Test
+	@DisplayName("V12의 0포인트 정산은 업그레이드 후 NO_POINTS로 정규화된다")
+	void zeroPointSettlementsAreNormalizedWhenUpgradingFromV12() throws Exception {
+		String schema = "point_settlement_upgrade_" + UUID.randomUUID().toString().replace("-", "");
+		String url = POSTGIS.getJdbcUrl();
+		String username = POSTGIS.getUsername();
+		String password = POSTGIS.getPassword();
+		Flyway flyway = Flyway.configure().dataSource(url, username, password).schemas(schema).defaultSchema(schema)
+				.target(MigrationVersion.fromVersion("12")).cleanDisabled(false).load();
+
+		try {
+			flyway.migrate();
+			try (Connection connection = DriverManager.getConnection(url, username, password);
+					Statement statement = connection.createStatement()) {
+				connection.setSchema(schema);
+				statement.executeUpdate("""
+						INSERT INTO members (id)
+						VALUES ('10000000-0000-0000-0000-000000000001');
+						INSERT INTO trips (id, member_id, status, ended_at)
+						VALUES ('10000000-0000-0000-0000-000000000002',
+						        '10000000-0000-0000-0000-000000000001', 'ENDED',
+						        TIMESTAMPTZ '2026-08-20 00:00:00Z'),
+						       ('10000000-0000-0000-0000-000000000003',
+						        '10000000-0000-0000-0000-000000000001', 'ENDED',
+						        TIMESTAMPTZ '2026-08-20 00:00:00Z');
+						INSERT INTO point_settlements (trip_id, choice, settled_points, settled_at, expires_at)
+						VALUES ('10000000-0000-0000-0000-000000000002', 'LEAVE_TO_BUYEO', 0,
+						        TIMESTAMPTZ '2026-08-20 00:00:00Z', NULL),
+						       ('10000000-0000-0000-0000-000000000003', 'CARRY_OVER', 0,
+						        TIMESTAMPTZ '2026-08-20 00:00:00Z', TIMESTAMPTZ '2026-08-30 00:00:00Z');
+						""");
+			}
+
+			Flyway.configure().dataSource(url, username, password).schemas(schema).defaultSchema(schema).load()
+					.migrate();
+
+			try (Connection connection = DriverManager.getConnection(url, username, password);
+					Statement statement = connection.createStatement()) {
+				connection.setSchema(schema);
+				try (ResultSet resultSet = statement.executeQuery("""
+						SELECT count(*)
+						FROM point_settlements
+						WHERE choice = 'NO_POINTS'
+						  AND settled_points = 0
+						  AND expires_at IS NULL
+						  AND expired_at IS NULL
+						""")) {
+					assertThat(resultSet.next()).isTrue();
+					assertThat(resultSet.getLong(1)).isEqualTo(2L);
+				}
+			}
+		} finally {
+			flyway.clean();
+		}
+	}
+
 	/** 실제 PostgreSQL enum에서 위치에 따라 계산되는 상태가 제거되고 영속 상태만 남았는지 검증한다. */
 	@Test
 	@DisplayName("DB 미션 상태 enum에는 위치와 무관한 영속 상태만 존재한다")
@@ -252,6 +310,56 @@ class PostgresSchemaIntegrationTests {
 				FROM pg_roles
 				WHERE rolname = current_user
 				""", Boolean.class)).isFalse();
+	}
+
+	/** 실제 마이그레이션 DB가 정산 선택별 포인트·만료 계약을 강제하는지 검증한다. */
+	@Test
+	@DisplayName("DB는 유효한 세 정산 선택만 허용하고 양수 정산의 0포인트를 거부한다")
+	void pointSettlementChoicesEnforcePointsAndExpirationContract() {
+		UUID memberId = UUID.randomUUID();
+		UUID leaveTripId = UUID.randomUUID();
+		UUID carryTripId = UUID.randomUUID();
+		UUID noPointsTripId = UUID.randomUUID();
+		UUID zeroLeaveTripId = UUID.randomUUID();
+		UUID zeroCarryTripId = UUID.randomUUID();
+		Instant settledAt = Instant.parse("2026-08-20T00:00:00Z");
+
+		jdbcTemplate.update("INSERT INTO members (id) VALUES (?)", memberId);
+		for (UUID tripId : new UUID[]{leaveTripId, carryTripId, noPointsTripId, zeroLeaveTripId, zeroCarryTripId}) {
+			jdbcTemplate.update("""
+					INSERT INTO trips (id, member_id, status, ended_at)
+					VALUES (?, ?, 'ENDED', ?)
+					""", tripId, memberId, Timestamp.from(settledAt));
+		}
+
+		try {
+			jdbcTemplate.update("""
+					INSERT INTO point_settlements (trip_id, choice, settled_points, settled_at)
+					VALUES (?, 'LEAVE_TO_BUYEO', 100, ?)
+					""", leaveTripId, Timestamp.from(settledAt));
+			jdbcTemplate.update("""
+					INSERT INTO point_settlements (trip_id, choice, settled_points, settled_at, expires_at)
+					VALUES (?, 'CARRY_OVER', 100, ?, ?)
+					""", carryTripId, Timestamp.from(settledAt), Timestamp.from(settledAt.plus(240, ChronoUnit.HOURS)));
+			jdbcTemplate.update("""
+					INSERT INTO point_settlements (trip_id, choice, settled_points, settled_at)
+					VALUES (?, 'NO_POINTS', 0, ?)
+					""", noPointsTripId, Timestamp.from(settledAt));
+
+			assertThatThrownBy(() -> jdbcTemplate.update("""
+					INSERT INTO point_settlements (trip_id, choice, settled_points, settled_at)
+					VALUES (?, 'LEAVE_TO_BUYEO', 0, ?)
+					""", zeroLeaveTripId, Timestamp.from(settledAt)))
+					.isInstanceOf(DataIntegrityViolationException.class);
+			assertThatThrownBy(() -> jdbcTemplate.update("""
+					INSERT INTO point_settlements (trip_id, choice, settled_points, settled_at, expires_at)
+					VALUES (?, 'CARRY_OVER', 0, ?, ?)
+					""", zeroCarryTripId, Timestamp.from(settledAt),
+					Timestamp.from(settledAt.plus(240, ChronoUnit.HOURS))))
+					.isInstanceOf(DataIntegrityViolationException.class);
+		} finally {
+			jdbcTemplate.update("DELETE FROM members WHERE id = ?", memberId);
+		}
 	}
 
 	/** 애플리케이션 검증을 우회한 입력도 DB가 유형별 시도 횟수 규칙에 따라 최종적으로 방어하는지 검증한다. */
