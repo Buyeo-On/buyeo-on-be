@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -18,6 +19,11 @@ import org.springframework.data.repository.query.Param;
  * 저장 시각순이며 거리는 표시용으로만 SELECT에 추가된다.
  */
 public interface SavedPlaceRepository extends JpaRepository<SavedPlaceEntity, SavedPlaceId> {
+
+	@Modifying
+	@Query(value = "INSERT INTO saved_places (member_id, place_id) VALUES (:memberId, :placeId) "
+			+ "ON CONFLICT (member_id, place_id) DO NOTHING", nativeQuery = true)
+	void insertIfAbsent(@Param("memberId") UUID memberId, @Param("placeId") UUID placeId);
 
 	/** 조회한 페이지의 장소만 한 번에 확인해 장소 수만큼 질의가 늘어나지 않게 한다. */
 	@Query("""
