@@ -14,22 +14,27 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** 회원의 포인트 잔액 요약(잔액, 누적 적립, 만료 예정)을 조회하는 point 도메인의 공개 seam이다. */
 @Service
-@Transactional(readOnly = true)
+@Transactional
 public class PointSummaryService {
 
 	private static final ZoneId ASIA_SEOUL = ZoneId.of("Asia/Seoul");
 
 	private final PointTransactionRepository pointTransactionRepository;
 	private final PointSettlementQueryRepository pointSettlementQueryRepository;
+	private final PointExpirationService pointExpirationService;
 
+	/** 포인트 조회 repository와 요청 시점 만료 확정 seam을 주입받는다. */
 	public PointSummaryService(PointTransactionRepository pointTransactionRepository,
-			PointSettlementQueryRepository pointSettlementQueryRepository) {
+			PointSettlementQueryRepository pointSettlementQueryRepository,
+			PointExpirationService pointExpirationService) {
 		this.pointTransactionRepository = pointTransactionRepository;
 		this.pointSettlementQueryRepository = pointSettlementQueryRepository;
+		this.pointExpirationService = pointExpirationService;
 	}
 
 	/** 잔액, `EARN` 누적 합계, 만료 시각 오름차순 만료 예정 목록을 조회한다. */
 	public PointSummaryView getSummary(UUID memberId) {
+		pointExpirationService.expireDueSettlementsForActiveMember(memberId);
 		long balance = pointTransactionRepository.sumAmountByMemberId(memberId);
 		long cumulativeEarned = pointTransactionRepository.sumAmountByMemberIdAndType(memberId,
 				PointTransactionType.EARN);

@@ -127,6 +127,7 @@ public class MissionSubmissionService {
 
 	private MissionSubmissionResult submitInTransaction(UUID memberId, UUID missionId, String idempotencyKey,
 			String requestHash, MissionSubmissionCommand command) {
+		long pointBalance = pointRewardService.currentBalance(memberId);
 		TripStatus tripStatus = tripQueryService.findOwnedTripStatus(memberId, command.tripId())
 				.orElseThrow(TripNotFoundException::new);
 		if (tripStatus != TripStatus.IN_PROGRESS) {
@@ -173,7 +174,6 @@ public class MissionSubmissionService {
 		missionSubmissions.save(toSubmissionEntity(participation.getId(), command, correct, photoRecordId));
 
 		int rewardPoints = 0;
-		long pointBalance = pointRewardService.currentBalance(memberId);
 		boolean visitRecorded = false;
 		UUID visitId = null;
 		List<AwardedBadgeResult> newlyAwardedBadges = List.of();

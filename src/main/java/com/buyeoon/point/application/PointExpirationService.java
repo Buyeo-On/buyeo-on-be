@@ -14,6 +14,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcOperations;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -68,8 +69,15 @@ public final class PointExpirationService {
 	 * 하지 않는다.
 	 */
 	public int expireDueSettlements(UUID memberId) {
-		Integer expired = transactions.execute(status -> expireDueSettlementsInTransaction(memberId));
+		Integer expired = transactions.execute(status -> expireDueSettlementsInTransaction(memberId, false));
 		return expired == null ? 0 : expired;
+	}
+
+	/**
+	 * 활성 회원 행을 잠근 뒤 만료 도래 정산을 확정한다. 탈퇴가 먼저 확정됐거나 회원이 없으면 인증 실패로 처리한다.
+	 */
+	public void expireDueSettlementsForActiveMember(UUID memberId) {
+		transactions.executeWithoutResult(status -> expireDueSettlementsInTransaction(memberId, true));
 	}
 
 	private int expireMemberSafely(UUID memberId) {
@@ -81,8 +89,11 @@ public final class PointExpirationService {
 		}
 	}
 
-	private int expireDueSettlementsInTransaction(UUID memberId) {
+	private int expireDueSettlementsInTransaction(UUID memberId, boolean activeMemberRequired) {
 		if (members.findByIdAndStatus(memberId, MemberStatus.ACTIVE).isEmpty()) {
+			if (activeMemberRequired) {
+				throw new AuthenticationCredentialsNotFoundException("활성 회원이 아닙니다.");
+			}
 			return 0;
 		}
 		List<DueSettlement> due = lockDueSettlements(memberId);
@@ -90,8 +101,13 @@ public final class PointExpirationService {
 			return 0;
 		}
 		Instant processedAt = currentDbTime();
+		long balance = currentBalance(memberId);
 		for (DueSettlement settlement : due) {
+			if (balance < settlement.settledPoints()) {
+				throw new IllegalStateException("만료 포인트가 현재 잔액보다 큽니다. settlementId=" + settlement.id());
+			}
 			confirmExpiration(memberId, settlement, processedAt);
+			balance -= settlement.settledPoints();
 		}
 		return due.size();
 	}
@@ -155,6 +171,14 @@ public final class PointExpirationService {
 	private Instant currentDbTime() {
 		return Objects.requireNonNull(jdbcOperations.queryForObject("SELECT CURRENT_TIMESTAMP", Timestamp.class))
 				.toInstant();
+	}
+
+	/** 회원 행 잠금 뒤 직전에 확정된 포인트 내역 합계로 현재 잔액을 계산한다. */
+	private long currentBalance(UUID memberId) {
+		Long balance = jdbcOperations.queryForObject(
+				"SELECT COALESCE(SUM(amount), 0)::bigint FROM point_transactions WHERE member_id = ?", Long.class,
+				memberId);
+		return balance == null ? 0L : balance;
 	}
 
 	private DueSettlement mapDueSettlement(ResultSet resultSet, int rowNumber) throws SQLException {

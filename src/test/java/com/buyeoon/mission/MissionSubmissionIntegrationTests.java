@@ -7,7 +7,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.buyeoon.member.auth.AccessTokenService;
 import com.buyeoon.mission.application.MissionCompleted;
+import com.buyeoon.point.application.PointExpirationService;
 import com.buyeoon.trip.VisitRecorded;
+import com.jayway.jsonpath.JsonPath;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -71,6 +73,9 @@ class MissionSubmissionIntegrationTests {
 	@Autowired
 	private ApplicationEvents applicationEvents;
 
+	@Autowired
+	private PointExpirationService pointExpirationService;
+
 	private AuthenticatedMember member;
 
 	@BeforeEach
@@ -81,6 +86,7 @@ class MissionSubmissionIntegrationTests {
 	@AfterEach
 	void cleanUp() {
 		jdbcTemplate.update("DELETE FROM idempotency_requests");
+		jdbcTemplate.update("DELETE FROM point_settlements");
 		jdbcTemplate.update("DELETE FROM point_transactions");
 		jdbcTemplate.update("DELETE FROM visit_records");
 		jdbcTemplate.update("DELETE FROM mission_submissions");
@@ -125,6 +131,124 @@ class MissionSubmissionIntegrationTests {
 
 		assertThat(applicationEvents.stream(MissionCompleted.class)).hasSize(1);
 		assertThat(applicationEvents.stream(VisitRecorded.class)).hasSize(1);
+	}
+
+	/** 미션 보상은 만료 도래 이월분을 먼저 EXPIRE로 확정한 뒤 EARN과 갱신 잔액을 반환한다. */
+	@Test
+	@DisplayName("만료 도래 이월분을 먼저 확정한 뒤 미션 보상과 갱신 잔액을 반환한다")
+	void expiresDueCarryOverBeforeGrantingMissionReward() throws Exception {
+		insertPointTransaction(member.memberId(), 300, Instant.now().minus(241, ChronoUnit.HOURS));
+		UUID settledTripId = insertSettledTrip(member.memberId());
+		insertCarryOverSettlement(settledTripId, 200, Instant.now().minus(1, ChronoUnit.MINUTES));
+		UUID tripId = startTrip(member.memberId());
+		UUID place = insertProjectedPlace("만료 후 보상 장소", 50);
+		UUID missionId = insertOxMission(place, "만료 후 보상 미션", 100, null, true);
+
+		mockMvc.perform(submit(missionId, "expire-before-reward", oxRequest(tripId, true))).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.rewardPoints").value(100))
+				.andExpect(jsonPath("$.data.pointBalance").value(200));
+
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM point_transactions WHERE member_id = ? AND type = 'EXPIRE'", Integer.class,
+				member.memberId())).isEqualTo(1);
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM point_transactions WHERE member_id = ? AND type = 'EARN'", Integer.class,
+				member.memberId())).isEqualTo(2);
+	}
+
+	/** 미션 보상과 scheduler가 경합해도 만료 후 EARN 순서로 한 번씩 확정하고 음수 잔액을 만들지 않는다. */
+	@Test
+	@DisplayName("미션 보상과 scheduler 경합에도 만료 후 EARN 잔액을 직렬화한다")
+	void missionRewardAndSchedulerSerializeExpirationBeforeEarn() throws Exception {
+		insertPointTransaction(member.memberId(), 300, Instant.now().minus(241, ChronoUnit.HOURS));
+		UUID settledTripId = insertSettledTrip(member.memberId());
+		insertCarryOverSettlement(settledTripId, 200, Instant.now().minus(1, ChronoUnit.MINUTES));
+		UUID tripId = startTrip(member.memberId());
+		UUID place = insertProjectedPlace("동시 만료 보상 장소", 50);
+		UUID missionId = insertOxMission(place, "동시 만료 보상 미션", 100, null, true);
+		CountDownLatch ready = new CountDownLatch(2);
+		CountDownLatch start = new CountDownLatch(1);
+		ExecutorService executor = Executors.newFixedThreadPool(2);
+
+		try {
+			Future<MvcResult> reward = executor.submit(() -> concurrentSubmit(missionId, "concurrent-expire-reward",
+					oxRequest(tripId, true), ready, start));
+			Future<Integer> scheduler = executor.submit(() -> {
+				ready.countDown();
+				if (!start.await(5, TimeUnit.SECONDS)) {
+					throw new IllegalStateException("동시 실행 시작 신호를 받지 못했습니다.");
+				}
+				return pointExpirationService.expireAllDue();
+			});
+			assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+			start.countDown();
+			MvcResult result = reward.get(10, TimeUnit.SECONDS);
+			scheduler.get(10, TimeUnit.SECONDS);
+			assertThat(result.getResponse().getStatus()).isEqualTo(200);
+			assertThat(JsonPath.<Integer>read(result.getResponse().getContentAsString(), "$.data.pointBalance"))
+					.isEqualTo(200);
+		} finally {
+			executor.shutdownNow();
+		}
+
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM point_transactions WHERE member_id = ? AND type = 'EXPIRE'", Integer.class,
+				member.memberId())).isEqualTo(1);
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT COALESCE(SUM(amount), 0)::bigint FROM point_transactions WHERE member_id = ?", Long.class,
+				member.memberId())).isEqualTo(200L);
+		assertThat(jdbcTemplate.queryForObject("""
+				SELECT MIN(balance_after)::bigint
+				FROM (
+				    SELECT SUM(amount) OVER (ORDER BY occurred_at, id) AS balance_after
+				    FROM point_transactions
+				    WHERE member_id = ?
+				) balances
+				""", Long.class, member.memberId())).isGreaterThanOrEqualTo(0L);
+	}
+
+	/** 미션 제출이 실패하면 같은 transaction에서 선반영한 만료도 함께 롤백한다. */
+	@Test
+	@DisplayName("미션 제출 실패는 선반영한 만료와 미션 변경을 함께 롤백한다")
+	void failedMissionSubmissionRollsBackExpiration() throws Exception {
+		insertPointTransaction(member.memberId(), 300, Instant.now().minus(241, ChronoUnit.HOURS));
+		UUID settledTripId = insertSettledTrip(member.memberId());
+		insertCarryOverSettlement(settledTripId, 200, Instant.now().minus(1, ChronoUnit.MINUTES));
+		UUID tripId = startTrip(member.memberId());
+		UUID place = insertProjectedPlace("먼 만료 보상 장소", 100.1);
+		UUID missionId = insertOxMission(place, "실패하는 만료 보상 미션", 100, null, true);
+
+		mockMvc.perform(submit(missionId, "rollback-expiration", oxRequest(tripId, true)))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.data.code").value("LOCATION_VERIFICATION_FAILED"));
+
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM point_transactions WHERE member_id = ? AND type = 'EXPIRE'", Integer.class,
+				member.memberId())).isZero();
+		assertThat(jdbcTemplate.queryForObject("SELECT expired_at IS NULL FROM point_settlements WHERE trip_id = ?",
+				Boolean.class, settledTripId)).isTrue();
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM mission_participations WHERE trip_id = ?",
+				Integer.class, tripId)).isZero();
+	}
+
+	/** 탈퇴가 먼저 확정된 회원은 기존 토큰으로 미션 보상을 요청할 수 없다. */
+	@Test
+	@DisplayName("탈퇴가 먼저 확정되면 미션 보상을 거부하고 WITHDRAWN을 유지한다")
+	void rejectsMissionRewardAfterWithdrawalCompleted() throws Exception {
+		jdbcTemplate.update("""
+				UPDATE members
+				SET status = 'WITHDRAWN', withdrawn_at = CURRENT_TIMESTAMP,
+				    purge_after = CURRENT_TIMESTAMP + INTERVAL '30 days'
+				WHERE id = ?
+				""", member.memberId());
+
+		mockMvc.perform(submit(UUID.randomUUID(), "withdrawn-reward", oxRequest(UUID.randomUUID(), true)))
+				.andExpect(status().isUnauthorized()).andExpect(jsonPath("$.data.code").value("UNAUTHORIZED"));
+
+		assertThat(jdbcTemplate.queryForObject("SELECT status::text FROM members WHERE id = ?", String.class,
+				member.memberId())).isEqualTo("WITHDRAWN");
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM point_transactions WHERE member_id = ?",
+				Integer.class, member.memberId())).isZero();
 	}
 
 	/** 객관식 미션에 정답을 제출하면 완료 처리된다. */
@@ -417,6 +541,32 @@ class MissionSubmissionIntegrationTests {
 		UUID tripId = UUID.randomUUID();
 		jdbcTemplate.update("INSERT INTO trips (id, member_id, status) VALUES (?, ?, 'IN_PROGRESS')", tripId, memberId);
 		return tripId;
+	}
+
+	/** 만료 선반영 fixture의 기존 잔액을 만드는 EARN 내역을 저장한다. */
+	private void insertPointTransaction(UUID memberId, long amount, Instant occurredAt) {
+		jdbcTemplate.update("""
+				INSERT INTO point_transactions (id, member_id, type, amount, description, occurred_at)
+				VALUES (?, ?, 'EARN', ?, '기존 미션 보상', ?)
+				""", UUID.randomUUID(), memberId, amount, Timestamp.from(occurredAt));
+	}
+
+	/** 만료 정산 fixture가 참조할 회원 소유의 정산 완료 여행을 만든다. */
+	private UUID insertSettledTrip(UUID memberId) {
+		UUID tripId = UUID.randomUUID();
+		jdbcTemplate.update(
+				"INSERT INTO trips (id, member_id, status, ended_at, settled_at) VALUES (?, ?, 'SETTLED', now(), now())",
+				tripId, memberId);
+		return tripId;
+	}
+
+	/** 지정한 시각에 만료되는 CARRY_OVER 정산 fixture를 만든다. */
+	private void insertCarryOverSettlement(UUID tripId, long settledPoints, Instant expiresAt) {
+		jdbcTemplate.update("""
+				INSERT INTO point_settlements (id, trip_id, choice, settled_points, expires_at, settled_at)
+				VALUES (?, ?, 'CARRY_OVER', ?, ?, ?)
+				""", UUID.randomUUID(), tripId, settledPoints, Timestamp.from(expiresAt),
+				Timestamp.from(expiresAt.minus(240, ChronoUnit.HOURS)));
 	}
 
 	private UUID insertPlace(String name, double latitude, double longitude) {

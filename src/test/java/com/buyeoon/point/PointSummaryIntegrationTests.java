@@ -1,14 +1,22 @@
 package com.buyeoon.point;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.buyeoon.member.auth.AccessTokenService;
+import com.buyeoon.point.application.PointExpirationService;
+import com.jayway.jsonpath.JsonPath;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -19,6 +27,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -47,6 +56,9 @@ class PointSummaryIntegrationTests {
 
 	@Autowired
 	private AccessTokenService accessTokenService;
+
+	@Autowired
+	private PointExpirationService pointExpirationService;
 
 	private AuthenticatedMember member;
 
@@ -100,6 +112,7 @@ class PointSummaryIntegrationTests {
 		UUID soonTrip = insertSettledTrip(member.memberId());
 		insertCarryOverSettlement(soonTrip, 100, soon);
 		UUID pastTrip = insertSettledTrip(member.memberId());
+		insertTransaction(member.memberId(), "EARN", 999, "과거 이월 전 적립", past.minus(241, ChronoUnit.HOURS));
 		insertCarryOverSettlement(pastTrip, 999, past);
 		UUID leaveTrip = insertSettledTrip(member.memberId());
 		insertLeaveToBuyeoSettlement(leaveTrip, 300);
@@ -108,6 +121,97 @@ class PointSummaryIntegrationTests {
 				.andExpect(jsonPath("$.data.expirations.length()").value(2))
 				.andExpect(jsonPath("$.data.expirations[0].points").value(100))
 				.andExpect(jsonPath("$.data.expirations[1].points").value(200));
+	}
+
+	/** 만료 도래 이월분은 요약을 계산하기 전에 EXPIRE로 확정하고 감소한 잔액과 유효한 만료 예정만 반환한다. */
+	@Test
+	@DisplayName("만료 도래 이월분을 먼저 확정하고 감소한 잔액과 유효한 만료 예정만 반환한다")
+	void expiresDueCarryOverBeforeReturningSummary() throws Exception {
+		Instant expiresAt = Instant.now().minus(1, ChronoUnit.MINUTES);
+		insertTransaction(member.memberId(), "EARN", 400, "미션 보상", expiresAt.minus(241, ChronoUnit.HOURS));
+		UUID expiredTrip = insertSettledTrip(member.memberId());
+		insertCarryOverSettlement(expiredTrip, 300, expiresAt);
+		UUID activeTrip = insertSettledTrip(member.memberId());
+		insertCarryOverSettlement(activeTrip, 100, Instant.now().plus(1, ChronoUnit.DAYS));
+
+		mockMvc.perform(pointsRequest()).andExpect(status().isOk()).andExpect(jsonPath("$.data.balance").value(100))
+				.andExpect(jsonPath("$.data.cumulativeEarned").value(400))
+				.andExpect(jsonPath("$.data.expirations.length()").value(1))
+				.andExpect(jsonPath("$.data.expirations[0].points").value(100));
+
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM point_transactions WHERE member_id = ? AND type = 'EXPIRE'", Integer.class,
+				member.memberId())).isEqualTo(1);
+		assertThat(jdbcTemplate.queryForObject("SELECT expired_at IS NOT NULL FROM point_settlements WHERE trip_id = ?",
+				Boolean.class, expiredTrip)).isTrue();
+	}
+
+	/** 요약 조회와 scheduler가 경합해도 같은 만료분은 한 번만 차감하고 확정 잔액을 반환한다. */
+	@Test
+	@DisplayName("요약 조회와 scheduler 경합에도 EXPIRE를 한 번만 확정한다")
+	void summaryAndSchedulerExpireSameCarryOverExactlyOnce() throws Exception {
+		Instant expiresAt = Instant.now().minus(1, ChronoUnit.MINUTES);
+		insertTransaction(member.memberId(), "EARN", 300, "미션 보상", expiresAt.minus(241, ChronoUnit.HOURS));
+		UUID expiredTrip = insertSettledTrip(member.memberId());
+		insertCarryOverSettlement(expiredTrip, 200, expiresAt);
+		CountDownLatch ready = new CountDownLatch(2);
+		CountDownLatch start = new CountDownLatch(1);
+		ExecutorService executor = Executors.newFixedThreadPool(2);
+
+		try {
+			Future<MvcResult> summary = executor.submit(() -> {
+				ready.countDown();
+				if (!start.await(5, TimeUnit.SECONDS)) {
+					throw new IllegalStateException("동시 실행 시작 신호를 받지 못했습니다.");
+				}
+				return mockMvc.perform(pointsRequest()).andReturn();
+			});
+			Future<Integer> scheduler = executor.submit(() -> {
+				ready.countDown();
+				if (!start.await(5, TimeUnit.SECONDS)) {
+					throw new IllegalStateException("동시 실행 시작 신호를 받지 못했습니다.");
+				}
+				return pointExpirationService.expireAllDue();
+			});
+			assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+			start.countDown();
+			MvcResult result = summary.get(10, TimeUnit.SECONDS);
+			scheduler.get(10, TimeUnit.SECONDS);
+			assertThat(result.getResponse().getStatus()).isEqualTo(200);
+			assertThat(JsonPath.<Integer>read(result.getResponse().getContentAsString(), "$.data.balance"))
+					.isEqualTo(100);
+		} finally {
+			executor.shutdownNow();
+		}
+
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM point_transactions WHERE member_id = ? AND type = 'EXPIRE'", Integer.class,
+				member.memberId())).isEqualTo(1);
+	}
+
+	/** 탈퇴가 먼저 확정된 회원은 기존 토큰으로 포인트를 조회하거나 만료를 확정하지 못한다. */
+	@Test
+	@DisplayName("탈퇴가 먼저 확정되면 포인트 조회와 만료 확정을 거부한다")
+	void rejectsPointSummaryAfterWithdrawalCompleted() throws Exception {
+		Instant expiresAt = Instant.now().minus(1, ChronoUnit.MINUTES);
+		insertTransaction(member.memberId(), "EARN", 100, "미션 보상", expiresAt.minus(241, ChronoUnit.HOURS));
+		UUID expiredTrip = insertSettledTrip(member.memberId());
+		insertCarryOverSettlement(expiredTrip, 100, expiresAt);
+		jdbcTemplate.update("""
+				UPDATE members
+				SET status = 'WITHDRAWN', withdrawn_at = CURRENT_TIMESTAMP,
+				    purge_after = CURRENT_TIMESTAMP + INTERVAL '30 days'
+				WHERE id = ?
+				""", member.memberId());
+
+		mockMvc.perform(pointsRequest()).andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.data.code").value("UNAUTHORIZED"));
+
+		assertThat(jdbcTemplate.queryForObject("SELECT status::text FROM members WHERE id = ?", String.class,
+				member.memberId())).isEqualTo("WITHDRAWN");
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM point_transactions WHERE member_id = ? AND type = 'EXPIRE'", Integer.class,
+				member.memberId())).isZero();
 	}
 
 	/** 다른 회원의 내역과 정산은 조회 결과에 포함되지 않는다. */
@@ -149,10 +253,15 @@ class PointSummaryIntegrationTests {
 	}
 
 	private void insertTransaction(UUID memberId, String type, long amount, String description) {
+		insertTransaction(memberId, type, amount, description, Instant.now());
+	}
+
+	/** 지정한 발생 시각으로 포인트 내역 fixture를 저장한다. */
+	private void insertTransaction(UUID memberId, String type, long amount, String description, Instant occurredAt) {
 		jdbcTemplate.update(
-				"INSERT INTO point_transactions (id, member_id, type, amount, description) "
-						+ "VALUES (?, ?, ?::point_transaction_type, ?, ?)",
-				UUID.randomUUID(), memberId, type, amount, description);
+				"INSERT INTO point_transactions (id, member_id, type, amount, description, occurred_at) "
+						+ "VALUES (?, ?, ?::point_transaction_type, ?, ?, ?)",
+				UUID.randomUUID(), memberId, type, amount, description, Timestamp.from(occurredAt));
 	}
 
 	/** 정산 대상 여행. 여러 여행을 같은 회원에 만들기 위해 진행 중 상태 대신 정산 완료 상태로 만든다. */
