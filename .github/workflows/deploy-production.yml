@@ -74,6 +74,16 @@ jobs:
       - name: Run quality gate
         run: ./gradlew check --no-daemon
 
+      - name: Upload spring test report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: spring-test-report
+          path: |
+            build/reports/tests/test
+            build/test-results/test
+          if-no-files-found: warn
+
       - name: Validate deployment artifacts
         shell: bash
         run: |
