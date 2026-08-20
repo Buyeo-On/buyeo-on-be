@@ -73,9 +73,10 @@ class PointExpirationIntegrationTests {
 		Instant after = currentDbTime();
 
 		assertThat(expired).isEqualTo(1);
+		Instant storedExpiresAt = ((Timestamp) settlementRow(tripId).get("expires_at")).toInstant();
 		Map<String, Object> transaction = onlyExpireTransaction(memberId);
 		assertThat(transaction.get("amount")).isEqualTo(-300L);
-		assertThat(((Timestamp) transaction.get("occurred_at")).toInstant()).isEqualTo(expiresAt);
+		assertThat(((Timestamp) transaction.get("occurred_at")).toInstant()).isEqualTo(storedExpiresAt);
 
 		Map<String, Object> settlement = settlementRow(tripId);
 		Instant expiredAt = ((Timestamp) settlement.get("expired_at")).toInstant();
