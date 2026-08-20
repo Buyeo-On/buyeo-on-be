@@ -21,6 +21,11 @@ public interface PointTransactionRepository extends JpaRepository<PointTransacti
 			+ "WHERE t.memberId = :memberId AND t.type = :type")
 	long sumAmountByMemberIdAndType(@Param("memberId") UUID memberId, @Param("type") PointTransactionType type);
 
+	/** 특정 여행의 특정 유형 포인트 내역 amount 합계를 계산한다. 내역이 없으면 0을 반환한다. */
+	@Query("SELECT COALESCE(SUM(t.amount), 0) FROM PointTransactionEntity t "
+			+ "WHERE t.tripId = :tripId AND t.type = :type")
+	long sumAmountByTripIdAndType(@Param("tripId") UUID tripId, @Param("type") PointTransactionType type);
+
 	/** 회원의 첫 페이지 내역을 발생 시각 내림차순, 동일 시각은 내역 ID 내림차순으로 조회하며 balanceAfter를 함께 계산한다. */
 	default List<PointTransactionRow> findFromStart(UUID memberId, int limit) {
 		return findRowsFromStart(memberId, limit).stream().map(PointTransactionRow::from).toList();
