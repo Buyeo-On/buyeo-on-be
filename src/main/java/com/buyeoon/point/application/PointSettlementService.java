@@ -1,8 +1,12 @@
 package com.buyeoon.point.application;
 
+import com.buyeoon.badge.BadgeEvaluationService;
+import com.buyeoon.badge.BadgeEvaluationService.AwardedBadgeResult;
+import com.buyeoon.badge.BadgeMetric;
 import com.buyeoon.common.api.SuccessResponse;
 import com.buyeoon.common.entity.IdempotencyRequestEntity;
 import com.buyeoon.common.entity.IdempotencyRequestId;
+import com.buyeoon.common.storage.PublicImageUrlService;
 import com.buyeoon.member.application.IdempotencyKeyReusedException;
 import com.buyeoon.member.application.InvalidStateTransitionException;
 import com.buyeoon.point.api.InvalidPointRequestException;
@@ -18,9 +22,11 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.stereotype.Service;
@@ -52,6 +58,8 @@ public class PointSettlementService {
 	private final PointTransactionRepository pointTransactions;
 	private final PointSettlementQueryRepository pointSettlements;
 	private final PointIdempotencyRequestRepository idempotencyRequests;
+	private final BadgeEvaluationService badgeEvaluationService;
+	private final PublicImageUrlService publicImageUrlService;
 	private final ObjectReader objectReader;
 	private final ObjectWriter objectWriter;
 
@@ -59,7 +67,8 @@ public class PointSettlementService {
 	public PointSettlementService(JdbcOperations jdbcOperations, PlatformTransactionManager transactionManager,
 			TripSettlementService tripSettlementService, PointExpirationService pointExpirationService,
 			PointTransactionRepository pointTransactions, PointSettlementQueryRepository pointSettlements,
-			PointIdempotencyRequestRepository idempotencyRequests, ObjectMapper objectMapper) {
+			PointIdempotencyRequestRepository idempotencyRequests, BadgeEvaluationService badgeEvaluationService,
+			PublicImageUrlService publicImageUrlService, ObjectMapper objectMapper) {
 		this.jdbcOperations = jdbcOperations;
 		this.transactions = new TransactionTemplate(transactionManager);
 		this.tripSettlementService = tripSettlementService;
@@ -67,6 +76,8 @@ public class PointSettlementService {
 		this.pointTransactions = pointTransactions;
 		this.pointSettlements = pointSettlements;
 		this.idempotencyRequests = idempotencyRequests;
+		this.badgeEvaluationService = badgeEvaluationService;
+		this.publicImageUrlService = publicImageUrlService;
 		this.objectReader = objectMapper.reader();
 		this.objectWriter = objectMapper.writer();
 	}
@@ -74,12 +85,12 @@ public class PointSettlementService {
 	public TripSettlementView settle(UUID memberId, UUID tripId, String idempotencyKey, SettlementChoice choice) {
 		validateIdempotencyKey(idempotencyKey);
 		String requestHash = requestHash(tripId, choice);
-		TripSettlementView result = transactions
+		TripSettlementResult result = transactions
 				.execute(status -> settleInTransaction(memberId, tripId, idempotencyKey, requestHash, choice));
-		return Objects.requireNonNull(result, "여행 포인트 정산 트랜잭션 결과가 없습니다.");
+		return toView(Objects.requireNonNull(result, "여행 포인트 정산 트랜잭션 결과가 없습니다."));
 	}
 
-	private TripSettlementView settleInTransaction(UUID memberId, UUID tripId, String idempotencyKey,
+	private TripSettlementResult settleInTransaction(UUID memberId, UUID tripId, String idempotencyKey,
 			String requestHash, SettlementChoice choice) {
 		pointExpirationService.expireDueSettlementsForActiveMember(memberId);
 
@@ -127,9 +138,11 @@ public class PointSettlementService {
 
 		tripSettlementService.settle(tripId, settledAt);
 
+		List<AwardedBadgeResult> newlyAwardedBadges = awardDonationBadges(memberId, tripId, finalChoice);
+
 		long remainingBalance = pointTransactions.sumAmountByMemberId(memberId);
-		TripSettlementView result = new TripSettlementView(tripId, finalChoice, settleablePoints, remainingBalance,
-				settlement.getExpiresAt(), settledAt, List.of());
+		TripSettlementResult result = new TripSettlementResult(tripId, finalChoice, settleablePoints, remainingBalance,
+				settlement.getExpiresAt(), settledAt, newlyAwardedBadges);
 
 		String responseBody = writeResponse(result);
 		IdempotencyRequestEntity idempotencyRequest = IdempotencyRequestEntity.create(memberId, idempotencyKey,
@@ -147,7 +160,19 @@ public class PointSettlementService {
 				""", memberId, tripId, -settleablePoints, LEAVE_TO_BUYEO_DESCRIPTION, Timestamp.from(settledAt));
 	}
 
-	private TripSettlementView replay(IdempotencyRequestEntity request, String requestHash) {
+	/**
+	 * 양수 포인트를 부여에 남기는 정산만 {@code POINT_DONATION_COUNT}를 판정한다(UC-14, ADR-003). badge
+	 * Provider query가 방금 확정한 정산 row를 포함하도록 flush한 뒤 같은 transaction에서 판정한다.
+	 */
+	private List<AwardedBadgeResult> awardDonationBadges(UUID memberId, UUID tripId, SettlementChoice choice) {
+		if (choice != SettlementChoice.LEAVE_TO_BUYEO) {
+			return List.of();
+		}
+		pointSettlements.flush();
+		return badgeEvaluationService.award(memberId, tripId, Set.of(BadgeMetric.POINT_DONATION_COUNT));
+	}
+
+	private TripSettlementResult replay(IdempotencyRequestEntity request, String requestHash) {
 		if (!OPERATION.equals(request.getOperation()) || !requestHash.equals(request.getRequestHash())) {
 			throw new IdempotencyKeyReusedException();
 		}
@@ -172,7 +197,7 @@ public class PointSettlementService {
 		return tripId + ":" + (choice == null ? "null" : choice.name());
 	}
 
-	private String writeResponse(TripSettlementView result) {
+	private String writeResponse(TripSettlementResult result) {
 		try {
 			return objectWriter.writeValueAsString(SuccessResponse.of(result));
 		} catch (JacksonException exception) {
@@ -180,21 +205,51 @@ public class PointSettlementService {
 		}
 	}
 
-	private TripSettlementView readResponse(String responseBody) {
+	private TripSettlementResult readResponse(String responseBody) {
 		try {
 			JsonNode data = required(objectReader.readTree(responseBody), "data");
-			return new TripSettlementView(UUID.fromString(requiredText(data, "tripId")),
+			return new TripSettlementResult(UUID.fromString(requiredText(data, "tripId")),
 					SettlementChoice.valueOf(requiredText(data, "choice")), requiredLong(data, "settledPoints"),
 					requiredLong(data, "remainingBalance"), nullableInstant(data, "expiresAt"),
-					Instant.parse(requiredText(data, "settledAt")), List.of());
+					Instant.parse(requiredText(data, "settledAt")), readBadges(required(data, "newlyAwardedBadges")));
 		} catch (JacksonException | IllegalArgumentException exception) {
 			throw new IllegalStateException("저장된 여행 포인트 정산 응답을 읽을 수 없습니다.", exception);
 		}
 	}
 
+	private List<AwardedBadgeResult> readBadges(JsonNode node) {
+		if (!node.isArray()) {
+			throw new IllegalStateException("저장된 여행 포인트 정산 응답의 배지 목록이 배열이 아닙니다.");
+		}
+		List<AwardedBadgeResult> badges = new ArrayList<>(node.size());
+		for (int index = 0; index < node.size(); index++) {
+			JsonNode badge = node.get(index);
+			badges.add(new AwardedBadgeResult(UUID.fromString(requiredText(badge, "badgeId")),
+					requiredText(badge, "name"), nullableText(badge, "imageKey"), requiredText(badge, "condition"),
+					Instant.parse(requiredText(badge, "earnedAt"))));
+		}
+		return badges;
+	}
+
+	/** 새로 획득한 배지의 image key를 요청 시점마다 새로 서명한 Presigned URL로 바꿔 최종 응답을 만든다. */
+	private TripSettlementView toView(TripSettlementResult result) {
+		List<AwardedBadgeView> badges = result.newlyAwardedBadges().stream()
+				.map(badge -> new AwardedBadgeView(badge.badgeId(), badge.name(),
+						badge.imageKey() != null ? publicImageUrlService.create(badge.imageKey()) : null,
+						badge.condition(), badge.earnedAt()))
+				.toList();
+		return new TripSettlementView(result.tripId(), result.choice(), result.settledPoints(),
+				result.remainingBalance(), result.expiresAt(), result.settledAt(), badges);
+	}
+
 	private Instant nullableInstant(JsonNode data, String field) {
 		JsonNode value = data.get(field);
 		return value == null || value.isNull() ? null : Instant.parse(value.stringValue());
+	}
+
+	private String nullableText(JsonNode node, String field) {
+		JsonNode value = node.get(field);
+		return value == null || value.isNull() ? null : value.stringValue();
 	}
 
 	private JsonNode required(JsonNode node, String field) {
@@ -217,11 +272,22 @@ public class PointSettlementService {
 		return required(node, field).longValue();
 	}
 
-	/** newlyAwardedBadges는 포인트 기부 배지 연동(#126) 전에는 항상 빈 배열이다. */
+	/** 멱등성 레코드에 저장하는 semantic result다. 배지 image key는 만료되는 URL 대신 그대로 저장한다. */
+	private record TripSettlementResult(UUID tripId, SettlementChoice choice, long settledPoints, long remainingBalance,
+			Instant expiresAt, Instant settledAt, List<AwardedBadgeResult> newlyAwardedBadges) {
+		private TripSettlementResult {
+			newlyAwardedBadges = List.copyOf(newlyAwardedBadges);
+		}
+	}
+
 	public record TripSettlementView(UUID tripId, SettlementChoice choice, long settledPoints, long remainingBalance,
-			Instant expiresAt, Instant settledAt, List<Object> newlyAwardedBadges) {
+			Instant expiresAt, Instant settledAt, List<AwardedBadgeView> newlyAwardedBadges) {
 		public TripSettlementView {
 			newlyAwardedBadges = List.copyOf(newlyAwardedBadges);
 		}
+	}
+
+	/** 요청마다 새로 서명한 10분 유효 Presigned URL을 담은 응답용 배지 뷰다. */
+	public record AwardedBadgeView(UUID badgeId, String name, String imageUrl, String condition, Instant earnedAt) {
 	}
 }
