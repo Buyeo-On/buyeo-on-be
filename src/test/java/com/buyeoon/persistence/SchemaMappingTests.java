@@ -35,6 +35,10 @@ class SchemaMappingTests {
 			.of("src/main/resources/db/migration/V9.1__add_location_term_type.sql");
 	private static final Path POINT_SETTLEMENT_EXPIRATION_MIGRATION = Path
 			.of("src/main/resources/db/migration/V12__track_point_settlement_expiration.sql");
+	private static final Path NO_POINTS_SETTLEMENT_CHOICE_MIGRATION = Path
+			.of("src/main/resources/db/migration/V13__add_no_points_settlement_choice.sql");
+	private static final Path POINT_SETTLEMENT_CONSTRAINTS_MIGRATION = Path
+			.of("src/main/resources/db/migration/V14__align_point_settlement_constraints.sql");
 	private static final Pattern CREATE_TABLE = Pattern.compile("CREATE TABLE ([a-z_]+) ");
 
 	/** 초기 스키마에 후속 마이그레이션을 적용한 정의가 기준 DB 스키마와 같음을 보장한다. */
@@ -45,6 +49,8 @@ class SchemaMappingTests {
 		String canonicalSchema = Files.readString(SCHEMA_SOURCE, StandardCharsets.UTF_8);
 		String legacyTermType = "CREATE TYPE term_type AS ENUM ('SERVICE', 'PRIVACY', 'MARKETING');";
 		String currentTermType = "CREATE TYPE term_type AS ENUM ('SERVICE', 'PRIVACY', 'LOCATION', 'MARKETING');";
+		String legacySettlementChoice = "CREATE TYPE settlement_choice AS ENUM ('LEAVE_TO_BUYEO', 'CARRY_OVER');";
+		String currentSettlementChoice = "CREATE TYPE settlement_choice AS ENUM ('LEAVE_TO_BUYEO', 'CARRY_OVER', 'NO_POINTS');";
 		String legacyMissionStatus = "CREATE TYPE mission_status AS ENUM ('LOCKED', 'AVAILABLE', 'EXHAUSTED', 'COMPLETED');";
 		String currentMissionStatus = "CREATE TYPE mission_status AS ENUM ('AVAILABLE', 'EXHAUSTED', 'COMPLETED');";
 		String placeSourceColumns = String.join("\n", "    source_name text, -- 관광데이터 제공처",
@@ -88,6 +94,56 @@ class SchemaMappingTests {
 		String authSessionIndex = "CREATE INDEX auth_sessions_member_idx ON auth_sessions (member_id, expires_at);";
 		String memberPurgeIndexes = String.join("\n", authSessionIndex, "CREATE INDEX members_due_purge_idx",
 				"    ON members (purge_after, id)", "    WHERE status = 'WITHDRAWN' AND purged_at IS NULL;");
+		String legacyPointSettlement = """
+				CREATE TABLE point_settlements (
+				    id uuid PRIMARY KEY DEFAULT gen_random_uuid(), -- 정산 ID
+				    trip_id uuid NOT NULL UNIQUE REFERENCES trips(id) ON DELETE CASCADE, -- 정산 대상 여행 ID
+				    choice settlement_choice NOT NULL, -- 남기기·이월 선택
+				    settled_points bigint NOT NULL CHECK (settled_points >= 0), -- 이번 여행에서 정산한 포인트
+				    expires_at timestamptz, -- 이월 포인트 만료 시각
+				    settled_at timestamptz NOT NULL DEFAULT now(), -- 정산 완료 시각
+				    CHECK (
+				        (choice = 'LEAVE_TO_BUYEO' AND expires_at IS NULL)
+				        OR (choice = 'CARRY_OVER' AND expires_at = settled_at + INTERVAL '240 hours')
+				    )
+				);
+				""";
+		String currentPointSettlement = """
+				CREATE TABLE point_settlements (
+				    id uuid PRIMARY KEY DEFAULT gen_random_uuid(), -- 정산 ID
+				    trip_id uuid NOT NULL UNIQUE REFERENCES trips(id) ON DELETE CASCADE, -- 정산 대상 여행 ID
+				    choice settlement_choice NOT NULL, -- 남기기·이월 선택
+				    settled_points bigint NOT NULL CHECK (settled_points >= 0), -- 이번 여행에서 정산한 포인트
+				    expires_at timestamptz, -- 이월 포인트 만료 시각
+				    settled_at timestamptz NOT NULL DEFAULT now(), -- 정산 완료 시각
+				    expired_at timestamptz, -- 이월 포인트 만료 처리를 실제로 확정한 시각
+				    CHECK (
+				        (
+				            choice = 'LEAVE_TO_BUYEO'
+				            AND settled_points > 0
+				            AND expires_at IS NULL
+				            AND expired_at IS NULL
+				        )
+				        OR (
+				            choice = 'CARRY_OVER'
+				            AND settled_points > 0
+				            AND expires_at = settled_at + INTERVAL '240 hours'
+				            AND (expired_at IS NULL OR expired_at >= expires_at)
+				        )
+				        OR (
+				            choice = 'NO_POINTS'
+				            AND settled_points = 0
+				            AND expires_at IS NULL
+				            AND expired_at IS NULL
+				        )
+				    )
+				);
+				""";
+		String pointTransactionIndex = "CREATE INDEX point_transactions_member_idx ON point_transactions "
+				+ "(member_id, occurred_at DESC);";
+		String pointIndexes = String.join("\n", pointTransactionIndex,
+				"CREATE INDEX point_settlements_due_expiration_idx", "    ON point_settlements (expires_at, id)",
+				"    WHERE choice = 'CARRY_OVER' AND expired_at IS NULL;");
 		String privatePhotoObjectKey = "object_key text NOT NULL UNIQUE CHECK (object_key LIKE 'private/%'),"
 				+ " -- 비공개 스토리지 객체 키";
 		String publicImageKeySchema = baseline
@@ -124,7 +180,10 @@ class SchemaMappingTests {
 		assertThat(publicImageKeySchema.replace(placeSourceColumns, placeExternalIdentityColumns)
 				.replace(placeLocationIndex, placeIndexes).replace(legacyMissionStatus, currentMissionStatus)
 				.replace(legacyMissionConstraints, currentMissionConstraints).replace(legacyTermType, currentTermType)
-				.replace(placeExternalIdentityColumns, placeOperatingInfoColumns)).isEqualTo(canonicalSchema);
+				.replace(placeExternalIdentityColumns, placeOperatingInfoColumns)
+				.replace(legacySettlementChoice, currentSettlementChoice)
+				.replace(legacyPointSettlement, currentPointSettlement).replace(pointTransactionIndex, pointIndexes))
+				.isEqualTo(canonicalSchema);
 		assertThat(Files.readString(LOCATION_TERM_MIGRATION, StandardCharsets.UTF_8))
 				.contains("ALTER TYPE term_type ADD VALUE 'LOCATION' AFTER 'PRIVACY'");
 	}
@@ -148,6 +207,8 @@ class SchemaMappingTests {
 	void pointSettlementExpirationIsDefinedInSchemaAndMigration() throws IOException {
 		String canonicalSchema = Files.readString(SCHEMA_SOURCE, StandardCharsets.UTF_8);
 		String migration = Files.readString(POINT_SETTLEMENT_EXPIRATION_MIGRATION, StandardCharsets.UTF_8);
+		String choiceMigration = Files.readString(NO_POINTS_SETTLEMENT_CHOICE_MIGRATION, StandardCharsets.UTF_8);
+		String constraintsMigration = Files.readString(POINT_SETTLEMENT_CONSTRAINTS_MIGRATION, StandardCharsets.UTF_8);
 
 		assertThat(canonicalSchema).contains("expired_at timestamptz, -- 이월 포인트 만료 처리를 실제로 확정한 시각")
 				.contains("AND (expired_at IS NULL OR expired_at >= expires_at)")
@@ -159,6 +220,9 @@ class SchemaMappingTests {
 				.contains("CREATE INDEX point_settlements_due_expiration_idx")
 				.contains("ON point_settlements (expires_at, id)")
 				.contains("WHERE choice = 'CARRY_OVER' AND expired_at IS NULL;");
+		assertThat(choiceMigration).contains("ALTER TYPE settlement_choice ADD VALUE 'NO_POINTS'");
+		assertThat(constraintsMigration).contains("choice = 'LEAVE_TO_BUYEO'").contains("settled_points > 0")
+				.contains("choice = 'CARRY_OVER'").contains("choice = 'NO_POINTS'").contains("settled_points = 0");
 	}
 
 	/** 미션 상태와 시도 횟수 제약이 신규 설치용 스키마와 기존 DB 업그레이드에 모두 반영됐는지 검증한다. */
