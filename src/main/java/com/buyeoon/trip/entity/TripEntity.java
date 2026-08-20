@@ -54,4 +54,10 @@ public class TripEntity {
 		this.status = TripStatus.ENDED;
 		this.endedAt = endedAt;
 	}
+
+	/** 종료된 여행을 정산 완료 상태로 전이하고 정산 완료 시각을 기록한다. */
+	public void settle(Instant settledAt) {
+		this.status = TripStatus.SETTLED;
+		this.settledAt = settledAt;
+	}
 }
