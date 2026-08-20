@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.buyeoon.member.auth.AccessTokenService;
+import com.buyeoon.point.application.PointExpirationService;
 import com.jayway.jsonpath.JsonPath;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -14,6 +15,11 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -53,9 +59,14 @@ class PointTransactionListIntegrationTests {
 	@Autowired
 	private AccessTokenService accessTokenService;
 
+	@Autowired
+	private PointExpirationService pointExpirationService;
+
 	@AfterEach
 	void cleanUp() {
+		jdbcTemplate.update("DELETE FROM point_settlements");
 		jdbcTemplate.update("DELETE FROM point_transactions");
+		jdbcTemplate.update("DELETE FROM trips");
 		jdbcTemplate.update("DELETE FROM auth_sessions");
 		jdbcTemplate.update("DELETE FROM members");
 	}
@@ -82,6 +93,74 @@ class PointTransactionListIntegrationTests {
 				.andExpect(jsonPath("$.data.items[1].balanceAfter").value(100))
 				.andExpect(jsonPath("$.data.page.hasNext").value(false))
 				.andExpect(jsonPath("$.data.page.nextCursor").doesNotExist());
+	}
+
+	/** 포인트 내역 조회는 만료 도래 이월분을 먼저 확정하고 새 EXPIRE 내역의 정확한 balanceAfter를 반환한다. */
+	@Test
+	@DisplayName("만료 도래 이월분을 먼저 확정하고 EXPIRE 내역과 정확한 balanceAfter를 반환한다")
+	void expiresDueCarryOverBeforeReturningTransactions() throws Exception {
+		AuthenticatedMember member = insertAuthenticatedMember();
+		Instant expiresAt = Instant.now().minus(1, ChronoUnit.MINUTES);
+		insertTransaction(member.memberId(), "EARN", 400, "미션 보상", expiresAt.minus(241, ChronoUnit.HOURS));
+		UUID tripId = insertSettledTrip(member.memberId());
+		insertCarryOverSettlement(tripId, 300, expiresAt);
+
+		mockMvc.perform(get("/members/me/point-transactions").header("Authorization", bearer(member)))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.data.items", hasSize(2)))
+				.andExpect(jsonPath("$.data.items[0].type").value("EXPIRE"))
+				.andExpect(jsonPath("$.data.items[0].amount").value(-300))
+				.andExpect(jsonPath("$.data.items[0].balanceAfter").value(100))
+				.andExpect(jsonPath("$.data.items[1].type").value("EARN"))
+				.andExpect(jsonPath("$.data.items[1].balanceAfter").value(400));
+
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM point_transactions WHERE member_id = ? AND type = 'EXPIRE'", Integer.class,
+				member.memberId())).isEqualTo(1);
+	}
+
+	/** 내역 조회와 scheduler가 경합해도 같은 만료분은 한 번만 차감하고 EXPIRE 내역을 반환한다. */
+	@Test
+	@DisplayName("내역 조회와 scheduler 경합에도 EXPIRE를 한 번만 확정한다")
+	void transactionListAndSchedulerExpireSameCarryOverExactlyOnce() throws Exception {
+		AuthenticatedMember member = insertAuthenticatedMember();
+		Instant expiresAt = Instant.now().minus(1, ChronoUnit.MINUTES);
+		insertTransaction(member.memberId(), "EARN", 300, "미션 보상", expiresAt.minus(241, ChronoUnit.HOURS));
+		UUID tripId = insertSettledTrip(member.memberId());
+		insertCarryOverSettlement(tripId, 200, expiresAt);
+		CountDownLatch ready = new CountDownLatch(2);
+		CountDownLatch start = new CountDownLatch(1);
+		ExecutorService executor = Executors.newFixedThreadPool(2);
+
+		try {
+			Future<MvcResult> transactions = executor.submit(() -> {
+				ready.countDown();
+				if (!start.await(5, TimeUnit.SECONDS)) {
+					throw new IllegalStateException("동시 실행 시작 신호를 받지 못했습니다.");
+				}
+				return mockMvc.perform(get("/members/me/point-transactions").header("Authorization", bearer(member)))
+						.andReturn();
+			});
+			Future<Integer> scheduler = executor.submit(() -> {
+				ready.countDown();
+				if (!start.await(5, TimeUnit.SECONDS)) {
+					throw new IllegalStateException("동시 실행 시작 신호를 받지 못했습니다.");
+				}
+				return pointExpirationService.expireAllDue();
+			});
+			assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+			start.countDown();
+			MvcResult result = transactions.get(10, TimeUnit.SECONDS);
+			scheduler.get(10, TimeUnit.SECONDS);
+			assertThat(result.getResponse().getStatus()).isEqualTo(200);
+			assertThat(JsonPath.<String>read(result.getResponse().getContentAsString(), "$.data.items[0].type"))
+					.isEqualTo("EXPIRE");
+		} finally {
+			executor.shutdownNow();
+		}
+
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM point_transactions WHERE member_id = ? AND type = 'EXPIRE'", Integer.class,
+				member.memberId())).isEqualTo(1);
 	}
 
 	/** 동일 발생 시각 내역은 내역 ID 내림차순으로 순서가 흔들리지 않고 balanceAfter도 그 순서로 누계된다. */
@@ -260,6 +339,24 @@ class PointTransactionListIntegrationTests {
 						+ "VALUES (?, ?, ?::point_transaction_type, ?, ?, ?)",
 				id, memberId, type, amount, description, Timestamp.from(occurredAt));
 		return id;
+	}
+
+	/** 만료 정산 fixture가 참조할 회원 소유의 정산 완료 여행을 만든다. */
+	private UUID insertSettledTrip(UUID memberId) {
+		UUID tripId = UUID.randomUUID();
+		jdbcTemplate.update(
+				"INSERT INTO trips (id, member_id, status, ended_at, settled_at) VALUES (?, ?, 'SETTLED', now(), now())",
+				tripId, memberId);
+		return tripId;
+	}
+
+	/** 지정한 시각에 만료되는 CARRY_OVER 정산 fixture를 만든다. */
+	private void insertCarryOverSettlement(UUID tripId, long settledPoints, Instant expiresAt) {
+		jdbcTemplate.update("""
+				INSERT INTO point_settlements (id, trip_id, choice, settled_points, expires_at, settled_at)
+				VALUES (?, ?, 'CARRY_OVER', ?, ?, ?)
+				""", UUID.randomUUID(), tripId, settledPoints, Timestamp.from(expiresAt),
+				Timestamp.from(expiresAt.minus(240, ChronoUnit.HOURS)));
 	}
 
 	private List<Map<String, Object>> transactions() {

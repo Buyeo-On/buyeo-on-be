@@ -12,6 +12,7 @@ import com.buyeoon.mission.application.TripNotFoundException;
 import com.buyeoon.mission.application.TripNotInProgressException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -64,5 +65,12 @@ public class MissionExceptionHandler {
 	@ResponseStatus(HttpStatus.CONFLICT)
 	public ErrorResponse handleIdempotencyKeyReused() {
 		return ErrorResponse.idempotencyKeyReused();
+	}
+
+	/** 회원 행 잠금 시 활성 상태가 아니면 인증 실패 응답을 반환한다. */
+	@ExceptionHandler(AuthenticationCredentialsNotFoundException.class)
+	@ResponseStatus(HttpStatus.UNAUTHORIZED)
+	public ErrorResponse handleUnauthorized() {
+		return ErrorResponse.unauthorized();
 	}
 }

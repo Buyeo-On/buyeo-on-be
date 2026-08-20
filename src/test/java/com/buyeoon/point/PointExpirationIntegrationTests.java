@@ -1,6 +1,7 @@
 package com.buyeoon.point;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.buyeoon.point.application.PointExpirationService;
 import java.sql.Timestamp;
@@ -92,7 +93,7 @@ class PointExpirationIntegrationTests {
 
 		assertThat(expired).isZero();
 		assertThat(settlementRow(tripId).get("expired_at")).isNull();
-		assertThat(pointTransactionCount(memberId)).isZero();
+		assertThat(expireTransactionCount(memberId)).isZero();
 	}
 
 	@Test
@@ -107,7 +108,7 @@ class PointExpirationIntegrationTests {
 		Instant firstExpiredAt = ((Timestamp) settlementRow(tripId).get("expired_at")).toInstant();
 
 		assertThat(expirationService.expireDueSettlements(memberId)).isZero();
-		assertThat(pointTransactionCount(memberId)).isEqualTo(1);
+		assertThat(expireTransactionCount(memberId)).isEqualTo(1);
 		assertThat(((Timestamp) settlementRow(tripId).get("expired_at")).toInstant()).isEqualTo(firstExpiredAt);
 	}
 
@@ -136,7 +137,7 @@ class PointExpirationIntegrationTests {
 		int expired = expirationService.expireDueSettlements(memberId);
 
 		assertThat(expired).isEqualTo(2);
-		assertThat(pointTransactionCount(memberId)).isEqualTo(2);
+		assertThat(expireTransactionCount(memberId)).isEqualTo(2);
 		assertThat(settlementRow(firstTrip).get("expired_at")).isNotNull();
 		assertThat(settlementRow(secondTrip).get("expired_at")).isNotNull();
 	}
@@ -223,9 +224,27 @@ class PointExpirationIntegrationTests {
 			executor.shutdownNow();
 		}
 
-		assertThat(pointTransactionCount(memberId)).isEqualTo(1);
+		assertThat(expireTransactionCount(memberId)).isEqualTo(1);
 		Map<String, Object> transaction = onlyExpireTransaction(memberId);
 		assertThat(transaction.get("amount")).isEqualTo(-300L);
+	}
+
+	@Test
+	@DisplayName("만료액이 직전 확정 잔액보다 크면 만료 전체를 롤백하고 음수 잔액을 만들지 않는다")
+	void doesNotExpireMorePointsThanCurrentBalance() {
+		UUID memberId = insertActiveMember();
+		UUID tripId = insertTrip(memberId);
+		insertCarryOverSettlement(tripId, 200, Instant.now().minus(241, ChronoUnit.HOURS));
+		jdbcTemplate.update("UPDATE point_transactions SET amount = 100 WHERE trip_id = ? AND type = 'EARN'", tripId);
+
+		assertThatThrownBy(() -> expirationService.expireDueSettlements(memberId))
+				.isInstanceOf(IllegalStateException.class);
+
+		assertThat(expireTransactionCount(memberId)).isZero();
+		assertThat(settlementRow(tripId).get("expired_at")).isNull();
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT COALESCE(SUM(amount), 0)::bigint FROM point_transactions WHERE member_id = ?", Long.class,
+				memberId)).isEqualTo(100L);
 	}
 
 	private UUID insertActiveMember() {
@@ -251,6 +270,12 @@ class PointExpirationIntegrationTests {
 	}
 
 	private void insertCarryOverSettlement(UUID tripId, long settledPoints, Instant settledAt) {
+		UUID memberId = Objects.requireNonNull(
+				jdbcTemplate.queryForObject("SELECT member_id FROM trips WHERE id = ?", UUID.class, tripId));
+		jdbcTemplate.update("""
+				INSERT INTO point_transactions (member_id, trip_id, type, amount, description, occurred_at)
+				VALUES (?, ?, 'EARN', ?, '이월 전 적립', ?)
+				""", memberId, tripId, settledPoints, Timestamp.from(settledAt));
 		jdbcTemplate.update("""
 				INSERT INTO point_settlements (trip_id, choice, settled_points, expires_at, settled_at)
 				VALUES (?, 'CARRY_OVER', ?, ?, ?)
@@ -274,9 +299,10 @@ class PointExpirationIntegrationTests {
 		return rows.get(0);
 	}
 
-	private long pointTransactionCount(UUID memberId) {
-		return Objects.requireNonNull(jdbcTemplate
-				.queryForObject("SELECT count(*) FROM point_transactions WHERE member_id = ?", Long.class, memberId));
+	private long expireTransactionCount(UUID memberId) {
+		return Objects.requireNonNull(jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM point_transactions WHERE member_id = ? AND type = 'EXPIRE'", Long.class,
+				memberId));
 	}
 
 	@DynamicPropertySource

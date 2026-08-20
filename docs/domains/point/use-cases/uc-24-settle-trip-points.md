@@ -2,9 +2,9 @@
 id: UC-24
 title: 여행 포인트 정산
 owner: point
-participants: [member, trip, badge, notification]
+participants: [member, trip, mission, badge, notification]
 policies: [authorization, idempotency, date-time, concurrency, transactions]
-api: ["GET /trips/{tripId}/settlement-preview", "PUT /trips/{tripId}/settlement"]
+api: ["GET /trips/{tripId}/settlement-preview", "PUT /trips/{tripId}/settlement", "GET /members/me/points", "GET /members/me/point-transactions", "POST /missions/{missionId}/submissions"]
 adrs: [ADR-003, ADR-010]
 ---
 
