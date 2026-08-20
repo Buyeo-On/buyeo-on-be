@@ -12,19 +12,22 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       KAKAO_APP_ID: ${KAKAO_APP_ID:?KAKAO_APP_ID is required}
-      APPLE_CLIENT_ID: ${APPLE_CLIENT_ID:?APPLE_CLIENT_ID is required}
-      APPLE_TEAM_ID: ${APPLE_TEAM_ID:?APPLE_TEAM_ID is required}
-      APPLE_KEY_ID: ${APPLE_KEY_ID:?APPLE_KEY_ID is required}
-      APPLE_PRIVATE_KEY_BASE64: ${APPLE_PRIVATE_KEY_BASE64:?APPLE_PRIVATE_KEY_BASE64 is required}
+      APPLE_LOGIN_ENABLED: ${APPLE_LOGIN_ENABLED:-false}
+      APPLE_CLIENT_ID: ${APPLE_CLIENT_ID:-}
+      APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}
+      APPLE_KEY_ID: ${APPLE_KEY_ID:-}
+      APPLE_PRIVATE_KEY_BASE64: ${APPLE_PRIVATE_KEY_BASE64:-}
       IMAGE_BUCKET: ${IMAGE_BUCKET:-}
       AWS_REGION: ${AWS_REGION:-ap-northeast-2}
+      TOURAPI_SERVICE_KEY: ${TOURAPI_SERVICE_KEY:-}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-}
       JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=75.0}
     expose:
       - "8080"
     restart: unless-stopped
 
   nginx:
-    image: nginx:1.29-alpine
+    image: nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de
     depends_on:
       app:
         condition: service_healthy
