@@ -115,6 +115,14 @@ jobs:
         id: ecr
         uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64
 
+      - name: Set up QEMU for ARM64 emulation
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435
+
       - name: Build and push immutable application image
         id: image
         shell: bash
@@ -122,8 +130,7 @@ jobs:
           ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
         run: |
           image_uri="${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}"
-          docker build --tag "${image_uri}" .
-          docker push "${image_uri}"
+          docker buildx build --platform linux/arm64 --tag "${image_uri}" --push .
           echo "uri=${image_uri}" >>"${GITHUB_OUTPUT}"
 
       - name: Deploy through Systems Manager
