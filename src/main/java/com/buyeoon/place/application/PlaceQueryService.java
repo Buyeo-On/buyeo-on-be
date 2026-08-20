@@ -8,6 +8,7 @@ import com.buyeoon.place.repository.PlaceQueryRepository;
 import com.buyeoon.place.repository.SavedPlaceProjection;
 import com.buyeoon.place.repository.SavedPlaceRepository;
 import com.buyeoon.trip.TripQueryService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -26,6 +27,7 @@ public class PlaceQueryService {
 	private final TripQueryService tripQueryService;
 	private final PublicImageUrlService imageUrls;
 
+	@SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring 싱글턴 빈을 그대로 주입받아 저장한다.")
 	public PlaceQueryService(PlaceQueryRepository placeQueryRepository, SavedPlaceRepository savedPlaceRepository,
 			TripQueryService tripQueryService, PublicImageUrlService imageUrls) {
 		this.placeQueryRepository = placeQueryRepository;

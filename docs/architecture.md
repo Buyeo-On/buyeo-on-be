@@ -62,6 +62,7 @@ iOS Flutter
 - 로그아웃·탈퇴 시 세션을 즉시 폐기한다.
 - FCM 등록 토큰은 현재 인증 세션과 1:1로 관리한다. 로그아웃·탈퇴 시 발송 대상에서 제외하고 FCM이 무효로 응답한 토큰은 삭제한다.
 - JWT 키와 OAuth 시크릿은 Parameter Store `SecureString`에서 읽는다.
+- Apple 로그인은 필요한 Apple 자격증명이 준비될 때만 활성화한다. 비활성화된 제공자로 로그인하면 소셜 인증 실패로 처리하고 다른 제공자와 애플리케이션 기동에는 영향을 주지 않는다.
 ## 데이터베이스
 - AWS RDS PostgreSQL과 PostGIS를 사용한다.
 - 장소는 `geography(Point, 4326)`와 GiST 인덱스로 저장한다.
@@ -92,6 +93,7 @@ iOS Flutter
 - EC2는 SSM 명령으로 이미지를 pull하고 Docker Compose를 실행하며 애플리케이션 시작 과정에서 Flyway를 적용한다.
 - 최초 운영 기준 SHA 이후 배포는 `/actuator/health`가 실패하면 직전 운영 SHA 이미지로 자동 롤백한다.
 - 배포가 끝나면 GitHub Actions가 Cloudflare를 경유해 공개 health endpoint를 확인한다.
+- Cloudflare 준비 전에는 수동 `app-only` 배포로 내부 health만 확인하고, production Environment의 자동 `full` 배포는 명시적 Repository Variable로 활성화한다.
 - AWS 인프라는 전용 IAM User로 접근한 운영 담당자가 [AWS Console 구성 Runbook](./aws-console-provisioning.md)에 따라 Console에서 생성·변경하고 리소스 목록과 변경 이력을 문서에 남긴다. IAM User는 MFA와 Console 비밀번호만 사용하고 Access Key를 만들지 않는다.
 - ECR push와 SSM 배포는 GitHub Actions만 수행하고 하나의 GitHub Automation OIDC IAM Role을 사용한다.
 - GitHub Automation Role과 EC2 Instance Role은 신뢰 주체가 다르므로 분리하며 장기 AWS Access Key를 사용하지 않는다.
@@ -106,7 +108,7 @@ iOS Flutter
 - 모든 검사를 통과한 `main`만 운영 배포
 ## 관측성과 복구
 - SLF4J 구조화 로그를 사용하고 개발은 일반 로그, 운영은 JSON 로그로 출력한다.
-- Spring과 Nginx 로그를 CloudWatch Logs에 전송해 30일 보관한다.
+- Spring ECS JSON 로그와 Nginx JSON access·error 로그를 호스트의 `/var/log/buyeoon`에 기록하고 CloudWatch Logs에 전송해 30일 보관한다.
 - 액세스 토큰, OAuth 코드, Presigned URL과 개인정보는 로그에 기록하지 않는다.
 - Docker `HEALTHCHECK`는 Actuator liveness를 확인한다.
 - 공개 헬스 응답은 내부 구성과 DB 상세정보를 노출하지 않는다.

@@ -1,0 +1,213 @@
+name: Deploy Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deployment_mode:
+        description: Deploy only the app for Stage 7, or include TLS Nginx after Stage 8
+        required: true
+        default: app-only
+        type: choice
+        options:
+          - app-only
+          - full
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || vars.PRODUCTION_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    env:
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      AWS_REGION: ${{ vars.AWS_REGION || 'ap-northeast-2' }}
+      EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'buyeoon/app' }}
+      PUBLIC_HEALTH_URL: ${{ vars.PUBLIC_HEALTH_URL }}
+
+    steps:
+      - name: Select deployment mode
+        id: mode
+        shell: bash
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            mode="${{ inputs.deployment_mode }}"
+          else
+            mode="full"
+          fi
+          echo "value=${mode}" >>"${GITHUB_OUTPUT}"
+
+      - name: Validate deployment configuration
+        shell: bash
+        run: |
+          for required_name in AWS_ACCOUNT_ID AWS_DEPLOY_ROLE_ARN EC2_INSTANCE_ID ECR_REPOSITORY; do
+            if [[ -z "${!required_name}" ]]; then
+              echo "GitHub production variable ${required_name} is required" >&2
+              exit 1
+            fi
+          done
+          if [[ "${{ steps.mode.outputs.value }}" == "full" && -z "${PUBLIC_HEALTH_URL}" ]]; then
+            echo "PUBLIC_HEALTH_URL is required for a full deployment" >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
+
+      - name: Run quality gate
+        run: ./gradlew check --no-daemon
+
+      - name: Validate deployment artifacts
+        shell: bash
+        run: |
+          bash -n scripts/deploy/*.sh scripts/ci/*.sh
+          scripts/ci/test-wait-for-ssm-command.sh
+          DB_URL=jdbc:postgresql://db:5432/buyeoon \
+          DB_USERNAME=buyeoon_app \
+          DB_PASSWORD=test \
+          JWT_SECRET=test \
+          KAKAO_APP_ID=1234 \
+          IMAGE_BUCKET=buyeoon-images \
+          TOURAPI_SERVICE_KEY=test \
+          ADMIN_API_KEY=test \
+          APP_IMAGE=example.invalid/buyeoon/app:${GITHUB_SHA} \
+          RELEASE_DIR=/tmp/buyeoon-release \
+            docker compose -f compose.prod.yaml config --quiet
+
+          nginx_test_directory=$(mktemp -d)
+          trap 'rm -rf "${nginx_test_directory}"' EXIT
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -subj '/CN=origin.example.invalid' \
+            -keyout "${nginx_test_directory}/origin.key" \
+            -out "${nginx_test_directory}/origin.pem" >/dev/null 2>&1
+          docker run --rm \
+            --add-host app:127.0.0.1 \
+            -v "${PWD}/docker/nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro" \
+            -v "${nginx_test_directory}:/etc/nginx/tls:ro" \
+            nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de nginx -t
+
+      - name: Configure AWS credentials from GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: buyeoon-${{ github.run_id }}
+          allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
+
+      - name: Log in to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64
+
+      - name: Set up QEMU for ARM64 emulation
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435
+
+      - name: Build and push immutable application image
+        id: image
+        shell: bash
+        env:
+          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          image_uri="${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}"
+          docker buildx build --platform linux/arm64 --tag "${image_uri}" --push .
+          echo "uri=${image_uri}" >>"${GITHUB_OUTPUT}"
+
+      - name: Deploy through Systems Manager
+        id: deploy
+        shell: bash
+        env:
+          APP_IMAGE: ${{ steps.image.outputs.uri }}
+          DEPLOYMENT_MODE: ${{ steps.mode.outputs.value }}
+        run: |
+          bootstrap_base64=$(base64 --wrap=0 scripts/deploy/bootstrap-release.sh)
+          command="printf '%s' '${bootstrap_base64}' | base64 --decode | bash -s -- '${APP_IMAGE}' '${GITHUB_SHA}' '${DEPLOYMENT_MODE}'"
+          parameters=$(jq -cn --arg command "${command}" '{commands:[$command]}')
+          command_id=$(aws ssm send-command \
+            --instance-ids "${EC2_INSTANCE_ID}" \
+            --document-name AWS-RunShellScript \
+            --comment "Deploy Buyeo-On ${GITHUB_SHA}" \
+            --parameters "${parameters}" \
+            --region "${AWS_REGION}" \
+            --query 'Command.CommandId' \
+            --output text)
+          echo "command-id=${command_id}" >>"${GITHUB_OUTPUT}"
+
+          set +e
+          SSM_COMMAND_TIMEOUT_SECONDS=1200 \
+            scripts/ci/wait-for-ssm-command.sh "${command_id}" "${EC2_INSTANCE_ID}" "${AWS_REGION}"
+          poll_status=$?
+          set -e
+
+          invocation=$(aws ssm get-command-invocation \
+            --command-id "${command_id}" \
+            --instance-id "${EC2_INSTANCE_ID}" \
+            --region "${AWS_REGION}" \
+            --output json)
+          jq -r '.StandardOutputContent // empty' <<<"${invocation}"
+          jq -r '.StandardErrorContent // empty' <<<"${invocation}" >&2
+          status=$(jq -r '.Status' <<<"${invocation}")
+          if [[ ${poll_status} -ne 0 || "${status}" != "Success" ]]; then
+            echo "SSM deployment failed with status ${status}" >&2
+            exit 1
+          fi
+
+      - name: Verify public Cloudflare health
+        if: steps.mode.outputs.value == 'full'
+        shell: bash
+        run: |
+          curl --fail --silent --show-error \
+            --retry 5 --retry-delay 10 --retry-all-errors \
+            "${PUBLIC_HEALTH_URL}" >/dev/null
+
+      - name: Roll back after public health failure
+        if: failure() && steps.deploy.outcome == 'success' && steps.mode.outputs.value == 'full'
+        shell: bash
+        run: |
+          parameters=$(jq -cn --arg command '/opt/buyeoon/current/scripts/deploy/rollback.sh' '{commands:[$command]}')
+          command_id=$(aws ssm send-command \
+            --instance-ids "${EC2_INSTANCE_ID}" \
+            --document-name AWS-RunShellScript \
+            --comment "Rollback Buyeo-On after public health failure" \
+            --parameters "${parameters}" \
+            --region "${AWS_REGION}" \
+            --query 'Command.CommandId' \
+            --output text)
+          set +e
+          SSM_COMMAND_TIMEOUT_SECONDS=1200 \
+            scripts/ci/wait-for-ssm-command.sh "${command_id}" "${EC2_INSTANCE_ID}" "${AWS_REGION}"
+          poll_status=$?
+          set -e
+
+          invocation=$(aws ssm get-command-invocation \
+            --command-id "${command_id}" \
+            --instance-id "${EC2_INSTANCE_ID}" \
+            --region "${AWS_REGION}" \
+            --output json)
+          jq -r '.StandardOutputContent // empty' <<<"${invocation}"
+          jq -r '.StandardErrorContent // empty' <<<"${invocation}" >&2
+          status=$(jq -r '.Status' <<<"${invocation}")
+          if [[ ${poll_status} -ne 0 || "${status}" != "Success" ]]; then
+            echo "SSM rollback failed with status ${status}" >&2
+            exit 1
+          fi

@@ -38,9 +38,9 @@ AWS resource는 먼저 생성할 수 있지만, 아래 항목이 준비되기 �
 | --- | --- | --- |
 | 운영 Domain | 확정 필요 | Production API 공개 |
 | Cloudflare zone·API hostname | 확정 필요 | DNS·Proxy·TLS 연결 |
-| Production Compose 파일 | 미구현 | EC2 애플리케이션 실행 |
-| Nginx 설정과 Origin Certificate 주입·갱신 절차 | 미구현 | HTTPS origin 공개 |
-| DB bootstrap과 Parameter Store 운영 값 | 미구현 | Spring Boot 최초 시작 |
+| Production Compose 파일 | `compose.prod.yaml` | EC2 애플리케이션 실행 |
+| Nginx 설정과 Origin Certificate 주입·갱신 절차 | `docker/nginx/nginx.prod.conf`, `scripts/deploy/restore-origin-tls.sh` | HTTPS origin 공개 |
+| DB bootstrap과 Parameter Store 운영 값 | DB bootstrap 완료, TourAPI·Admin 값 추가 필요 | Spring Boot 최초 시작 |
 
 ### C. 자동 배포 완료 조건
 
@@ -49,8 +49,8 @@ AWS resource는 먼저 생성할 수 있지만, 아래 항목이 준비되기 �
 | 입력·산출물 | 현재 값 | 차단되는 작업 |
 | --- | --- | --- |
 | GitHub organization/repository | `Buyeo-On/buyeo-on-be` | GitHub OIDC Trust Policy 생성 |
-| SSM 배포·rollback script 또는 Command Document | 미구현 | SSM 자동 배포·rollback |
-| GitHub Actions production 배포 Workflow | 미구현 | GitHub Actions 자동 배포 |
+| SSM 배포·rollback script 또는 Command Document | `scripts/deploy/` | SSM 자동 배포·rollback |
+| GitHub Actions production 배포 Workflow | `.github/workflows/deploy-production.yml` | GitHub Actions 자동 배포 |
 
 ## 리소스 목록
 
@@ -59,25 +59,25 @@ Console에서 생성한 직후 실제 ID, ARN 또는 Endpoint를 기록한다. �
 | 구분 | 권장 이름 | 실제 ID·ARN·Endpoint |
 | --- | --- | --- |
 | 운영 담당자 IAM User | `buyeoon-operator` | 미생성 |
-| GitHub OIDC Provider | `token.actions.githubusercontent.com` | 미생성 |
-| GitHub Automation Role | `buyeoon-prod-github-automation` | 미생성 |
-| EC2 Instance Role·Profile | `buyeoon-prod-ec2` | 미생성 |
-| VPC | `buyeoon-prod-vpc` | 미생성 |
-| Public Subnet | `buyeoon-prod-public-a` | 미생성 |
-| Private DB Subnet | `buyeoon-prod-db-a` | 미생성 |
-| Private DB Subnet | `buyeoon-prod-db-c` | 미생성 |
-| Internet Gateway | `buyeoon-prod-igw` | 미생성 |
-| Public Route Table | `buyeoon-prod-public-rt` | 미생성 |
-| EC2 Security Group | `buyeoon-prod-ec2-sg` | 미생성 |
-| RDS Security Group | `buyeoon-prod-rds-sg` | 미생성 |
-| RDS DB Subnet Group | `buyeoon-prod-db-subnets` | 미생성 |
-| RDS | `buyeoon-prod-db` | 미생성 |
-| EC2 | `buyeoon-prod-app` | 미생성 |
-| EIP | `buyeoon-prod-app-eip` | 미생성 |
-| ECR | `buyeoon/app` | 미생성 |
-| 이미지 S3 | 확정 필요 | 미생성 |
-| Parameter Store 경로 | `/buyeoon/prod/` | 미생성 |
-| CloudWatch Log Group | `/buyeoon/prod/app`, `/buyeoon/prod/nginx` | 미생성 |
+| GitHub OIDC Provider | `token.actions.githubusercontent.com` | 생성 완료 |
+| GitHub Automation Role | `buyeoon-github-deploy` | ARN은 GitHub `AWS_DEPLOY_ROLE_ARN` Variable로 관리 |
+| EC2 Instance Role·Profile | `buyeoon-ec2` | `buyeoon-ec2` |
+| VPC | `buyeoon-vpc` | Console ID 기록 필요 |
+| Public Subnet | `buyeoon-public-a` | Console ID 기록 필요 |
+| Private DB Subnet | `buyeoon-db-a` | Console ID 기록 필요 |
+| Private DB Subnet | `buyeoon-db-c` | Console ID 기록 필요 |
+| Internet Gateway | `buyeoon-igw` | Console ID 기록 필요 |
+| Public Route Table | `buyeoon-public-rt` | Console ID 기록 필요 |
+| EC2 Security Group | `buyeoon-ec2-sg` | Console ID 기록 필요 |
+| RDS Security Group | `buyeoon-rds-sg` | Console ID 기록 필요 |
+| RDS DB Subnet Group | `buyeoon-db-subnets` | Console ID 기록 필요 |
+| RDS | `buyeoon-db` | `buyeoon-db` |
+| EC2 | `buyeoon-app` | `i-02040f4aa55f0e233` |
+| EIP | `buyeoon-app-eip` | Console 주소 기록 필요 |
+| ECR | `buyeoon/app` | 생성 여부 확인 필요 |
+| 이미지 S3 | `buyeoon-images` | `buyeoon-images` |
+| Parameter Store 경로 | `/buyeoon/` | `/buyeoon/` |
+| CloudWatch Log Group | `/buyeoon/app`, `/buyeoon/nginx` | 9단계에서 생성 |
 
 모든 Tag 지원 리소스에는 다음 값을 적용한다.
 
@@ -136,7 +136,22 @@ Console에서 생성한 직후 실제 ID, ARN 또는 Endpoint를 기록한다. �
 10. Bucket Policy에서 `aws:SecureTransport=false`인 모든 요청을 거부한다.
 11. S3 Lifecycle에 1일이 지난 미완료 multipart upload를 중단하는 규칙을 추가한다.
 12. CloudWatch Log Group을 생성한다.
-13. `/buyeoon/prod/` 아래에 필요한 Parameter 이름을 생성하고 비밀값은 `SecureString`으로 저장한다.
+13. `/buyeoon/` 아래에 필요한 Parameter 이름을 생성하고 비밀값은 `SecureString`으로 저장한다.
+
+7단계 배포가 읽는 Parameter 계약은 다음과 같다. 값은 이 문서나 셸 이력에 기록하지 않는다.
+
+| Parameter | Type | 용도 |
+| --- | --- | --- |
+| `/buyeoon/aws/region` | String | AWS SDK·CLI Region |
+| `/buyeoon/db/url` | String | JDBC URL |
+| `/buyeoon/db/username`, `/buyeoon/db/password` | SecureString | 애플리케이션 DB Role |
+| `/buyeoon/jwt/secret-base64` | SecureString | HS256 서명 키 |
+| `/buyeoon/social/kakao/app-id` | String | 카카오 숫자형 앱 ID |
+| `/buyeoon/storage/image-bucket` | String | Private 이미지 Bucket 이름 |
+| `/buyeoon/tourapi/service-key` | SecureString | TourAPI 장소 동기화 |
+| `/buyeoon/admin/api-key` | SecureString | `/admin/**` 인증 |
+
+Apple 로그인은 기본적으로 비활성화한다. 활성화할 때만 `/buyeoon/social/apple/enabled=true`와 `client-id`, `team-id`, `key-id`, `private-key-base64`를 추가하며 비공개 키만 SecureString으로 저장한다. 8단계 TLS에서는 `/buyeoon/tls/origin-certificate`와 `/buyeoon/tls/origin-private-key`를 추가하고 비공개 키를 SecureString으로 저장한다.
 
 RDS 삭제는 일반 변경과 분리해 승인된 변경으로만 수행한다.
 
@@ -161,17 +176,20 @@ EC2 Instance Role은 다음 권한만 가진다.
 | --- | --- |
 | Systems Manager | `AmazonSSMManagedInstanceCore` 수준의 Managed Node 권한 |
 | ECR | 인증 토큰 조회와 `buyeoon/app` 이미지 pull |
-| Parameter Store | `/buyeoon/prod/*`의 필요한 Parameter 조회·복호화 |
+| Parameter Store | `/buyeoon/*`의 필요한 Parameter 조회·복호화 |
 | 이미지 S3 Bucket | prefix 범위의 `ListBucket`, 객체 `GetObject`, `PutObject`, `DeleteObject` |
 | CloudWatch Logs | 지정 Log Group의 Stream 생성과 이벤트 전송 |
 
 S3 `ListBucket`은 `public/*`, `private/*` prefix 조건으로 제한하고 객체 권한은 해당 객체 ARN으로 제한한다. 이 권한으로 애플리케이션이 Presigned PUT·GET을 생성하고 `HeadObject` 검증과 삭제 작업을 수행한다.
 
+현재 단일 EC2 Docker 구조에서는 애플리케이션이 Presigned URL을 만들기 위해 Instance Profile의 S3 권한을 사용한다. 따라서 Parameter Store 권한은 위에 열거한 운영 Parameter ARN만, S3 권한은 `buyeoon-images`의 필요한 prefix와 action만 허용한다. 컨테이너별 IAM 격리가 필요해지는 시점에는 ECS Task Role 구조로 이전한다.
+
 1. EC2 Instance Role과 Instance Profile을 생성한다.
 2. Public Subnet에 EC2를 생성하고 Instance Profile과 EC2 Security Group을 연결한다. 최초 package 설치와 SSM 등록을 위해 launch 시 public IPv4 자동 할당을 활성화한다.
 3. EC2가 Running이 되면 즉시 EIP를 생성해 연결하고 임시 public IPv4를 대체한다.
 4. SSM Agent가 포함된 승인 AMI를 사용하고 User data에는 Docker, Docker Compose Plugin과 CloudWatch Agent 설치만 둔다.
-5. 애플리케이션·Nginx 구성과 비밀값은 AMI와 User data에 넣지 않는다.
+5. Root EBS와 Snapshot 암호화를 활성화하고 IMDSv2를 Required, hop limit을 2로 설정한다.
+6. 애플리케이션·Nginx 구성과 비밀값은 AMI와 User data에 넣지 않는다.
 
 검증:
 
@@ -190,7 +208,7 @@ EC2가 준비된 뒤 Session Manager로 접속해 최초 한 번 수행한다.
 3. 로그나 명령 이력에 남기지 않는 방식으로 무작위 애플리케이션 DB 비밀번호를 생성한다.
 4. `buyeoon_app`을 `LOGIN`, 비 Superuser Role로 생성하고 생성한 비밀번호를 설정한다.
 5. `buyeoon_app`에 Flyway DDL과 애플리케이션 DML에 필요한 권한을 부여한다.
-6. `/buyeoon/prod/db/username`과 `/buyeoon/prod/db/password` SecureString을 애플리케이션 계정 값으로 갱신한다.
+6. `/buyeoon/db/username`과 `/buyeoon/db/password` SecureString을 애플리케이션 계정 값으로 갱신한다.
 7. RDS 관리자 자격증명을 애플리케이션 Parameter에 넣지 않는다.
 8. 기존 개발 DB의 `image_url` 값이 있으면 `public/` S3 객체 키로 먼저 교체하고 V5를 적용한다.
 9. V5가 적용된 앱 SHA를 최초 운영 기준 SHA로 기록한다. V5 이전 앱으로는 rollback하지 않는다.
@@ -239,19 +257,38 @@ Trust Policy 조건:
 
 다음 산출물이 Repository에 구현되고 검토되기 전에는 최초 배포를 진행하지 않는다.
 
-- Production Docker Compose 파일
-- Nginx 설정
-- Parameter Store 값을 root 전용 임시 환경 파일로 만드는 절차
-- Cloudflare Origin Certificate와 비공개 키를 Parameter Store에서 복원하는 절차
-- ECR pull, Compose 교체, health check와 이전 SHA 롤백을 수행하는 SSM 배포 스크립트 또는 Document
-- 현재·이전 배포 SHA를 기록하는 위치와 형식
-- `environment: production`, OIDC 권한, SHA 이미지 push, SSM SendCommand·결과 polling, Cloudflare 경유 공개 health 확인과 실패 시 이전 SHA 롤백을 포함한 GitHub Actions Workflow
+- `compose.prod.yaml`: SHA 이미지, localhost 내부 health 포트, 앱·Nginx 로그 볼륨
+- `docker/nginx/nginx.prod.conf`: Cloudflare Origin TLS와 query string을 제외한 JSON access log
+- `scripts/deploy/fetch-runtime-env.sh`: Parameter Store 값을 `/opt/buyeoon/runtime/runtime.env`에 root 전용 shell export 형식으로 복원
+- `scripts/deploy/restore-origin-tls.sh`: Origin Certificate와 비공개 키를 `/opt/buyeoon/tls`에 복원
+- `scripts/deploy/bootstrap-release.sh`: ECR SHA 이미지에서 같은 SHA의 배포 bundle을 추출
+- `scripts/deploy/deploy.sh`, `rollback.sh`: Compose 교체, 내부 health, 현재·이전 SHA 기록과 rollback
+- `.github/workflows/deploy-production.yml`: production Environment OIDC, ECR push, SSM polling과 공개 health 실패 rollback
+
+Workflow의 외부 Action과 운영 컨테이너 이미지는 검증한 commit SHA 또는 digest로 고정한다. SSM Command는 기본 waiter보다 긴 20분 제한으로 terminal status를 polling하고 제한을 넘으면 cancellation을 요청한다.
+
+호스트 상태는 `/opt/buyeoon/state/current-{sha,image,mode}`와 `previous-{sha,image,mode}`에 기록한다. 배포 bundle은 `/opt/buyeoon/releases/<commit-sha>`에 보관하며, EC2 디스크에는 RDS·S3의 영구 데이터를 저장하지 않는다.
+
+GitHub production Environment에는 다음 Variables를 설정한다.
+
+| Variable | 값 |
+| --- | --- |
+| `AWS_ACCOUNT_ID` | 운영 AWS Account ID |
+| `AWS_DEPLOY_ROLE_ARN` | 6단계 GitHub Automation Role ARN |
+| `AWS_REGION` | `ap-northeast-2` |
+| `EC2_INSTANCE_ID` | 운영 EC2 Instance ID |
+| `ECR_REPOSITORY` | `buyeoon/app` |
+| `PUBLIC_HEALTH_URL` | 8단계에서 확정할 `https://<api-host>/actuator/health` |
+| `PRODUCTION_DEPLOY_ENABLED` | 8단계 검증 전 `false`, 검증 후 `true` |
+
+Stage 7에서는 Workflow를 수동 실행하고 `app-only`를 선택한다. 이 모드는 Nginx와 인증서 없이 앱 컨테이너를 실행하고 EC2 localhost의 `127.0.0.1:18080/actuator/health`만 검증한다. Stage 8에서 Origin Certificate, DNS와 Cloudflare를 준비한 뒤 `full`을 실행해 Nginx와 공개 health 검증을 활성화한다. `main` push 자동 배포는 `PRODUCTION_DEPLOY_ENABLED=true`일 때만 실행된다.
 
 EC2 복구는 새 EC2를 같은 Public Subnet과 Instance Profile로 생성하고 EIP를 재연결한 뒤, 동일한 SSM 배포 산출물로 Nginx와 애플리케이션을 복원하는 방식으로 검증한다. 인증서와 애플리케이션 비밀값은 Parameter Store에서 다시 읽으며 EC2 디스크를 백업 원본으로 사용하지 않는다.
 
 검증:
 
-- [ ] 빈 EC2에서 SSM 배포만으로 Nginx와 앱을 시작할 수 있다.
+- [ ] 빈 EC2에서 수동 `app-only` Workflow만으로 앱과 Flyway를 시작할 수 있다.
+- [ ] 8단계 이후 빈 EC2에서 `full` Workflow만으로 Nginx와 앱을 시작할 수 있다.
 - [ ] 현재와 이전 app SHA가 모두 ECR에 존재한다.
 - [ ] health check 실패 시 이전 SHA로 재실행된다.
 - [ ] EC2 교체 후 RDS와 S3 데이터가 유지된다.
@@ -260,26 +297,28 @@ EC2 복구는 새 EC2를 같은 Public Subnet과 Instance Profile로 생성하�
 
 1. Cloudflare API DNS Record를 EIP로 연결하고 Proxy를 활성화한다.
 2. Nginx에 Origin Certificate를 복원하고 TLS를 `Full (strict)`로 설정한다.
-3. 테스트를 통과한 commit SHA 이미지를 ECR에 push한다.
-4. GitHub Actions가 SSM으로 운영 EC2에 배포 명령을 전달하고 Command 성공 여부를 확인한다.
-5. Spring Boot의 Flyway와 JPA validate가 성공한 뒤 GitHub Actions가 Cloudflare 경유 공개 health endpoint를 호출한다. 실패하면 Workflow가 실패하고 이전 SHA를 재배포한다.
-6. 공개 콘텐츠 API가 `public/` 객체의 10분 Presigned GET URL을 발급하는지 확인한다.
-7. 비공개 사진 API가 소유권 확인 후 `private/` 객체의 10분 Presigned GET URL을 발급하는지 확인한다.
+3. 군민증 캐릭터·테마·배지 등 앱이 관리할 공용 이미지 객체 키를 확정하고 `buyeoon-images/public/`에 실제 파일을 업로드한다.
+4. 같은 `public/` 객체 키를 저장하는 Flyway 시드를 작성하고 테스트한다. TourAPI 원본 장소 이미지는 `source_image_href`를 사용하므로 일괄 복사하지 않는다.
+5. GitHub Actions를 `full`로 실행해 테스트를 통과한 commit SHA 이미지를 ECR에 push하고 SSM Command 결과를 확인한다.
+6. Spring Boot의 Flyway와 JPA validate가 성공한 뒤 GitHub Actions가 Cloudflare 경유 공개 health endpoint를 호출한다. 실패하면 Workflow가 실패하고 이전 SHA를 재배포한다.
+7. 공개 콘텐츠 API가 `public/` 객체의 10분 Presigned GET URL을 발급하는지 확인한다.
 8. Presigned PUT 업로드 후 서버가 크기·MIME 타입·소유자를 검증하는지 확인한다.
+
+비공개 사진 Presigned GET과 다른 회원 접근 거부 검증은 현재 Repository에 조회 API가 없어 수행할 수 없다. 이 기능이 제품에 필요하면 인프라 배포 PR과 분리된 API 작업으로 구현한 뒤 아래 보류 체크를 활성화한다.
 
 검증:
 
 - [ ] Cloudflare 경유 HTTPS와 공개 health endpoint가 성공한다.
 - [ ] EIP 직접 HTTPS 접근은 Cloudflare 대역 외에서 차단된다.
 - [ ] S3 객체를 공개 S3 URL로 직접 조회할 수 없다.
-- [ ] 다른 회원은 API를 통해 해당 비공개 사진의 Presigned URL을 발급받을 수 없다.
+- [ ] 보류: 다른 회원은 API를 통해 해당 비공개 사진의 Presigned URL을 발급받을 수 없다.
 - [ ] Presigned URL은 HTTPS이며 만료 후 사용할 수 없다.
 - [ ] Presigned URL은 만료 전까지 소지자가 사용할 수 있는 bearer URL임을 클라이언트·로그 정책에 반영했다.
 - [ ] 실행 이미지 Tag가 배포 commit SHA와 일치한다.
 
 ### 9. 관측성과 복구
 
-1. Spring과 Nginx 로그를 CloudWatch Logs에 전송하고 30일 보관한다.
+1. `/var/log/buyeoon/app/application.json`, `/var/log/buyeoon/nginx/access.log`, `/var/log/buyeoon/nginx/error.log`를 CloudWatch Logs에 전송하고 30일 보관한다.
 2. RDS Snapshot 복원과 이전 app SHA 재배포를 비운영 복원 대상으로 검증한다.
 
 검증:
