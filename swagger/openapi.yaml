@@ -1171,7 +1171,7 @@ components:
               newlyAwardedBadges:
                 - badgeId: 550e8400-e29b-41d4-a716-446655440020
                   name: 부소산성 탐험가
-                  imageUrl: https://buyeoon-prod-images.s3.ap-northeast-2.amazonaws.com/public/badges/example.png?X-Amz-Expires=600
+                  imageUrl: https://buyeoon-images.s3.ap-northeast-2.amazonaws.com/public/badges/example.png?X-Amz-Expires=600
                   condition: 부소산성 방문 기록 1회
                   earnedAt: '2026-08-06T11:20:00+09:00'
     PointSummarySuccess:
@@ -1202,7 +1202,7 @@ components:
                   category: EXPLORATION
                   name: 부소산성 탐험가
                   description: 부소산성 문화재 퀴즈를 완료한다.
-                  imageUrl: https://buyeoon-prod-images.s3.ap-northeast-2.amazonaws.com/public/badges/example.png?X-Amz-Expires=600
+                  imageUrl: https://buyeoon-images.s3.ap-northeast-2.amazonaws.com/public/badges/example.png?X-Amz-Expires=600
                   condition: 부소산성 방문 기록 1회
                   conditions:
                     - metricKey: HERITAGE_VISITED_COUNT
@@ -1224,7 +1224,7 @@ components:
               category: EXPLORATION
               name: 부소산성 탐험가
               description: 부소산성 문화재 퀴즈를 완료한다.
-              imageUrl: https://buyeoon-prod-images.s3.ap-northeast-2.amazonaws.com/public/badges/example.png?X-Amz-Expires=600
+              imageUrl: https://buyeoon-images.s3.ap-northeast-2.amazonaws.com/public/badges/example.png?X-Amz-Expires=600
               condition: 부소산성 방문 기록 1회
               conditions:
                 - metricKey: HERITAGE_VISITED_COUNT
