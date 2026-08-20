@@ -1,6 +1,8 @@
 package com.buyeoon.point.api;
 
 import com.buyeoon.common.api.ErrorResponse;
+import com.buyeoon.member.application.InvalidStateTransitionException;
+import com.buyeoon.member.application.ResourceNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -14,6 +16,18 @@ public class PointExceptionHandler {
 	@ResponseStatus(HttpStatus.BAD_REQUEST)
 	public ErrorResponse handleInvalidRequest() {
 		return ErrorResponse.invalidRequest();
+	}
+
+	@ExceptionHandler(ResourceNotFoundException.class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	public ErrorResponse handleResourceNotFound() {
+		return ErrorResponse.resourceNotFound();
+	}
+
+	@ExceptionHandler(InvalidStateTransitionException.class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	public ErrorResponse handleInvalidStateTransition() {
+		return ErrorResponse.invalidStateTransition();
 	}
 
 	/** 회원 행 잠금 시 활성 상태가 아니면 인증 실패 응답을 반환한다. */
