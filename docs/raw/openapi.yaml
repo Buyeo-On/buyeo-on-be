@@ -2630,7 +2630,7 @@ components:
           type: array
           description: 해당 여행에서 처음 획득한 배지
           items:
-            $ref: '#/components/schemas/Badge'
+            $ref: '#/components/schemas/AwardedBadge'
         photos:
           type: array
           items:
