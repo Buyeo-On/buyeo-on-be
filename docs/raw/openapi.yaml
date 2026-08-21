@@ -663,6 +663,8 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/BadgeListSuccess'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
   /members/me/badges/{badgeId}:
@@ -670,6 +672,7 @@ paths:
       tags: [Badges]
       summary: 배지 상세 조회
       operationId: getMyBadge
+      description: 지급이 중단됐고 아직 획득하지 않은 배지를 조회하면 404를 반환한다.
       parameters:
         - name: badgeId
           in: path
@@ -2471,6 +2474,9 @@ components:
     BadgeStatus:
       type: string
       enum: [NOT_EARNED, IN_PROGRESS, EARNED]
+      description: |
+        member_badges에 이력이 있으면 EARNED다. 그렇지 않을 때 conditions 중 하나 이상의 progress가 0보다 크면
+        IN_PROGRESS, 모든 조건의 progress가 0이면 NOT_EARNED다.
     BadgeMetric:
       type: string
       enum: [MISSION_COMPLETED_COUNT, HERITAGE_VISITED_COUNT, POINT_DONATION_COUNT]
@@ -2502,6 +2508,7 @@ components:
           type: integer
           format: int64
           minimum: 0
+          description: 현재 메트릭값이다. threshold를 초과해도 threshold로 캡해 반환한다.
         threshold:
           type: integer
           format: int64
@@ -2861,11 +2868,16 @@ components:
         earnedCount:
           type: integer
           minimum: 0
+          description: items 중 status가 EARNED인 개수다. category 필터를 적용하면 필터링된 결과 기준이다.
         totalCount:
           type: integer
           minimum: 0
+          description: items 개수다. category 필터를 적용하면 필터링된 결과 기준이다.
         items:
           type: array
+          description: |
+            category enum 순서(EXPLORATION, QUIZ, RECORD, ASSET, SPECIAL), 같은 분야 내에서는 badge ID 오름차순으로 정렬한다.
+            지급이 중단됐고 아직 획득하지 않은 배지는 제외한다. 이미 획득한 배지는 지급 중단 여부와 무관하게 포함한다.
           items:
             $ref: '#/components/schemas/Badge'
     BadgeListEnvelope:

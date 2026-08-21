@@ -3,6 +3,7 @@ package com.buyeoon.badge.repository;
 import com.buyeoon.badge.entity.MemberBadgeEntity;
 import com.buyeoon.badge.entity.MemberBadgeId;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -10,6 +11,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface MemberBadgeRepository extends JpaRepository<MemberBadgeEntity, MemberBadgeId> {
+
+	/** 회원이 획득한 모든 배지 이력을 조회한다. */
+	List<MemberBadgeEntity> findByIdMemberId(UUID memberId);
 
 	/**
 	 * {@code (member_id, badge_id)} 유일성으로 중복 획득을 막는다(ADR-003). 실제로 새 이력을 만든 경우에만
