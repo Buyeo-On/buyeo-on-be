@@ -1,6 +1,7 @@
 package com.buyeoon.badge.api;
 
 import com.buyeoon.badge.application.BadgeQueryService;
+import com.buyeoon.badge.application.BadgeQueryService.BadgeItemView;
 import com.buyeoon.badge.application.BadgeQueryService.BadgeListView;
 import com.buyeoon.badge.entity.BadgeCategory;
 import com.buyeoon.common.api.SuccessResponse;
@@ -9,6 +10,7 @@ import java.util.UUID;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -26,6 +28,12 @@ public class BadgeController {
 			@RequestParam(required = false) String category) {
 		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
 		return SuccessResponse.of(badgeQueryService.list(memberId, parseCategory(category)));
+	}
+
+	@GetMapping("/members/me/badges/{badgeId}")
+	public SuccessResponse<BadgeItemView> getMyBadge(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID badgeId) {
+		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
+		return SuccessResponse.of(badgeQueryService.getDetail(memberId, badgeId));
 	}
 
 	private BadgeCategory parseCategory(String category) {

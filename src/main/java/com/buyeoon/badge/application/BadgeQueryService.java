@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 로그인 회원의 배지 진척도 목록을 조회하는 application service다(UC-18). */
+/** 로그인 회원의 배지 진척도 목록·상세를 조회하는 application service다(UC-18). */
 @Service
 @Transactional(readOnly = true)
 public class BadgeQueryService {
@@ -67,6 +67,19 @@ public class BadgeQueryService {
 				.toList();
 		long earnedCount = items.stream().filter(item -> item.status() == BadgeStatus.EARNED).count();
 		return new BadgeListView((int) earnedCount, items.size(), items);
+	}
+
+	/**
+	 * 지급이 중단됐고 아직 획득하지 않은 배지, 존재하지 않는 배지는 {@link BadgeNotFoundException}으로 거부하고 그
+	 * 외에는 조건별 진행도를 포함한 배지 상세를 반환한다.
+	 */
+	public BadgeItemView getDetail(UUID memberId, UUID badgeId) {
+		BadgeEntity badge = badgeRepository.findVisibleForMember(memberId, badgeId)
+				.orElseThrow(BadgeNotFoundException::new);
+		List<BadgeConditionEntity> conditions = badgeConditionRepository.findByIdBadgeIdIn(List.of(badgeId));
+		Instant earnedAt = memberBadgeRepository.findByIdMemberIdAndIdBadgeId(memberId, badgeId)
+				.map(MemberBadgeEntity::getEarnedAt).orElse(null);
+		return toView(badge, conditions, earnedAt, memberId, new EnumMap<>(BadgeMetric.class));
 	}
 
 	private BadgeItemView toView(BadgeEntity badge, List<BadgeConditionEntity> conditions, Instant earnedAt,
