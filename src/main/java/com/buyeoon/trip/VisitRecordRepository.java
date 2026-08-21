@@ -17,6 +17,9 @@ public interface VisitRecordRepository extends JpaRepository<VisitRecordEntity, 
 
 	long countByTripId(UUID tripId);
 
+	/** 방문 시각 오름차순으로 여행의 방문 기록을 조회한다. */
+	List<VisitRecordEntity> findByTripIdOrderByVisitedAtAsc(UUID tripId);
+
 	/**
 	 * 회원이 전체 여행에서 방문한 고유 문화재 수를 센다({@code HERITAGE_VISITED_COUNT}, ADR-003).
 	 */

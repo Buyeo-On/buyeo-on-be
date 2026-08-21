@@ -1,12 +1,21 @@
 package com.buyeoon.trip;
 
 import com.buyeoon.common.api.SuccessResponse;
+import com.buyeoon.place.entity.PlaceCategory;
+import com.buyeoon.point.application.PointSummaryService.PointSummaryView;
+import com.buyeoon.trip.FootprintQueryService.BadgeView;
+import com.buyeoon.trip.FootprintQueryService.FootprintView;
+import com.buyeoon.trip.FootprintQueryService.PhotoView;
+import com.buyeoon.trip.FootprintQueryService.VisitView;
 import com.buyeoon.trip.TripQueryService.TripStatisticsView;
 import com.buyeoon.trip.TripStartService.LocationCommand;
 import com.buyeoon.trip.TripStartService.TripStartCommand;
 import com.buyeoon.trip.TripStartService.TripView;
+import com.buyeoon.trip.entity.TripStatus;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -28,11 +37,14 @@ public class TripController {
 	private final TripStarter tripStart;
 	private final TripEnder tripEnd;
 	private final TripQueryService tripQuery;
+	private final FootprintQueryService footprintQuery;
 
-	public TripController(TripStarter tripStart, TripEnder tripEnd, TripQueryService tripQuery) {
+	public TripController(TripStarter tripStart, TripEnder tripEnd, TripQueryService tripQuery,
+			FootprintQueryService footprintQuery) {
 		this.tripStart = tripStart;
 		this.tripEnd = tripEnd;
 		this.tripQuery = tripQuery;
+		this.footprintQuery = footprintQuery;
 	}
 
 	@PostMapping("/trips")
@@ -60,12 +72,77 @@ public class TripController {
 		return ResponseEntity.ok(SuccessResponse.of(TripStatisticsResponse.from(statistics)));
 	}
 
+	@GetMapping("/trips/{tripId}/footprint")
+	public ResponseEntity<SuccessResponse<FootprintResponse>> footprint(@AuthenticationPrincipal Jwt jwt,
+			@PathVariable UUID tripId) {
+		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
+		FootprintView footprint = footprintQuery.getFootprint(memberId, tripId);
+		return ResponseEntity.ok(SuccessResponse.of(FootprintResponse.from(footprint)));
+	}
+
 	/** 이동 거리·소모 칼로리는 MVP에서 계산하지 않으므로 항상 null이다. */
 	private record TripStatisticsResponse(UUID tripId, Double distanceKm, long visitedPlaceCount, long durationMinutes,
 			Integer caloriesKcal) {
 		static TripStatisticsResponse from(TripStatisticsView statistics) {
 			return new TripStatisticsResponse(statistics.tripId(), null, statistics.visitedPlaceCount(),
 					statistics.durationMinutes(), null);
+		}
+	}
+
+	private record FootprintResponse(FootprintTripResponse trip, TripStatisticsResponse statistics,
+			List<FootprintVisitResponse> visits, PointSummaryView points, List<FootprintBadgeResponse> badges,
+			List<FootprintPhotoResponse> photos) {
+		static FootprintResponse from(FootprintView footprint) {
+			TripStatisticsResponse statistics = new TripStatisticsResponse(footprint.statistics().tripId(), null,
+					footprint.statistics().visitedPlaceCount(), footprint.statistics().durationMinutes(), null);
+			List<FootprintVisitResponse> visits = footprint.visits().stream().map(FootprintVisitResponse::from)
+					.toList();
+			List<FootprintBadgeResponse> badges = footprint.badges().stream().map(FootprintBadgeResponse::from)
+					.toList();
+			List<FootprintPhotoResponse> photos = footprint.photos().stream().map(FootprintPhotoResponse::from)
+					.toList();
+			return new FootprintResponse(FootprintTripResponse.from(footprint.trip()), statistics, visits,
+					footprint.points(), badges, photos);
+		}
+	}
+
+	private record FootprintTripResponse(UUID tripId, TripStatus status, Instant startedAt, Instant endedAt,
+			Instant settledAt) {
+		static FootprintTripResponse from(FootprintQueryService.FootprintTripView trip) {
+			return new FootprintTripResponse(trip.tripId(), trip.status(), trip.startedAt(), trip.endedAt(),
+					trip.settledAt());
+		}
+	}
+
+	private record FootprintPlaceResponse(UUID placeId, PlaceCategory category, String name, String summary,
+			String description, String address, String imageUrl, double latitude, double longitude,
+			Integer distanceMeters, Integer walkingMinutes, boolean saved) {
+		static FootprintPlaceResponse from(FootprintQueryService.PlaceView place) {
+			return new FootprintPlaceResponse(place.placeId(), place.category(), place.name(), place.summary(),
+					place.description(), place.address(), place.imageUrl(), place.latitude(), place.longitude(), null,
+					null, place.saved());
+		}
+	}
+
+	private record FootprintVisitResponse(UUID visitId, UUID missionId, FootprintPlaceResponse place,
+			Instant visitedAt) {
+		static FootprintVisitResponse from(VisitView visit) {
+			return new FootprintVisitResponse(visit.visitId(), visit.missionId(),
+					FootprintPlaceResponse.from(visit.place()), visit.visitedAt());
+		}
+	}
+
+	private record FootprintBadgeResponse(UUID badgeId, String name, String imageUrl, String condition,
+			Instant earnedAt) {
+		static FootprintBadgeResponse from(BadgeView badge) {
+			return new FootprintBadgeResponse(badge.badgeId(), badge.name(), badge.imageUrl(), badge.condition(),
+					badge.earnedAt());
+		}
+	}
+
+	private record FootprintPhotoResponse(UUID photoId, String url, Instant uploadedAt) {
+		static FootprintPhotoResponse from(PhotoView photo) {
+			return new FootprintPhotoResponse(photo.photoId(), photo.url(), photo.uploadedAt());
 		}
 	}
 
