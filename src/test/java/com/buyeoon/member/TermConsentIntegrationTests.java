@@ -18,7 +18,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.UUID;
-import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -62,7 +62,7 @@ class TermConsentIntegrationTests {
 	@Autowired
 	private ObjectMapper objectMapper;
 
-	@AfterEach
+	@BeforeEach
 	void cleanUp() {
 		jdbcTemplate.update("DELETE FROM idempotency_requests");
 		jdbcTemplate.update("DELETE FROM term_consents");
