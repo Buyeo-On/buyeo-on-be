@@ -24,6 +24,7 @@ jobs:
         run: ./gradlew test --no-daemon
 
       - name: Deploy test report to Cloudflare Pages
+        if: always()
         uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
