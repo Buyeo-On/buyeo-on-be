@@ -140,11 +140,13 @@ jobs:
           ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
         run: |
           image_uri="${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}"
-          if aws ecr describe-images --repository-name "${ECR_REPOSITORY}" \
-              --image-ids imageTag="${GITHUB_SHA}" --region "${AWS_REGION}" >/dev/null 2>&1; then
-            echo "Image tag ${GITHUB_SHA} already exists in ${ECR_REPOSITORY}; reusing it."
-          else
-            docker buildx build --platform linux/arm64 --tag "${image_uri}" --push .
+          build_log=$(mktemp)
+          if ! docker buildx build --platform linux/arm64 --tag "${image_uri}" --push . 2>&1 | tee "${build_log}"; then
+            if grep -q "already exists in the '${ECR_REPOSITORY}' repository and cannot be overwritten because the tag is immutable" "${build_log}"; then
+              echo "Image tag ${GITHUB_SHA} already exists in ${ECR_REPOSITORY}; reusing it."
+            else
+              exit 1
+            fi
           fi
           echo "uri=${image_uri}" >>"${GITHUB_OUTPUT}"
 
