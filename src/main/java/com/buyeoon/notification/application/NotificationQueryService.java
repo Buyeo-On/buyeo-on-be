@@ -1,5 +1,6 @@
 package com.buyeoon.notification.application;
 
+import com.buyeoon.common.storage.PublicImageUrlService;
 import com.buyeoon.notification.entity.NotificationType;
 import com.buyeoon.notification.repository.NotificationProjection;
 import com.buyeoon.notification.repository.NotificationQueryRepository;
@@ -16,9 +17,12 @@ public class NotificationQueryService {
 	private static final ZoneId ASIA_SEOUL = ZoneId.of("Asia/Seoul");
 
 	private final NotificationQueryRepository notificationQueryRepository;
+	private final PublicImageUrlService publicImageUrlService;
 
-	public NotificationQueryService(NotificationQueryRepository notificationQueryRepository) {
+	public NotificationQueryService(NotificationQueryRepository notificationQueryRepository,
+			PublicImageUrlService publicImageUrlService) {
 		this.notificationQueryRepository = notificationQueryRepository;
+		this.publicImageUrlService = publicImageUrlService;
 	}
 
 	public NotificationListView list(UUID memberId, NotificationCursor cursor, int size) {
@@ -38,8 +42,9 @@ public class NotificationQueryService {
 
 	private NotificationItemView toView(NotificationProjection row) {
 		String targetId = row.targetId() == null ? null : row.targetId().toString();
+		String iconUrl = publicImageUrlService.create(row.type().iconKey());
 		return new NotificationItemView(row.id(), row.type(), row.title(), row.body(), row.read(),
-				row.occurredAt().atZone(ASIA_SEOUL), row.targetType(), targetId);
+				row.occurredAt().atZone(ASIA_SEOUL), row.targetType(), targetId, iconUrl);
 	}
 
 	public record NotificationListView(List<NotificationItemView> items, PageInfoView page) {
@@ -49,7 +54,7 @@ public class NotificationQueryService {
 	}
 
 	public record NotificationItemView(UUID notificationId, NotificationType type, String title, String body,
-			boolean read, ZonedDateTime occurredAt, String targetType, String targetId) {
+			boolean read, ZonedDateTime occurredAt, String targetType, String targetId, String iconUrl) {
 	}
 
 	public record PageInfoView(String nextCursor, boolean hasNext) {
