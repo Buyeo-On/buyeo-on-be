@@ -97,15 +97,19 @@ class PushTokenIntegrationTests {
 	}
 
 	@Test
-	@DisplayName("현재 세션의 동일 토큰 재등록은 DB 상태를 변경하지 않는다")
-	void sameTokenRegistrationIsNoOp() throws Exception {
+	@DisplayName("현재 세션의 동일 토큰 재등록은 연결과 최초 등록 시각을 유지하고 최신성 시각만 갱신한다")
+	void sameTokenRegistrationRefreshesUpdatedAtOnly() throws Exception {
 		AuthenticatedMember member = insertAuthenticatedMember();
 		insertPushToken(member.sessionId(), "same-token");
 		Map<String, Object> before = pushToken(member.sessionId());
 
 		performPut(member, "{\"token\":\"same-token\"}").andExpect(status().isOk());
 
-		assertThat(pushToken(member.sessionId())).isEqualTo(before);
+		Map<String, Object> after = pushToken(member.sessionId());
+		assertThat(after.get("auth_session_id")).isEqualTo(before.get("auth_session_id"));
+		assertThat(after.get("registration_token")).isEqualTo(before.get("registration_token"));
+		assertThat(after.get("created_at")).isEqualTo(before.get("created_at"));
+		assertThat((Timestamp) after.get("updated_at")).isAfter((Timestamp) before.get("updated_at"));
 	}
 
 	@Test

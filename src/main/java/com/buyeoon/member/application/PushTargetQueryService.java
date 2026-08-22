@@ -1,0 +1,31 @@
+package com.buyeoon.member.application;
+
+import java.util.List;
+import java.util.UUID;
+import org.springframework.jdbc.core.JdbcOperations;
+import org.springframework.stereotype.Service;
+
+/** 다른 도메인이 회원의 실제 발송 대상 등록 토큰을 조회할 때 사용하는 회원 도메인의 공개 seam이다. */
+@Service
+public class PushTargetQueryService {
+
+	private final JdbcOperations jdbcOperations;
+
+	public PushTargetQueryService(JdbcOperations jdbcOperations) {
+		this.jdbcOperations = jdbcOperations;
+	}
+
+	/** 활성 회원의 미폐기·미만료 인증 세션에 연결된 모든 등록 토큰을 반환한다. 알림 설정과 동의는 확인하지 않는다. */
+	public List<String> findRegistrationTokens(UUID memberId) {
+		return jdbcOperations.query("""
+				SELECT push_token.registration_token
+				FROM push_tokens push_token
+				JOIN auth_sessions session ON session.id = push_token.auth_session_id
+				JOIN members member ON member.id = session.member_id
+				WHERE member.id = ?
+				  AND member.status = 'ACTIVE'
+				  AND session.revoked_at IS NULL
+				  AND session.expires_at > CURRENT_TIMESTAMP
+				""", (resultSet, rowNumber) -> resultSet.getString("registration_token"), memberId);
+	}
+}
