@@ -1,0 +1,43 @@
+name: Check Flyway Migration Versions
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/main/resources/db/migration/**'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Check for duplicate Flyway version numbers
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          migrations_dir="src/main/resources/db/migration"
+
+          # 'V<version>__<description>.sql' 형식에서 'V' 뒤 버전 부분만 추출해 중복을 찾는다.
+          # 예: V1__initial_schema.sql -> 1, V9.1__add_location_term_type.sql -> 9.1
+          duplicates="$(
+            find "${migrations_dir}" -maxdepth 1 -type f -name 'V*__*.sql' -printf '%f\n' \
+              | sed -n 's/^V\([0-9][0-9.]*\)__.*$/\1/p' \
+              | sort \
+              | uniq -d
+          )"
+
+          if [[ -n "${duplicates}" ]]; then
+            echo "::error::Flyway 마이그레이션 버전이 중복되었습니다."
+            for version in ${duplicates}; do
+              echo "중복 버전 V${version}:"
+              find "${migrations_dir}" -maxdepth 1 -type f -name "V${version}__*.sql" -printf '  %f\n'
+            done
+            exit 1
+          fi
+
+          echo "Flyway 마이그레이션 버전 충돌 없음"
