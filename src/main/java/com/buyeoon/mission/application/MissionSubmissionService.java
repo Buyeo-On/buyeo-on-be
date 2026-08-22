@@ -199,6 +199,9 @@ public class MissionSubmissionService {
 			if (visitRecorded) {
 				affectedMetrics.add(BadgeMetric.HERITAGE_VISITED_COUNT);
 			}
+			if (command.type() == MissionType.PHOTO) {
+				affectedMetrics.add(BadgeMetric.PHOTO_SUBMISSION_COUNT);
+			}
 			newlyAwardedBadges = badgeEvaluationService.award(memberId, command.tripId(), affectedMetrics);
 		}
 

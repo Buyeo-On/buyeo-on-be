@@ -33,7 +33,8 @@ adrs: [ADR-003, ADR-004, ADR-010]
 - `MISSION_COMPLETED_COUNT`는 모든 여행에서 완료한 mission participation 수다. 다른 여행에서 같은 mission을 다시 완료하면 다시 센다.
 - `HERITAGE_VISITED_COUNT`는 모든 여행에서 방문한 고유 문화재 수다.
 - `POINT_DONATION_COUNT`는 `LEAVE_TO_BUYEO`를 선택하고 `settled_points > 0`인 여행 정산 건수다.
-- 미션 완료는 `MISSION_COMPLETED_COUNT`를 판정하고, 같은 처리에서 방문 기록을 새로 만들었으면 `HERITAGE_VISITED_COUNT`도 한 번에 판정한다.
+- `PHOTO_SUBMISSION_COUNT`는 모든 여행에서 제출한 `PHOTO` 유형 mission submission 수다.
+- 미션 완료는 `MISSION_COMPLETED_COUNT`를 판정하고, 같은 처리에서 방문 기록을 새로 만들었으면 `HERITAGE_VISITED_COUNT`도 한 번에 판정한다. 제출한 미션이 `PHOTO` 유형이면 `PHOTO_SUBMISSION_COUNT`도 함께 판정한다.
 - 양수 포인트를 부여에 남긴 정산은 `POINT_DONATION_COUNT`를 판정한다.
 - 한 활동이 여러 배지 조건을 충족하면 모두 지급하고 response와 알림 생성 순서는 배지 ID 오름차순으로 고정한다.
 
