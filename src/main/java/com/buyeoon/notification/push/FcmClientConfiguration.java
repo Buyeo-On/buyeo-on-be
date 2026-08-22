@@ -39,7 +39,7 @@ public class FcmClientConfiguration {
 	/** FCM이 비활성화된 기본 구성에서는 Firebase 자격증명 없이도 기동할 수 있도록 no-op 구현을 등록한다. */
 	@Bean
 	@ConditionalOnProperty(prefix = "fcm", name = "enabled", havingValue = "false", matchIfMissing = true)
-	FcmClient noOpFcmClient() {
-		return new NoOpFcmClient();
+	FcmClient noOpFcmClient(PushNotificationMetrics metrics) {
+		return new NoOpFcmClient(metrics);
 	}
 }

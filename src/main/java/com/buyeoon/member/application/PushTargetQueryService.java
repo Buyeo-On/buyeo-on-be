@@ -28,4 +28,13 @@ public class PushTargetQueryService {
 				  AND session.expires_at > CURRENT_TIMESTAMP
 				""", (resultSet, rowNumber) -> resultSet.getString("registration_token"), memberId);
 	}
+
+	/** FCM이 {@code UNREGISTERED}로 응답한 등록 토큰을 삭제하는 회원 도메인의 공개 seam이다. */
+	public void deleteRegistrationTokens(List<String> registrationTokens) {
+		if (registrationTokens.isEmpty()) {
+			return;
+		}
+		jdbcOperations.batchUpdate("DELETE FROM push_tokens WHERE registration_token = ?",
+				registrationTokens.stream().map(token -> new Object[]{token}).toList());
+	}
 }
