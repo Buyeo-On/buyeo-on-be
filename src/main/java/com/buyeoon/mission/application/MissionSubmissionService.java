@@ -202,6 +202,9 @@ public class MissionSubmissionService {
 			if (command.type() != MissionType.PHOTO) {
 				affectedMetrics.add(BadgeMetric.QUIZ_CORRECT_COUNT);
 			}
+			if (command.type() == MissionType.PHOTO) {
+				affectedMetrics.add(BadgeMetric.PHOTO_SUBMISSION_COUNT);
+			}
 			newlyAwardedBadges = badgeEvaluationService.award(memberId, command.tripId(), affectedMetrics);
 		}
 
