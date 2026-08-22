@@ -112,7 +112,7 @@ jobs:
           ADMIN_API_KEY=test \
           APP_IMAGE=example.invalid/buyeoon/app:${GITHUB_SHA} \
           RELEASE_DIR=/tmp/buyeoon-release \
-          FCM_ENABLED=true \
+          FCM_ENABLED=false \
           GOOGLE_APPLICATION_CREDENTIALS=/opt/buyeoon/fcm/service-account.json \
             docker compose -f compose.prod.yaml config --quiet
 
