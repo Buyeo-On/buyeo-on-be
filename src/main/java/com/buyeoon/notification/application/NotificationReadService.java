@@ -1,5 +1,6 @@
 package com.buyeoon.notification.application;
 
+import com.buyeoon.common.storage.PublicImageUrlService;
 import com.buyeoon.notification.entity.NotificationEntity;
 import com.buyeoon.notification.entity.NotificationType;
 import com.buyeoon.notification.repository.NotificationRepository;
@@ -15,9 +16,12 @@ public class NotificationReadService {
 	private static final ZoneId ASIA_SEOUL = ZoneId.of("Asia/Seoul");
 
 	private final NotificationRepository notificationRepository;
+	private final PublicImageUrlService publicImageUrlService;
 
-	public NotificationReadService(NotificationRepository notificationRepository) {
+	public NotificationReadService(NotificationRepository notificationRepository,
+			PublicImageUrlService publicImageUrlService) {
 		this.notificationRepository = notificationRepository;
+		this.publicImageUrlService = publicImageUrlService;
 	}
 
 	@Transactional
@@ -32,10 +36,11 @@ public class NotificationReadService {
 		return new NotificationView(notification.getId(), notification.getType(), notification.getTitle(),
 				notification.getBody(), notification.getReadAt() != null,
 				notification.getOccurredAt().atZone(ASIA_SEOUL), notification.getTargetType(),
-				notification.getTargetId() == null ? null : notification.getTargetId().toString());
+				notification.getTargetId() == null ? null : notification.getTargetId().toString(),
+				publicImageUrlService.create(notification.getType().iconKey()));
 	}
 
 	public record NotificationView(UUID notificationId, NotificationType type, String title, String body, boolean read,
-			ZonedDateTime occurredAt, String targetType, String targetId) {
+			ZonedDateTime occurredAt, String targetType, String targetId, String iconUrl) {
 	}
 }

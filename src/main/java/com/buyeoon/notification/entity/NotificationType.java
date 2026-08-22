@@ -6,5 +6,9 @@ public enum NotificationType {
 	NEARBY_QUIZ,
 	DISCOUNT,
 	CITIZEN_CARD,
-	BUYEO_NEWS
+	BUYEO_NEWS;
+
+	public String iconKey() {
+		return "public/notifications/" + name().toLowerCase() + ".png";
+	}
 }
