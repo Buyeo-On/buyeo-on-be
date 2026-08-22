@@ -33,6 +33,7 @@ Spring이 계산하는 메트릭과 달성 임계값의 조합이다. 배지는 
    - `MISSION_COMPLETED_COUNT`: 완료한 mission participation 수. 다른 여행에서 같은 mission을 다시 완료하면 다시 센다.
    - `HERITAGE_VISITED_COUNT`: 방문한 고유 문화재 수.
    - `POINT_DONATION_COUNT`: `LEAVE_TO_BUYEO`를 선택하고 `settled_points > 0`인 여행 정산 수.
+   - `QUIZ_CORRECT_STREAK`: 제출 시각순으로 정렬한 퀴즈(객관식·OX) 답안 중 지금까지 달성한 최대 연속 정답 수. 오답이 나오면 연속이 끊기고 다른 여행의 제출이 섞여도 끊기지 않는다.
 3. 진행도와 상태는 원본 활동 데이터 및 배지 획득 이력으로 계산한다.
 4. 같은 배지는 한 회원에게 한 번만 지급하고 획득 상태는 되돌리지 않는다.
 5. 지급이 중단된 배지는 새로 지급하지 않지만 기존 획득 이력은 유지한다.
