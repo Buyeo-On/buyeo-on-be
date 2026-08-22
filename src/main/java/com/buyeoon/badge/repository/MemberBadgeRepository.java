@@ -15,6 +15,9 @@ public interface MemberBadgeRepository extends JpaRepository<MemberBadgeEntity, 
 	/** 회원이 획득한 모든 배지 이력을 조회한다. */
 	List<MemberBadgeEntity> findByIdMemberId(UUID memberId);
 
+	/** 회원이 특정 배지를 획득했는지와 획득 시각을 조회한다. */
+	Optional<MemberBadgeEntity> findByIdMemberIdAndIdBadgeId(UUID memberId, UUID badgeId);
+
 	/**
 	 * {@code (member_id, badge_id)} 유일성으로 중복 획득을 막는다(ADR-003). 실제로 새 이력을 만든 경우에만
 	 * DB가 기록한 획득 시각을 반환하고, 이미 획득한 배지면 빈 값을 반환한다.

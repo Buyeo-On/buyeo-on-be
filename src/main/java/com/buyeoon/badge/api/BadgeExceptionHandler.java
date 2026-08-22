@@ -1,5 +1,6 @@
 package com.buyeoon.badge.api;
 
+import com.buyeoon.badge.application.BadgeNotFoundException;
 import com.buyeoon.common.api.ErrorResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -13,5 +14,11 @@ public class BadgeExceptionHandler {
 	@ResponseStatus(HttpStatus.BAD_REQUEST)
 	public ErrorResponse handleInvalidRequest() {
 		return ErrorResponse.invalidRequest();
+	}
+
+	@ExceptionHandler(BadgeNotFoundException.class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	public ErrorResponse handleNotFound() {
+		return ErrorResponse.resourceNotFound();
 	}
 }
