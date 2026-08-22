@@ -14,7 +14,9 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,6 +54,18 @@ class NotificationListIntegrationTests {
 
 	@Autowired
 	private AccessTokenService accessTokenService;
+
+	@BeforeAll
+	static void configureAwsCredentials() {
+		System.setProperty("aws.accessKeyId", "test-access-key");
+		System.setProperty("aws.secretAccessKey", "test-secret-key");
+	}
+
+	@AfterAll
+	static void clearAwsCredentials() {
+		System.clearProperty("aws.accessKeyId");
+		System.clearProperty("aws.secretAccessKey");
+	}
 
 	@AfterEach
 	void cleanUp() {
@@ -252,6 +266,8 @@ class NotificationListIntegrationTests {
 		registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
 		registry.add("spring.datasource.username", () -> APPLICATION_USERNAME);
 		registry.add("spring.datasource.password", () -> APPLICATION_PASSWORD);
+		registry.add("storage.images.bucket", () -> "buyeoon-test-images");
+		registry.add("storage.images.region", () -> "ap-northeast-2");
 		registry.add("spring.flyway.enabled", () -> true);
 		registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
 		registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.PostgreSQLDialect");
