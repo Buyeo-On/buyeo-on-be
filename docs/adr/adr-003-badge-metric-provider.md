@@ -9,10 +9,12 @@
 - 배지 판정은 Spring Boot 내부에서 처리한다.
 - `badge_conditions`에 배지별 `metric_key`와 `threshold`를 저장하고 모든 조건을 `AND`로 판정한다.
 - `BadgeMetricProvider`가 메트릭별 원본 활동 데이터를 집계하고 Registry가 메트릭에 맞는 Provider를 선택한다.
-- 지원 메트릭은 회원의 전체 여행을 누적하는 `MISSION_COMPLETED_COUNT`, `HERITAGE_VISITED_COUNT`, `POINT_DONATION_COUNT`다.
+- 지원 메트릭은 회원의 전체 여행을 누적하는 `MISSION_COMPLETED_COUNT`, `HERITAGE_VISITED_COUNT`, `POINT_DONATION_COUNT`와 회원의 배지 획득 이력을 누적하는 `BADGE_ACQUIRED_COUNT`다.
   - 미션 완료 수는 완료한 mission participation 수이며 다른 여행에서 같은 mission을 다시 완료하면 다시 센다.
   - 문화재 방문 수는 회원이 방문한 고유 문화재 수다.
   - 포인트 기부 수는 `LEAVE_TO_BUYEO`를 선택하고 `settled_points > 0`인 정산 수다.
+  - 배지 획득 수는 회원이 획득한 배지 수다. 이 메트릭을 조건으로 쓰는 배지(예: 전체 배지 달성률 배지)는 판정 시점에 자신이 아직 `member_badges`에 없어 값에 스스로를 포함하지 않으므로 순환 정의가 생기지 않는다. threshold는 그 배지 자신을 제외한, 현재 지급 가능한 배지 수로 등록하고 catalog가 바뀔 때마다 함께 갱신한다.
+  - `award`는 이번 호출로 배지가 실제 지급되면 `BADGE_ACQUIRED_COUNT`가 바뀐 것으로 보고, 새 지급이 없을 때까지 같은 transaction에서 `BADGE_ACQUIRED_COUNT`를 대상으로 재판정을 반복해 배지 획득 수 기반 meta 배지도 같은 activity에서 즉시 지급될 수 있게 한다. `BadgeReconciliationService`는 모든 metric을 한 번에 후보로 조회하고 badge ID 오름차순으로 lazy하게 값을 계산하므로 별도 반복 없이 같은 결과를 얻는다.
 - 기존 메트릭을 사용하는 배지는 데이터만 추가·수정한다.
 - 새로운 메트릭은 Provider와 source application service 연결 코드를 추가한다.
 - `member_badges`는 획득 이력과 획득을 유발한 여행 ID만 저장하며 진행도와 상태는 원본 데이터 및 획득 이력에서 계산한다.

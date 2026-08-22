@@ -33,13 +33,14 @@ Spring이 계산하는 메트릭과 달성 임계값의 조합이다. 배지는 
    - `MISSION_COMPLETED_COUNT`: 완료한 mission participation 수. 다른 여행에서 같은 mission을 다시 완료하면 다시 센다.
    - `HERITAGE_VISITED_COUNT`: 방문한 고유 문화재 수.
    - `POINT_DONATION_COUNT`: `LEAVE_TO_BUYEO`를 선택하고 `settled_points > 0`인 여행 정산 수.
+   - `BADGE_ACQUIRED_COUNT`: 회원이 획득한 배지 수. 판정 대상 배지 자신은 판정 시점에 아직 획득 이력이 없으므로 값에 포함되지 않는다. 이 메트릭을 조건으로 쓰는 배지의 threshold는 그 배지 자신을 제외한, 현재 지급 가능한(지급 중단되지 않은) 배지 수로 등록하고, catalog에 새 배지가 추가되거나 지급 중단이 풀려 지급 가능한 배지 수가 바뀔 때마다 threshold를 함께 갱신한다.
 3. 진행도와 상태는 원본 활동 데이터 및 배지 획득 이력으로 계산한다.
 4. 같은 배지는 한 회원에게 한 번만 지급하고 획득 상태는 되돌리지 않는다.
 5. 지급이 중단된 배지는 새로 지급하지 않지만 기존 획득 이력은 유지한다.
 6. 미획득 배지도 각 조건과 현재 진행도를 조회할 수 있다.
 7. 배지는 탐험, 퀴즈, 기록, 재화, 특별 분야로 구분한다.
 8. 배지를 획득하면 획득을 유발한 여행 ID를 함께 저장하며 이후 다른 여행에서 같은 배지를 다시 연결하지 않는다.
-9. 배지 판정은 activity를 처리하는 application service가 source 변경을 같은 transaction에서 query할 수 있게 flush한 뒤 badge의 공개 application service를 동기 호출하며, 변경된 metric에 관련된 미획득 배지만 판정한다.
+9. 배지 판정은 activity를 처리하는 application service가 source 변경을 같은 transaction에서 query할 수 있게 flush한 뒤 badge의 공개 application service를 동기 호출하며, 변경된 metric에 관련된 미획득 배지만 판정한다. 이 호출로 배지가 실제로 지급되면 `BADGE_ACQUIRED_COUNT`도 함께 바뀌므로, 새 지급이 더는 없을 때까지 같은 transaction에서 `BADGE_ACQUIRED_COUNT`에 걸린 미획득 배지를 반복해 재판정한다.
 10. 하나의 미션 완료에서 mission 완료와 방문 기록 생성이 함께 발생하면 변경된 두 metric을 한 번에 판정한다.
 11. Activity, 새 배지 획득과 persistent `BADGE` 알림은 하나의 transaction으로 확정한다.
 12. `BADGE` 알림은 새로 획득한 배지마다 한 건 만들며 `target_type`은 `BADGE`, `target_id`는 badge ID다.
