@@ -223,6 +223,27 @@ paths:
           $ref: '#/components/responses/CitizenCardOptionsSuccess'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /citizen-cards/location-verification:
+    post:
+      tags: [CitizenCards]
+      summary: 군민증 발급 전 위치 확인
+      description: 군민증 발급 전에 현재 위치가 부여 행정구역 안인지 확인한다. 군민증 생성 시에도 위치를 다시 검증한다.
+      operationId: verifyCitizenCardLocation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Location'
+      responses:
+        '200':
+          $ref: '#/components/responses/CitizenCardLocationVerificationSuccess'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/CitizenCardCreationForbidden'
   /citizen-cards:
     post:
       tags: [CitizenCards]
@@ -969,6 +990,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/CitizenCardOptionsEnvelope'
+    CitizenCardLocationVerificationSuccess:
+      description: 부여 내부 위치 확인 결과
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CitizenCardLocationVerificationEnvelope'
     CitizenCardSuccess:
       description: 디지털 군민증
       content:
@@ -2706,6 +2733,20 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/CitizenCardOptionsData'
+    CitizenCardLocationVerificationData:
+      type: object
+      required: [withinBuyeo]
+      properties:
+        withinBuyeo:
+          type: boolean
+          example: true
+    CitizenCardLocationVerificationEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/CitizenCardLocationVerificationData'
     CitizenCardEnvelope:
       allOf:
         - $ref: '#/components/schemas/SuccessEnvelope'

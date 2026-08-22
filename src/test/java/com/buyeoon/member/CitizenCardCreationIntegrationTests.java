@@ -136,6 +136,18 @@ class CitizenCardCreationIntegrationTests {
 				request("경계인", catalog.characterId(), catalog.themeId(), 36.2, 126.8)).andExpect(status().isCreated());
 	}
 
+	@Test
+	@DisplayName("군민증 발급 전 위치 확인은 부여 내부 여부를 반환한다")
+	void locationVerificationReturnsBoundaryResult() throws Exception {
+		AuthenticatedMember member = insertAuthenticatedMember();
+
+		performLocationVerification(member, locationRequest(36.27, 126.91)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true)).andExpect(jsonPath("$.data.withinBuyeo").value(true));
+
+		performLocationVerification(member, locationRequest(36.5, 127.2)).andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.data.code").value("OUTSIDE_BUYEO"));
+	}
+
 	/** 현재 필수 약관을 모두 동의하지 않은 회원은 군민증을 발급받을 수 없다. */
 	@Test
 	@DisplayName("현재 필수 약관 미동의는 군민증 생성을 거부한다")
@@ -307,6 +319,14 @@ class CitizenCardCreationIntegrationTests {
 				.andExpect(jsonPath("$.data.code").value("UNAUTHORIZED"));
 	}
 
+	@Test
+	@DisplayName("발급 전 위치 확인에는 유효한 인증 세션이 필요하다")
+	void locationVerificationAuthenticationIsRequired() throws Exception {
+		mockMvc.perform(post("/citizen-cards/location-verification").contentType(MediaType.APPLICATION_JSON)
+				.content(locationRequest(36.27, 126.91))).andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.data.code").value("UNAUTHORIZED"));
+	}
+
 	private MvcResult concurrentCreate(AuthenticatedMember member, String body, CountDownLatch ready,
 			CountDownLatch start) throws Exception {
 		ready.countDown();
@@ -324,6 +344,13 @@ class CitizenCardCreationIntegrationTests {
 			request.header("Idempotency-Key", key);
 		}
 		return mockMvc.perform(request);
+	}
+
+	private org.springframework.test.web.servlet.ResultActions performLocationVerification(AuthenticatedMember member,
+			String body) throws Exception {
+		return mockMvc.perform(
+				post("/citizen-cards/location-verification").header("Authorization", "Bearer " + member.accessToken())
+						.contentType(MediaType.APPLICATION_JSON).content(body));
 	}
 
 	private AuthenticatedMember insertAuthenticatedMember() {
@@ -389,6 +416,11 @@ class CitizenCardCreationIntegrationTests {
 		return "{\"displayName\":\"" + displayName + "\",\"characterId\":\"" + characterId + "\",\"themeId\":\""
 				+ themeId + "\",\"location\":{\"latitude\":" + latitude + ",\"longitude\":" + longitude
 				+ ",\"accuracyMeters\":5.5,\"capturedAt\":\"2026-08-12T15:30:00+09:00\"}}";
+	}
+
+	private String locationRequest(double latitude, double longitude) {
+		return "{\"latitude\":" + latitude + ",\"longitude\":" + longitude
+				+ ",\"accuracyMeters\":5.5,\"capturedAt\":\"2026-08-12T15:30:00+09:00\"}";
 	}
 
 	private void assertCreationStateIsEmpty(UUID memberId) {
