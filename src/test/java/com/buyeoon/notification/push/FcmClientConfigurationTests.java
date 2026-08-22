@@ -2,6 +2,8 @@ package com.buyeoon.notification.push;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Assumptions;
@@ -12,7 +14,8 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 class FcmClientConfigurationTests {
 
 	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-			.withUserConfiguration(FcmClientConfiguration.class);
+			.withBean(MeterRegistry.class, SimpleMeterRegistry::new)
+			.withUserConfiguration(FcmClientConfiguration.class, PushNotificationMetrics.class);
 
 	@Test
 	@DisplayName("FCM_ENABLED=false이면 Firebase 자격증명 없이 no-op 구현으로 정상 기동한다")
