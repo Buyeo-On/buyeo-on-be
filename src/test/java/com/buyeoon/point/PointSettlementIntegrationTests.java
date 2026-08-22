@@ -74,6 +74,7 @@ class PointSettlementIntegrationTests {
 
 	@AfterEach
 	void cleanUp() {
+		jdbcTemplate.update("DELETE FROM member_badges");
 		jdbcTemplate.update("DELETE FROM idempotency_requests");
 		jdbcTemplate.update("DELETE FROM point_settlements");
 		jdbcTemplate.update("DELETE FROM point_transactions");
@@ -101,7 +102,8 @@ class PointSettlementIntegrationTests {
 				.andExpect(jsonPath("$.data.remainingBalance").value(500))
 				.andExpect(jsonPath("$.data.expiresAt").isEmpty()).andExpect(jsonPath("$.data.settledAt").isString())
 				.andExpect(jsonPath("$.data.newlyAwardedBadges").isArray())
-				.andExpect(jsonPath("$.data.newlyAwardedBadges.length()").value(0));
+				.andExpect(jsonPath("$.data.newlyAwardedBadges.length()").value(1))
+				.andExpect(jsonPath("$.data.newlyAwardedBadges[0].name").value("사비의 마음"));
 
 		assertThat(jdbcTemplate.queryForObject(
 				"SELECT COALESCE(SUM(amount),0) FROM point_transactions WHERE member_id = ?", Long.class,
@@ -399,6 +401,8 @@ class PointSettlementIntegrationTests {
 		registry.add("spring.flyway.enabled", () -> true);
 		registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
 		registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.PostgreSQLDialect");
+		registry.add("storage.images.bucket", () -> "buyeoon-test-images");
+		registry.add("storage.images.region", () -> "ap-northeast-2");
 	}
 
 	private record AuthenticatedMember(UUID memberId, String accessToken) {
