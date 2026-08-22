@@ -2576,7 +2576,7 @@ components:
       enum: [POINT, BADGE, NEARBY_QUIZ, DISCOUNT, CITIZEN_CARD, BUYEO_NEWS]
     Notification:
       type: object
-      required: [notificationId, type, title, body, read, occurredAt]
+      required: [notificationId, type, title, body, read, occurredAt, iconUrl]
       properties:
         notificationId:
           type: string
@@ -2596,6 +2596,9 @@ components:
           type: [string, 'null']
         targetId:
           type: [string, 'null']
+        iconUrl:
+          type: string
+          format: uri
     PushTokenUpdateRequest:
       type: object
       additionalProperties: false
