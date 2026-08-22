@@ -59,6 +59,29 @@ class PostgresSchemaIntegrationTests {
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
+	/** V16이 온보딩 검증용 약관 4종을 명확한 초안 버전으로 적재하는지 검증한다. */
+	@Test
+	@DisplayName("개발 검증용 약관 4종은 초안 버전과 필수 여부로 시딩된다")
+	void draftTermsAreSeeded() {
+		assertThat(jdbcTemplate.queryForList("""
+				SELECT type::text || '|' || version || '|' || required || '|' || title
+				FROM terms
+				ORDER BY CASE type
+				    WHEN 'SERVICE' THEN 1
+				    WHEN 'PRIVACY' THEN 2
+				    WHEN 'LOCATION' THEN 3
+				    WHEN 'MARKETING' THEN 4
+				END
+				""", String.class)).containsExactly("SERVICE|0.1-draft|true|서비스 이용약관",
+				"PRIVACY|0.1-draft|true|개인정보 수집·이용 동의", "LOCATION|0.1-draft|true|위치기반서비스 이용약관",
+				"MARKETING|0.1-draft|false|마케팅 정보 수신 동의");
+		assertThat(jdbcTemplate.queryForObject("""
+				SELECT count(*)
+				FROM terms
+				WHERE content LIKE '%개발 검증용 초안(0.1-draft)%'
+				""", Long.class)).isEqualTo(4L);
+	}
+
 	/** V15가 앱에서 노출할 군민증 캐릭터와 테마를 승인된 객체 키와 순서로 적재하는지 검증한다. */
 	@Test
 	@DisplayName("군민증 카탈로그는 승인된 S3 객체 키와 순서로 시딩된다")
