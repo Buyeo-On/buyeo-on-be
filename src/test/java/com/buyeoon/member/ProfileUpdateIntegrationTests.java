@@ -18,7 +18,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,7 +58,7 @@ class ProfileUpdateIntegrationTests {
 	@Autowired
 	private AccessTokenService accessTokenService;
 
-	@AfterEach
+	@BeforeEach
 	void cleanUp() {
 		jdbcTemplate.execute("DROP TRIGGER IF EXISTS fail_profile_update ON member_profiles");
 		jdbcTemplate.execute("DROP FUNCTION IF EXISTS fail_profile_update()");

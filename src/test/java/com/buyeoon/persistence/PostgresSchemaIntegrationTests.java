@@ -59,6 +59,26 @@ class PostgresSchemaIntegrationTests {
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
+	/** V15가 앱에서 노출할 군민증 캐릭터와 테마를 승인된 객체 키와 순서로 적재하는지 검증한다. */
+	@Test
+	@DisplayName("군민증 카탈로그는 승인된 S3 객체 키와 순서로 시딩된다")
+	void citizenCardCatalogIsSeeded() {
+		assertThat(jdbcTemplate.queryForList("""
+				SELECT name || '|' || image_key || '|' || sort_order
+				FROM card_characters
+				ORDER BY sort_order
+				""", String.class)).containsExactly("금동이|public/characters/geumdong.png|1",
+				"금용이|public/characters/geumyong.png|2", "금황이|public/characters/geumhwang.png|3");
+
+		assertThat(jdbcTemplate.queryForList("""
+				SELECT name || '|' || image_key || '|' || sort_order
+				FROM card_themes
+				ORDER BY sort_order
+				""", String.class)).containsExactly("봉황|public/themes/phoenix.svg|1", "연화문|public/themes/lotus.svg|2",
+				"금관|public/themes/crown.svg|3", "금관 장식|public/themes/crown_ornament.svg|4",
+				"석탑|public/themes/pagoda.svg|5", "돛배|public/themes/sailboat.svg|6");
+	}
+
 	/** V2의 기존 LOCKED 참여 데이터가 최신 스키마로 업그레이드될 때 유실되지 않고 AVAILABLE로 전환되는지 검증한다. */
 	@Test
 	@DisplayName("V2의 LOCKED 참여 데이터는 업그레이드 후 AVAILABLE로 보존된다")
@@ -138,8 +158,8 @@ class PostgresSchemaIntegrationTests {
 						""");
 			}
 
-			Flyway.configure().dataSource(url, username, password).schemas(schema).defaultSchema(schema).load()
-					.migrate();
+			Flyway.configure().dataSource(url, username, password).schemas(schema).defaultSchema(schema)
+					.target(MigrationVersion.fromVersion("5")).load().migrate();
 
 			try (Connection connection = DriverManager.getConnection(url, username, password);
 					Statement statement = connection.createStatement()) {
