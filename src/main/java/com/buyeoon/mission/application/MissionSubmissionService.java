@@ -206,6 +206,9 @@ public class MissionSubmissionService {
 			if (command.type() == MissionType.PHOTO) {
 				affectedMetrics.add(BadgeMetric.PHOTO_SUBMISSION_COUNT);
 			}
+			if (command.type() == MissionType.MULTIPLE_CHOICE || command.type() == MissionType.OX) {
+				affectedMetrics.add(BadgeMetric.QUIZ_CORRECT_STREAK);
+			}
 			newlyAwardedBadges = badgeEvaluationService.award(memberId, command.tripId(), affectedMetrics);
 		}
 

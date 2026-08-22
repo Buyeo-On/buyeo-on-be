@@ -36,6 +36,7 @@ adrs: [ADR-003, ADR-004, ADR-010]
 - `QUIZ_CORRECT_COUNT`는 모든 여행에서 정답으로 제출한 객관식·OX 퀴즈 수다. 사진 인증 제출은 포함하지 않는다.
 - `PHOTO_SUBMISSION_COUNT`는 모든 여행에서 제출한 `PHOTO` 유형 mission submission 수다.
 - 미션 완료는 `MISSION_COMPLETED_COUNT`를 판정하고, 같은 처리에서 방문 기록을 새로 만들었으면 `HERITAGE_VISITED_COUNT`도 한 번에 판정한다. 정답으로 제출한 객관식·OX 퀴즈는 같은 처리에서 `QUIZ_CORRECT_COUNT`도 함께 판정하고, 제출한 미션이 `PHOTO` 유형이면 `PHOTO_SUBMISSION_COUNT`도 함께 판정한다.
+- 객관식·OX 퀴즈 제출이 정답이면 `QUIZ_CORRECT_STREAK`도 함께 판정한다.
 - 양수 포인트를 부여에 남긴 정산은 `POINT_DONATION_COUNT`를 판정한다.
 - 한 활동이 여러 배지 조건을 충족하면 모두 지급하고 response와 알림 생성 순서는 배지 ID 오름차순으로 고정한다.
 
