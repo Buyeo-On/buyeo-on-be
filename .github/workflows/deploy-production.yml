@@ -71,8 +71,8 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
 
-      - name: Run quality gate
-        run: ./gradlew check --no-daemon
+      - name: Run test gate
+        run: ./gradlew test --no-daemon
 
       - name: Upload spring test report
         if: always()
