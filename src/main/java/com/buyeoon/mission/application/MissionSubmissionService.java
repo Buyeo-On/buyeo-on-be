@@ -201,6 +201,7 @@ public class MissionSubmissionService {
 			}
 			if (command.type() != MissionType.PHOTO) {
 				affectedMetrics.add(BadgeMetric.QUIZ_CORRECT_COUNT);
+				affectedMetrics.add(BadgeMetric.QUIZ_CORRECT_WITHIN_60_MINUTES_COUNT);
 			}
 			if (command.type() == MissionType.PHOTO) {
 				affectedMetrics.add(BadgeMetric.PHOTO_SUBMISSION_COUNT);

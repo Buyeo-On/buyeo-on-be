@@ -42,6 +42,7 @@
 20. 미션을 완료하면 `MissionCompleted` 이벤트를 발행한다. 리스너가 없어도 발행 자체는 완료 처리에 영향을 주지 않는다.
 21. 미션 완료 처리는 badge의 공개 application service를 동기 호출해 `MISSION_COMPLETED_COUNT`를 판정하고, 방문 기록을 새로 만들었으면 `HERITAGE_VISITED_COUNT`도 함께 판정한다. 새로 지급된 배지는 제출 response에 포함한다.
 22. 정답으로 완료한 객관식·OX 미션은 같은 badge 판정에서 `QUIZ_CORRECT_COUNT`도 함께 판정한다. 사진 인증 미션 완료는 판정하지 않는다.
+23. 객관식·OX 미션의 정답 제출로 완료 처리되면 `QUIZ_CORRECT_WITHIN_60_MINUTES_COUNT`도 함께 판정한다.
 
 ## 상태 전이
 
