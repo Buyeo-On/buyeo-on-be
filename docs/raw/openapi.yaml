@@ -2506,7 +2506,7 @@ components:
         IN_PROGRESS, 모든 조건의 progress가 0이면 NOT_EARNED다.
     BadgeMetric:
       type: string
-      enum: [MISSION_COMPLETED_COUNT, HERITAGE_VISITED_COUNT, POINT_DONATION_COUNT]
+      enum: [MISSION_COMPLETED_COUNT, HERITAGE_VISITED_COUNT, POINT_DONATION_COUNT, QUIZ_CORRECT_COUNT]
     AwardedBadge:
       type: object
       required: [badgeId, name, imageUrl, condition, earnedAt]
