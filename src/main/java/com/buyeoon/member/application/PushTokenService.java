@@ -23,6 +23,11 @@ public final class PushTokenService {
 			lockActiveSession(memberId, sessionId);
 			String currentToken = currentToken(sessionId);
 			if (registrationToken.equals(currentToken)) {
+				jdbcOperations.update("""
+						UPDATE push_tokens
+						SET updated_at = CURRENT_TIMESTAMP
+						WHERE auth_session_id = ?
+						""", sessionId);
 				return;
 			}
 			jdbcOperations.update("DELETE FROM push_tokens WHERE auth_session_id = ?", sessionId);
