@@ -33,6 +33,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -242,23 +243,18 @@ class PushNotificationPublisherIntegrationTests {
 	@Test
 	@DisplayName("executor의 worker 2개와 queue 100이 모두 사용 중이면 새 발송 요청을 drop하고 호출 thread에서 실행하지 않는다")
 	void dropsWhenExecutorSaturated() throws Exception {
+		awaitExecutorIdle();
 		CountDownLatch started = new CountDownLatch(2);
 		CountDownLatch release = new CountDownLatch(1);
 		CountDownLatch finished = new CountDownLatch(102);
-		for (int i = 0; i < 102; i++) {
-			pushNotificationExecutor.execute(() -> {
-				started.countDown();
-				try {
-					release.await();
-				} catch (InterruptedException exception) {
-					Thread.currentThread().interrupt();
-				} finally {
-					finished.countDown();
-				}
-			});
-		}
 		try {
+			for (int i = 0; i < 2; i++) {
+				submitBlockingTask(started, release, finished);
+			}
 			assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+			for (int i = 0; i < 100; i++) {
+				submitBlockingTask(started, release, finished);
+			}
 			double dropsBefore = meterRegistry.get("push_notification.queue_dropped").counter().count();
 			UUID memberId = insertActiveMemberWithToken("saturated-token");
 
@@ -271,6 +267,31 @@ class PushNotificationPublisherIntegrationTests {
 			release.countDown();
 			assertThat(finished.await(10, TimeUnit.SECONDS)).isTrue();
 		}
+	}
+
+	private void submitBlockingTask(CountDownLatch started, CountDownLatch release, CountDownLatch finished) {
+		pushNotificationExecutor.execute(() -> {
+			started.countDown();
+			try {
+				release.await();
+			} catch (InterruptedException exception) {
+				Thread.currentThread().interrupt();
+			} finally {
+				finished.countDown();
+			}
+		});
+	}
+
+	private void awaitExecutorIdle() throws InterruptedException {
+		ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) pushNotificationExecutor;
+		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+		while (System.nanoTime() < deadline) {
+			if (executor.getActiveCount() == 0 && executor.getThreadPoolExecutor().getQueue().isEmpty()) {
+				return;
+			}
+			Thread.sleep(10);
+		}
+		throw new AssertionError("이전 비동기 발송 작업이 종료되지 않았습니다.");
 	}
 
 	@Test
