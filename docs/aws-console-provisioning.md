@@ -153,6 +153,8 @@ Console에서 생성한 직후 실제 ID, ARN 또는 Endpoint를 기록한다. �
 
 Apple 로그인은 기본적으로 비활성화한다. 활성화할 때만 `/buyeoon/social/apple/enabled=true`와 `client-id`, `team-id`, `key-id`, `private-key-base64`를 추가하며 비공개 키만 SecureString으로 저장한다. 8단계 TLS에서는 `/buyeoon/tls/origin-certificate`와 `/buyeoon/tls/origin-private-key`를 추가하고 비공개 키를 SecureString으로 저장한다.
 
+FCM push 발송도 기본적으로 비활성화한다. `/buyeoon/fcm/enabled`(String, 기본 `false`)이 `true`일 때만 `/buyeoon/fcm/service-account-json`(SecureString, Firebase 서비스 계정 JSON 전체)을 추가로 읽는다. Firebase·APNs 연동과 법무 준비사항(계약 주체·연락처·개인정보 이전 국가·시기·방법·보유기간 확정)이 끝나기 전까지는 `/buyeoon/fcm/enabled`를 `false`로 유지한다.
+
 RDS 삭제는 일반 변경과 분리해 승인된 변경으로만 수행한다.
 
 1. 필요하면 삭제 전에 별도 수동 Snapshot을 만들고 `available` 상태를 확인한다.
@@ -182,7 +184,7 @@ EC2 Instance Role은 다음 권한만 가진다.
 
 S3 `ListBucket`은 `public/*`, `private/*` prefix 조건으로 제한하고 객체 권한은 해당 객체 ARN으로 제한한다. 이 권한으로 애플리케이션이 Presigned PUT·GET을 생성하고 `HeadObject` 검증과 삭제 작업을 수행한다.
 
-현재 단일 EC2 Docker 구조에서는 애플리케이션이 Presigned URL을 만들기 위해 Instance Profile의 S3 권한을 사용한다. 따라서 Parameter Store 권한은 위에 열거한 운영 Parameter ARN만, S3 권한은 `buyeoon-images`의 필요한 prefix와 action만 허용한다. 컨테이너별 IAM 격리가 필요해지는 시점에는 ECS Task Role 구조로 이전한다.
+현재 단일 EC2 Docker 구조에서는 애플리케이션이 Presigned URL을 만들기 위해 Instance Profile의 S3 권한을 사용한다. 따라서 Parameter Store 권한은 위에 열거한 운영 Parameter ARN만, S3 권한은 `buyeoon-images`의 필요한 prefix와 action만 허용한다. `/buyeoon/fcm/enabled`와 `/buyeoon/fcm/service-account-json`도 이 Parameter ARN 목록에 포함한다. 컨테이너별 IAM 격리가 필요해지는 시점에는 ECS Task Role 구조로 이전한다.
 
 1. EC2 Instance Role과 Instance Profile을 생성한다.
 2. Public Subnet에 EC2를 생성하고 Instance Profile과 EC2 Security Group을 연결한다. 최초 package 설치와 SSM 등록을 위해 launch 시 public IPv4 자동 할당을 활성화한다.
@@ -326,6 +328,17 @@ EC2 복구는 새 EC2를 같은 Public Subnet과 Instance Profile로 생성하�
 - [ ] 로그에 토큰, Presigned URL, DB 비밀번호와 개인정보가 노출되지 않는다.
 - [ ] Spring과 Nginx 로그가 지정된 Log Group에 기록되고 30일 후 만료된다.
 - [ ] RDS Snapshot에서 새 인스턴스를 복원할 수 있다.
+
+### 10. FCM push 활성화 전 준비사항
+
+`/buyeoon/fcm/enabled`를 `true`로 바꾸기 전에 아래를 모두 완료한다. 하나라도 비어 있으면 `false`로 유지한다.
+
+- [ ] Firebase 프로젝트를 생성하고 서비스 계정을 발급했다.
+- [ ] Apple Developer APNs 인증 키(.p8)를 Firebase Console의 iOS 앱 설정에 업로드했다.
+- [ ] Google/Firebase와의 계약 주체(법인/개인)와 담당 연락처를 확정했다.
+- [ ] 푸시 토큰·회원 식별자가 이전되는 국가와 그 시기·방법을 확정했다.
+- [ ] 개인정보(기기 토큰) 보유기간을 확정하고 법무 검토를 받았다.
+- [ ] 위 항목이 모두 끝난 뒤에만 `/buyeoon/fcm/enabled=true`와 `/buyeoon/fcm/service-account-json`을 SecureString으로 등록한다.
 
 ## Console 변경 절차
 

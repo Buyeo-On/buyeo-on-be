@@ -89,6 +89,33 @@ case "${apple_enabled}" in
         ;;
 esac
 
+fcm_enabled=false
+if configured_fcm_enabled=$(read_optional_parameter "${parameter_prefix}/fcm/enabled"); then
+    fcm_enabled=${configured_fcm_enabled}
+fi
+
+service_account_directory=/opt/buyeoon/fcm
+install -d -m 0750 -o root -g 10001 "${service_account_directory}"
+
+case "${fcm_enabled}" in
+    true)
+        write_export FCM_ENABLED true
+        service_account_path="${service_account_directory}/service-account.json"
+        read_parameter "${parameter_prefix}/fcm/service-account-json" >"${service_account_path}"
+        chmod 0640 "${service_account_path}"
+        chown root:10001 "${service_account_path}"
+        write_export GOOGLE_APPLICATION_CREDENTIALS "/opt/buyeoon/fcm/service-account.json"
+        ;;
+    false)
+        write_export FCM_ENABLED false
+        write_export GOOGLE_APPLICATION_CREDENTIALS ""
+        ;;
+    *)
+        echo "${parameter_prefix}/fcm/enabled must be true or false" >&2
+        exit 1
+        ;;
+esac
+
 mv "${temporary_path}" "${output_path}"
 trap - EXIT
 chmod 0600 "${output_path}"

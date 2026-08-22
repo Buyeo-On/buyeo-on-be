@@ -89,6 +89,7 @@ jobs:
         run: |
           bash -n scripts/deploy/*.sh scripts/ci/*.sh
           scripts/ci/test-wait-for-ssm-command.sh
+          docker run --rm -v "${PWD}:/repo" -w /repo bash:5 bash scripts/ci/test-fetch-runtime-env.sh
           DB_URL=jdbc:postgresql://db:5432/buyeoon \
           DB_USERNAME=buyeoon_app \
           DB_PASSWORD=test \
@@ -99,6 +100,20 @@ jobs:
           ADMIN_API_KEY=test \
           APP_IMAGE=example.invalid/buyeoon/app:${GITHUB_SHA} \
           RELEASE_DIR=/tmp/buyeoon-release \
+            docker compose -f compose.prod.yaml config --quiet
+
+          DB_URL=jdbc:postgresql://db:5432/buyeoon \
+          DB_USERNAME=buyeoon_app \
+          DB_PASSWORD=test \
+          JWT_SECRET=test \
+          KAKAO_APP_ID=1234 \
+          IMAGE_BUCKET=buyeoon-images \
+          TOURAPI_SERVICE_KEY=test \
+          ADMIN_API_KEY=test \
+          APP_IMAGE=example.invalid/buyeoon/app:${GITHUB_SHA} \
+          RELEASE_DIR=/tmp/buyeoon-release \
+          FCM_ENABLED=true \
+          GOOGLE_APPLICATION_CREDENTIALS=/opt/buyeoon/fcm/service-account.json \
             docker compose -f compose.prod.yaml config --quiet
 
           nginx_test_directory=$(mktemp -d)
