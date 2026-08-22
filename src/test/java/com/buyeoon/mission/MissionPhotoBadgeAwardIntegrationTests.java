@@ -145,8 +145,11 @@ class MissionPhotoBadgeAwardIntegrationTests {
 
 		for (int i = 1; i <= 15; i++) {
 			UUID missionId = insertOxMission(place, "OX 미션 " + i, 10);
+			// OX 정답 제출은 '백제 박사'·'무결점'·'집중력' 등 퀴즈 배지를 정당하게 지급할 수 있으므로,
+			// 새로 지급된 배지가 '추억 수집가'(인증 사진 배지)가 아닌지로 좁혀 검증한다.
 			mockMvc.perform(submit(missionId, "ox-submit-" + i, oxRequest(tripId))).andExpect(status().isOk())
-					.andExpect(jsonPath("$.data.newlyAwardedBadges", hasSize(0)));
+					.andExpect(jsonPath("$.data.newlyAwardedBadges[?(@.badgeId == '" + MEMORY_COLLECTOR_BADGE_ID + "')]",
+							hasSize(0)));
 		}
 
 		assertThat(
