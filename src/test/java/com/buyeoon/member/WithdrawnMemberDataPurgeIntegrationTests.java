@@ -15,7 +15,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,7 +53,7 @@ class WithdrawnMemberDataPurgeIntegrationTests {
 	@MockitoBean
 	private PrivateImageObjectStore objectStore;
 
-	@AfterEach
+	@BeforeEach
 	void cleanUp() {
 		jdbcTemplate.execute("DROP TRIGGER IF EXISTS fail_member_settings_delete ON member_settings");
 		jdbcTemplate.execute("DROP FUNCTION IF EXISTS fail_member_settings_delete()");

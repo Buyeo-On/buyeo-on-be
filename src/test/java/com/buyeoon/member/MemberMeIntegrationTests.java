@@ -13,7 +13,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.UUID;
-import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -66,7 +66,7 @@ class MemberMeIntegrationTests {
 	@Autowired
 	private JwtDecoder jwtDecoder;
 
-	@AfterEach
+	@BeforeEach
 	void cleanUp() {
 		jdbcTemplate.update("DELETE FROM citizen_cards");
 		jdbcTemplate.update("DELETE FROM member_profiles");

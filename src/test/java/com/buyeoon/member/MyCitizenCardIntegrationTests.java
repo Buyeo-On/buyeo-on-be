@@ -12,7 +12,7 @@ import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -69,7 +69,7 @@ class MyCitizenCardIntegrationTests {
 		System.clearProperty("aws.secretAccessKey");
 	}
 
-	@AfterEach
+	@BeforeEach
 	void cleanUp() {
 		jdbcTemplate.update("DELETE FROM citizen_cards");
 		jdbcTemplate.update("DELETE FROM member_profiles");
