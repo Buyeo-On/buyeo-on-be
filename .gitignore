@@ -60,6 +60,7 @@ replay_pid*
 !*.env.example
 application-local.yml
 application-local.properties
+/secrets/
 
 # --- Log & Temp ---
 *.log
