@@ -41,6 +41,7 @@
 19. MVP에서는 DB에 저장된 모든 미션 정의를 게시된 상태로 간주하며 초안, 비활성화와 게시 기간을 구분하지 않는다.
 20. 미션을 완료하면 `MissionCompleted` 이벤트를 발행한다. 리스너가 없어도 발행 자체는 완료 처리에 영향을 주지 않는다.
 21. 미션 완료 처리는 badge의 공개 application service를 동기 호출해 `MISSION_COMPLETED_COUNT`를 판정하고, 방문 기록을 새로 만들었으면 `HERITAGE_VISITED_COUNT`도 함께 판정한다. 새로 지급된 배지는 제출 response에 포함한다.
+22. 객관식·OX 미션의 정답 제출로 완료 처리되면 `QUIZ_CORRECT_WITHIN_60_MINUTES_COUNT`도 함께 판정한다.
 
 ## 상태 전이
 
