@@ -72,9 +72,9 @@ public class MissionQueryService {
 		MissionCommon common = computeCommon(row);
 		MissionEntity mission = common.mission();
 		PlaceEntity place = common.place();
-		return new MissionItemView(mission.getId(), tripId, place.getId(), place.getName(), place.getLocation().getY(),
-				place.getLocation().getX(), common.distanceMeters(), mission.getType(), mission.getTitle(),
-				mission.getRewardPoints(), common.availability(), PARTICIPATION_RADIUS_METERS,
+		return new MissionItemView(mission.getId(), tripId, place.getId(), place.getName(),
+				mission.getLocation().getY(), mission.getLocation().getX(), common.distanceMeters(), mission.getType(),
+				mission.getTitle(), mission.getRewardPoints(), common.availability(), PARTICIPATION_RADIUS_METERS,
 				common.remainingAttempts());
 	}
 
@@ -82,7 +82,7 @@ public class MissionQueryService {
 		MissionEntity mission = common.mission();
 		PlaceEntity place = common.place();
 		return new MissionRestrictedView(mission.getId(), tripId, place.getId(), place.getName(),
-				place.getLocation().getY(), place.getLocation().getX(), common.distanceMeters(), mission.getType(),
+				mission.getLocation().getY(), mission.getLocation().getX(), common.distanceMeters(), mission.getType(),
 				mission.getTitle(), mission.getRewardPoints(), common.availability(), PARTICIPATION_RADIUS_METERS,
 				common.remainingAttempts());
 	}
@@ -91,7 +91,7 @@ public class MissionQueryService {
 		MissionEntity mission = common.mission();
 		PlaceEntity place = common.place();
 		return new MissionDetailView(mission.getId(), tripId, place.getId(), place.getName(),
-				place.getLocation().getY(), place.getLocation().getX(), common.distanceMeters(), mission.getType(),
+				mission.getLocation().getY(), mission.getLocation().getX(), common.distanceMeters(), mission.getType(),
 				mission.getTitle(), mission.getRewardPoints(), common.availability(), PARTICIPATION_RADIUS_METERS,
 				common.remainingAttempts(), mission.getDescription());
 	}
@@ -101,7 +101,7 @@ public class MissionQueryService {
 		MissionEntity mission = common.mission();
 		PlaceEntity place = common.place();
 		return new MissionMultipleChoiceDetailView(mission.getId(), tripId, place.getId(), place.getName(),
-				place.getLocation().getY(), place.getLocation().getX(), common.distanceMeters(), mission.getType(),
+				mission.getLocation().getY(), mission.getLocation().getX(), common.distanceMeters(), mission.getType(),
 				mission.getTitle(), mission.getRewardPoints(), common.availability(), PARTICIPATION_RADIUS_METERS,
 				common.remainingAttempts(), mission.getDescription(), choices);
 	}

@@ -419,20 +419,23 @@ class PostgresSchemaIntegrationTests {
 		try {
 			assertThatThrownBy(() -> jdbcTemplate.update("""
 					INSERT INTO missions
-					    (place_id, type, title, description, reward_points, max_attempts)
-					VALUES (?, 'PHOTO', 'Photo', 'Take a photo', 100, 1)
+					    (place_id, location, type, title, description, reward_points, max_attempts)
+					VALUES (?, ST_SetSRID(ST_MakePoint(126.91, 36.28), 4326)::geography, 'PHOTO', 'Photo',
+					        'Take a photo', 100, 1)
 					""", placeId)).isInstanceOf(DataIntegrityViolationException.class);
 
 			jdbcTemplate.update("""
 					INSERT INTO missions
-					    (place_id, type, title, description, reward_points, max_attempts)
-					VALUES (?, 'MULTIPLE_CHOICE', 'Multiple choice', 'Choose one', 100, 3)
+					    (place_id, location, type, title, description, reward_points, max_attempts)
+					VALUES (?, ST_SetSRID(ST_MakePoint(126.91, 36.28), 4326)::geography, 'MULTIPLE_CHOICE',
+					        'Multiple choice', 'Choose one', 100, 3)
 					""", placeId);
 			jdbcTemplate.update("""
 					INSERT INTO missions
-					    (place_id, type, title, description, reward_points, max_attempts,
+					    (place_id, location, type, title, description, reward_points, max_attempts,
 					     ox_correct_answer)
-					VALUES (?, 'OX', 'OX', 'True or false', 100, NULL, true)
+					VALUES (?, ST_SetSRID(ST_MakePoint(126.91, 36.28), 4326)::geography, 'OX', 'OX',
+					        'True or false', 100, NULL, true)
 					""", placeId);
 
 			assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM missions WHERE place_id = ?", Long.class,

@@ -329,9 +329,9 @@ class BadgeReconciliationIntegrationTests {
 	private UUID insertMission(UUID placeId) {
 		UUID id = UUID.randomUUID();
 		jdbcTemplate.update("""
-				INSERT INTO missions (id, place_id, type, title, description, reward_points)
-				VALUES (?, ?, 'PHOTO', '테스트 미션', '설명', 100)
-				""", id, placeId);
+				INSERT INTO missions (id, place_id, location, type, title, description, reward_points)
+				VALUES (?, ?, (SELECT location FROM places WHERE id = ?), 'PHOTO', '테스트 미션', '설명', 100)
+				""", id, placeId, placeId);
 		return id;
 	}
 

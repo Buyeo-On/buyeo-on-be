@@ -12,6 +12,9 @@ import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.GeometryFactory;
+import org.locationtech.jts.geom.Point;
 
 class EntityInvariantTests {
 
@@ -28,10 +31,11 @@ class EntityInvariantTests {
 	@DisplayName("미션 팩토리는 유형별로 지원하는 시도 횟수 제한을 적용한다")
 	void missionFactoriesApplySupportedAttemptLimits() {
 		UUID placeId = UUID.randomUUID();
+		Point location = newPoint();
 
-		MissionEntity unlimited = MissionEntity.multipleChoice(placeId, "Quiz", "Choose one", 100, null);
-		MissionEntity limited = MissionEntity.ox(placeId, "OX", "True or false", 100, 3, true);
-		MissionEntity photo = MissionEntity.photo(placeId, "Photo", "Take a photo", 100);
+		MissionEntity unlimited = MissionEntity.multipleChoice(placeId, location, "Quiz", "Choose one", 100, null);
+		MissionEntity limited = MissionEntity.ox(placeId, location, "OX", "True or false", 100, 3, true);
+		MissionEntity photo = MissionEntity.photo(placeId, location, "Photo", "Take a photo", 100);
 
 		assertThat(unlimited.getMaxAttempts()).isNull();
 		assertThat(limited.getMaxAttempts()).isEqualTo(3);
@@ -43,11 +47,16 @@ class EntityInvariantTests {
 	@DisplayName("퀴즈 미션은 0 이하의 최대 시도 횟수를 거부한다")
 	void quizMissionsRejectNonPositiveMaximumAttempts() {
 		UUID placeId = UUID.randomUUID();
+		Point location = newPoint();
 
-		assertThatThrownBy(() -> MissionEntity.multipleChoice(placeId, "Quiz", "Choose one", 100, 0))
+		assertThatThrownBy(() -> MissionEntity.multipleChoice(placeId, location, "Quiz", "Choose one", 100, 0))
 				.isInstanceOf(IllegalArgumentException.class);
-		assertThatThrownBy(() -> MissionEntity.ox(placeId, "OX", "True or false", 100, -1, true))
+		assertThatThrownBy(() -> MissionEntity.ox(placeId, location, "OX", "True or false", 100, -1, true))
 				.isInstanceOf(IllegalArgumentException.class);
+	}
+
+	private static Point newPoint() {
+		return new GeometryFactory().createPoint(new Coordinate(126.91, 36.28));
 	}
 
 	/** 이월 포인트의 만료 시각이 처리 시각이 아닌 정산 시각으로부터 정확히 10일 뒤인지 검증한다. */

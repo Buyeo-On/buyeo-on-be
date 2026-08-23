@@ -258,9 +258,10 @@ class FootprintIntegrationTests {
 	private UUID insertMission(UUID placeId, String title) {
 		UUID id = UUID.randomUUID();
 		jdbcTemplate.update(
-				"INSERT INTO missions (id, place_id, type, title, description, reward_points, ox_correct_answer) "
-						+ "VALUES (?, ?, 'OX'::mission_type, ?, '설명', 10, true)",
-				id, placeId, title);
+				"INSERT INTO missions (id, place_id, location, type, title, description, reward_points, "
+						+ "ox_correct_answer) VALUES (?, ?, (SELECT location FROM places WHERE id = ?), "
+						+ "'OX'::mission_type, ?, '설명', 10, true)",
+				id, placeId, placeId, title);
 		return id;
 	}
 
