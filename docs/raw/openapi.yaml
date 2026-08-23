@@ -2126,6 +2126,18 @@ components:
           minimum: 0
         saved:
           type: boolean
+        opensAt:
+          type: [string, 'null']
+          format: partial-time
+          description: TourAPI 이용시간 원문을 파싱한 개장 시각. 파싱 실패 시 null.
+        closesAt:
+          type: [string, 'null']
+          format: partial-time
+          description: TourAPI 이용시간 원문을 파싱한 폐장 시각. 파싱 실패 시 null.
+        admissionFee:
+          type: [integer, 'null']
+          minimum: 0
+          description: TourAPI 이용요금 원문을 파싱한 입장료(원). 무료 또는 파싱 실패 시 null.
     MissionType:
       type: string
       enum: [MULTIPLE_CHOICE, OX, PHOTO]
