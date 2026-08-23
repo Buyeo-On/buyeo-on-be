@@ -9,6 +9,7 @@ import com.buyeoon.place.repository.SavedPlaceProjection;
 import com.buyeoon.place.repository.SavedPlaceRepository;
 import com.buyeoon.trip.TripQueryService;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -158,7 +159,8 @@ public class PlaceQueryService {
 
 		return new PlaceItemView(place.getId(), place.getCategory(), place.getName(), place.getSummary(),
 				place.getDescription(), place.getAddress(), imageUrl, place.getLocation().getY(),
-				place.getLocation().getX(), distanceMeters, walkingMinutes, saved);
+				place.getLocation().getX(), distanceMeters, walkingMinutes, saved, place.getOpensAt(),
+				place.getClosesAt(), place.getAdmissionFee());
 	}
 
 	public record PlaceListView(List<PlaceItemView> items, PageInfoView page) {
@@ -169,7 +171,7 @@ public class PlaceQueryService {
 
 	public record PlaceItemView(UUID placeId, PlaceCategory category, String name, String summary, String description,
 			String address, String imageUrl, double latitude, double longitude, Integer distanceMeters,
-			Integer walkingMinutes, boolean saved) {
+			Integer walkingMinutes, boolean saved, LocalTime opensAt, LocalTime closesAt, Integer admissionFee) {
 	}
 
 	public record PageInfoView(String nextCursor, boolean hasNext) {
