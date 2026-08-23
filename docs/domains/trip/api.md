@@ -9,5 +9,6 @@ API 계약의 원본은 [`docs/raw/openapi.yaml`](../../raw/openapi.yaml)이다.
 | `endTrip` | POST | `/trips/{tripId}/end` |
 | `getTripStatistics` | GET | `/trips/{tripId}/statistics` |
 | `getTripFootprint` | GET | `/trips/{tripId}/footprint` |
+| `getTripPhotos` | GET | `/trips/{tripId}/photos` |
 
 포인트 정산 endpoint는 여행 URL 아래에 있지만 포인트 상태를 변경하므로 [포인트 API](../point/api.md)가 소유한다.
