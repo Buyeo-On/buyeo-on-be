@@ -87,6 +87,14 @@ public class TripController {
 		return ResponseEntity.ok(SuccessResponse.of(FootprintResponse.from(footprint)));
 	}
 
+	@GetMapping("/trips/{tripId}/photos")
+	public ResponseEntity<SuccessResponse<TripPhotoListResponse>> photos(@AuthenticationPrincipal Jwt jwt,
+			@PathVariable UUID tripId) {
+		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
+		TripQueryService.PhotoListView photos = tripQuery.getPhotos(memberId, tripId);
+		return ResponseEntity.ok(SuccessResponse.of(TripPhotoListResponse.from(photos)));
+	}
+
 	/** 이동 거리·소모 칼로리는 MVP에서 계산하지 않으므로 항상 null이다. */
 	private record TripStatisticsResponse(UUID tripId, Double distanceKm, long visitedPlaceCount, long durationMinutes,
 			Integer caloriesKcal) {
@@ -150,6 +158,12 @@ public class TripController {
 	private record FootprintPhotoResponse(UUID photoId, String url, Instant uploadedAt) {
 		static FootprintPhotoResponse from(PhotoView photo) {
 			return new FootprintPhotoResponse(photo.photoId(), photo.url(), photo.uploadedAt());
+		}
+	}
+
+	private record TripPhotoListResponse(List<FootprintPhotoResponse> items) {
+		static TripPhotoListResponse from(TripQueryService.PhotoListView view) {
+			return new TripPhotoListResponse(view.items().stream().map(FootprintPhotoResponse::from).toList());
 		}
 	}
 

@@ -1,5 +1,6 @@
 package com.buyeoon.trip;
 
+import com.buyeoon.common.storage.PrivateImageGetUrlService;
 import com.buyeoon.member.application.ResourceNotFoundException;
 import com.buyeoon.trip.entity.TripEntity;
 import com.buyeoon.trip.entity.TripStatus;
@@ -7,6 +8,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -21,11 +23,16 @@ public class TripQueryService {
 
 	private final TripRepository tripRepository;
 	private final VisitRecordRepository visitRecordRepository;
+	private final FootprintPhotoRepository photoRepository;
+	private final PrivateImageGetUrlService privateImageUrls;
 
 	@SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring 싱글턴 빈을 그대로 주입받아 저장한다.")
-	public TripQueryService(TripRepository tripRepository, VisitRecordRepository visitRecordRepository) {
+	public TripQueryService(TripRepository tripRepository, VisitRecordRepository visitRecordRepository,
+			FootprintPhotoRepository photoRepository, PrivateImageGetUrlService privateImageUrls) {
 		this.tripRepository = tripRepository;
 		this.visitRecordRepository = visitRecordRepository;
+		this.photoRepository = photoRepository;
+		this.privateImageUrls = privateImageUrls;
 	}
 
 	public boolean hasActiveTrip(UUID memberId) {
@@ -56,5 +63,25 @@ public class TripQueryService {
 	}
 
 	public record TripStatisticsView(UUID tripId, long visitedPlaceCount, long durationMinutes) {
+	}
+
+	/**
+	 * 요청 회원이 소유한 여행에서 촬영한 사진을 업로드 시각 오름차순으로 조회한다. footprint와 달리 여행 상태와 무관하게
+	 * 조회할 수 있다. 소유하지 않았거나 존재하지 않으면 404 예외를 던진다.
+	 */
+	public PhotoListView getPhotos(UUID memberId, UUID tripId) {
+		tripRepository.findByIdAndMemberId(tripId, memberId).orElseThrow(ResourceNotFoundException::new);
+		List<FootprintQueryService.PhotoView> items = photoRepository
+				.findByMemberIdAndTripIdOrderByUploadedAtAsc(memberId, tripId).stream()
+				.map(photo -> new FootprintQueryService.PhotoView(photo.getId(),
+						privateImageUrls.create(photo.getObjectKey()), photo.getUploadedAt()))
+				.toList();
+		return new PhotoListView(items);
+	}
+
+	public record PhotoListView(List<FootprintQueryService.PhotoView> items) {
+		public PhotoListView {
+			items = List.copyOf(items);
+		}
 	}
 }

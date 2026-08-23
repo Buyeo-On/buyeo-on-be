@@ -424,6 +424,21 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/StateConflict'
+  /trips/{tripId}/photos:
+    get:
+      tags: [Trips]
+      summary: 여행 사진 조회
+      description: 발자취와 달리 여행 상태와 무관하게 조회할 수 있다. 진행 중인 여행에서도 그때까지 촬영한 사진을 확인할 수 있다.
+      operationId: getTripPhotos
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      responses:
+        '200':
+          $ref: '#/components/responses/TripPhotoListSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /places:
     get:
       tags: [Places]
@@ -1237,6 +1252,19 @@ components:
                 expirations: []
               badges: []
               photos: []
+    TripPhotoListSuccess:
+      description: 여행 사진 목록
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/TripPhotoListEnvelope'
+          example:
+            success: true
+            data:
+              items:
+                - photoId: 550e8400-e29b-41d4-a716-446655440013
+                  url: https://buyeoon-images.s3.ap-northeast-2.amazonaws.com/private/mission-photos/550e8400-e29b-41d4-a716-446655440013.jpg?X-Amz-Signature=...
+                  uploadedAt: '2026-08-06T11:20:00+09:00'
     PlaceListSuccess:
       description: 장소 목록
       content:
@@ -2801,6 +2829,21 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/FootprintData'
+    TripPhotoListData:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MissionPhotoData'
+    TripPhotoListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/TripPhotoListData'
     PlaceListData:
       type: object
       required: [items, page]
