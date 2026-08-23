@@ -130,13 +130,9 @@ public final class WithdrawnMemberDataPurgeService {
 		jdbcOperations.update("DELETE FROM term_consents WHERE member_id = ?", memberId);
 		jdbcOperations.update("DELETE FROM member_settings WHERE member_id = ?", memberId);
 		jdbcOperations.update("DELETE FROM auth_sessions WHERE member_id = ?", memberId);
-		int updated = jdbcOperations.update("""
-				UPDATE members
-				SET purged_at = CURRENT_TIMESTAMP
-				WHERE id = ? AND purged_at IS NULL
-				""", memberId);
+		int updated = jdbcOperations.update("DELETE FROM members WHERE id = ? AND status = 'WITHDRAWN'", memberId);
 		if (updated != 1) {
-			throw new IllegalStateException("회원 정보 파기 완료 상태를 저장할 수 없습니다.");
+			throw new IllegalStateException("탈퇴 회원 정보를 완전히 파기할 수 없습니다.");
 		}
 		return true;
 	}

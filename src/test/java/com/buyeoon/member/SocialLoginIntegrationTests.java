@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -263,24 +264,33 @@ class SocialLoginIntegrationTests {
 		assertRegistrationTablesAreEmpty();
 	}
 
-	/** 탈퇴 회원에게 연결된 subject는 재가입시키지 않고 409를 반환하는지 검증한다. */
+	/** 탈퇴로 연결이 해제된 subject가 기존 정보를 복구하지 않고 새 회원으로 가입하는지 검증한다. */
 	@Test
-	@DisplayName("탈퇴 회원의 소셜 계정은 재가입 없이 409를 반환한다")
-	void withdrawnMemberCannotLogInOrRegisterAgain() throws Exception {
-		UUID memberId = UUID.randomUUID();
-		jdbcTemplate.update("""
-				INSERT INTO members (id, status, withdrawn_at, purge_after)
-				VALUES (?, 'WITHDRAWN', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '30 days')
-				""", memberId);
-		insertSocialAccount(memberId, SocialProvider.KAKAO, "kakao-withdrawn");
+	@DisplayName("탈퇴한 소셜 계정은 기존 회원을 복구하지 않고 새 회원으로 재가입한다")
+	void withdrawnSocialAccountRegistersAsNewMember() throws Exception {
+		MvcResult firstLogin = kakaoLogin("kakao-rejoin").andExpect(status().isOk()).andReturn();
+		String firstResponse = response(firstLogin);
+		UUID withdrawnMemberId = UUID.fromString(JsonPath.read(firstResponse, "$.data.member.memberId"));
+		String accessToken = JsonPath.read(firstResponse, "$.data.accessToken");
 
-		kakaoLogin("kakao-withdrawn").andExpect(status().isConflict()).andExpect(content().json("""
-				{"success":false,"data":{"code":"MEMBER_WITHDRAWN","message":"탈퇴한 회원은 로그인할 수 없습니다."}}
-				"""));
+		mockMvc.perform(delete("/members/me").header("Authorization", "Bearer " + accessToken))
+				.andExpect(status().isOk());
+		assertThat(jdbcTemplate.queryForObject("SELECT status::text FROM members WHERE id = ?", String.class,
+				withdrawnMemberId)).isEqualTo("WITHDRAWN");
+		assertThat(count("social_accounts")).isZero();
 
-		assertThat(count("members")).isEqualTo(1);
+		MvcResult rejoin = kakaoLogin("kakao-rejoin").andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.isNewMember").value(true))
+				.andExpect(jsonPath("$.data.member.requiredTermsAgreed").value(false))
+				.andExpect(jsonPath("$.data.member.citizenCardIssued").value(false)).andReturn();
+		UUID newMemberId = UUID.fromString(JsonPath.read(response(rejoin), "$.data.member.memberId"));
+
+		assertThat(newMemberId).isNotEqualTo(withdrawnMemberId);
+		assertThat(count("members")).isEqualTo(2);
 		assertThat(count("social_accounts")).isEqualTo(1);
-		assertThat(count("auth_sessions")).isZero();
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM auth_sessions WHERE member_id = ? AND revoked_at IS NULL", Long.class,
+				newMemberId)).isEqualTo(1);
 	}
 
 	/** 제공자 장애가 발생하면 회원이나 세션을 생성하지 않고 502를 반환하는지 검증한다. */
