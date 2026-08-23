@@ -2,7 +2,7 @@
 id: UC-26
 title: 여행 사진 조회
 owner: trip
-participants: [mission]
+participants: [mission, place]
 policies: [authorization, date-time]
 api: ["GET /trips/{tripId}/photos"]
 adrs: [ADR-008]
@@ -22,7 +22,7 @@ adrs: [ADR-008]
 ## 기본 흐름
 
 1. 사용자가 `활동내역` 탭을 누른다.
-2. 앱이 오늘의 추억 사진으로 해당 여행에서 업로드 시각 순으로 촬영한 사진을 표시한다.
+2. 앱이 오늘의 추억 사진으로 해당 여행에서 업로드 시각 순으로 촬영한 사진을, 사진을 찍은 미션이 연결된 장소명과 함께 표시한다.
 3. 사용자가 사진을 눌러 크게 본다.
 
 ## 예외 흐름

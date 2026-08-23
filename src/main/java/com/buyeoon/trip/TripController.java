@@ -161,9 +161,15 @@ public class TripController {
 		}
 	}
 
-	private record TripPhotoListResponse(List<FootprintPhotoResponse> items) {
+	private record TripPhotoListResponse(List<TripPhotoResponse> items) {
 		static TripPhotoListResponse from(TripQueryService.PhotoListView view) {
-			return new TripPhotoListResponse(view.items().stream().map(FootprintPhotoResponse::from).toList());
+			return new TripPhotoListResponse(view.items().stream().map(TripPhotoResponse::from).toList());
+		}
+	}
+
+	private record TripPhotoResponse(UUID photoId, String url, Instant uploadedAt, String placeName) {
+		static TripPhotoResponse from(TripQueryService.PhotoView photo) {
+			return new TripPhotoResponse(photo.photoId(), photo.url(), photo.uploadedAt(), photo.placeName());
 		}
 	}
 

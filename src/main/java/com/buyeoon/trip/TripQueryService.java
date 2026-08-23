@@ -71,17 +71,20 @@ public class TripQueryService {
 	 */
 	public PhotoListView getPhotos(UUID memberId, UUID tripId) {
 		tripRepository.findByIdAndMemberId(tripId, memberId).orElseThrow(ResourceNotFoundException::new);
-		List<FootprintQueryService.PhotoView> items = photoRepository
-				.findByMemberIdAndTripIdOrderByUploadedAtAsc(memberId, tripId).stream()
-				.map(photo -> new FootprintQueryService.PhotoView(photo.getId(),
-						privateImageUrls.create(photo.getObjectKey()), photo.getUploadedAt()))
+		List<PhotoView> items = photoRepository.findWithPlaceNameByMemberIdAndTripId(memberId, tripId).stream()
+				.map(projection -> new PhotoView(projection.photo().getId(),
+						privateImageUrls.create(projection.photo().getObjectKey()), projection.photo().getUploadedAt(),
+						projection.placeName()))
 				.toList();
 		return new PhotoListView(items);
 	}
 
-	public record PhotoListView(List<FootprintQueryService.PhotoView> items) {
+	public record PhotoListView(List<PhotoView> items) {
 		public PhotoListView {
 			items = List.copyOf(items);
 		}
+	}
+
+	public record PhotoView(UUID photoId, String url, Instant uploadedAt, String placeName) {
 	}
 }

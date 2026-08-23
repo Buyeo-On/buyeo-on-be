@@ -80,7 +80,30 @@ class TripPhotosIntegrationTests {
 		performGet(member, tripId).andExpect(status().isOk()).andExpect(jsonPath("$.data.items.length()").value(1))
 				.andExpect(jsonPath("$.data.items[0].photoId").value(photoId.toString()))
 				.andExpect(jsonPath("$.data.items[0].url").value("https://signed-url.example.com/photo"))
-				.andExpect(jsonPath("$.data.items[0].uploadedAt").exists());
+				.andExpect(jsonPath("$.data.items[0].uploadedAt").exists())
+				.andExpect(jsonPath("$.data.items[0].placeName").value("정림사지"));
+	}
+
+	/** 사진이 찍힌 미션이 연결된 장소명을 사진마다 정확히 매칭해 반환한다. */
+	@Test
+	@DisplayName("사진마다 촬영 미션이 연결된 장소명을 반환한다")
+	void photosIncludeConnectedPlaceName() throws Exception {
+		AuthenticatedMember member = insertAuthenticatedMember();
+		UUID tripId = insertTrip(member.memberId(), "IN_PROGRESS", Instant.now(), null);
+		UUID placeA = insertPlace("정림사지");
+		UUID placeB = insertPlace("궁남지");
+		UUID missionA = insertMission(placeA, "미션 A");
+		UUID missionB = insertMission(placeB, "미션 B");
+		UUID photoAtPlaceA = insertMissionPhoto(member.memberId(), tripId, missionA, Instant.now().minus(1, ChronoUnit.HOURS));
+		UUID photoAtPlaceB = insertMissionPhoto(member.memberId(), tripId, missionB, Instant.now());
+
+		when(privateImageGetUrlService.create(anyString())).thenReturn("https://signed-url.example.com/photo");
+
+		performGet(member, tripId).andExpect(status().isOk()).andExpect(jsonPath("$.data.items.length()").value(2))
+				.andExpect(jsonPath("$.data.items[0].photoId").value(photoAtPlaceA.toString()))
+				.andExpect(jsonPath("$.data.items[0].placeName").value("정림사지"))
+				.andExpect(jsonPath("$.data.items[1].photoId").value(photoAtPlaceB.toString()))
+				.andExpect(jsonPath("$.data.items[1].placeName").value("궁남지"));
 	}
 
 	/** ENDED(정산 전) 상태 여행도 사진을 조회할 수 있다. */
