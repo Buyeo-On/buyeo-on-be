@@ -81,8 +81,8 @@ class WithdrawnMemberDataPurgeIntegrationTests {
 	}
 
 	@Test
-	@DisplayName("기한이 지난 회원의 사진을 먼저 지우고 서비스 이용 데이터를 파기한다")
-	void purgesDueMemberDataAndKeepsMinimalTombstone() {
+	@DisplayName("기한이 지난 회원의 사진을 먼저 지우고 회원 정보를 완전히 파기한다")
+	void purgesDueMemberDataCompletely() {
 		Fixture due = insertRichWithdrawnMember("private/missions/due-photo.webp", Instant.now().minusSeconds(1));
 		UUID futureMemberId = insertMinimalWithdrawnMember(Instant.now().plus(1, ChronoUnit.DAYS));
 
@@ -110,7 +110,7 @@ class WithdrawnMemberDataPurgeIntegrationTests {
 		}).when(objectStore).delete(anyString());
 
 		assertThat(purgeService.purgeDueMembers()).isEqualTo(1);
-		assertThat(member(failed.memberId()).get("purged_at")).isNull();
+		assertThat(count("members", "id", failed.memberId())).isEqualTo(1);
 		assertThat(count("member_settings", "member_id", failed.memberId())).isEqualTo(1);
 		assertPurged(successful);
 
@@ -137,7 +137,7 @@ class WithdrawnMemberDataPurgeIntegrationTests {
 				""");
 
 		assertThat(purgeService.purgeDueMembers()).isZero();
-		assertThat(member(fixture.memberId()).get("purged_at")).isNull();
+		assertThat(count("members", "id", fixture.memberId())).isEqualTo(1);
 		assertThat(count("trips", "member_id", fixture.memberId())).isEqualTo(1);
 		assertThat(count("member_settings", "member_id", fixture.memberId())).isEqualTo(1);
 
@@ -154,7 +154,7 @@ class WithdrawnMemberDataPurgeIntegrationTests {
 
 		assertThat(purgeService.purgeDueMembers()).isEqualTo(1);
 
-		assertThat(member(memberId).get("purged_at")).isNotNull();
+		assertThat(count("members", "id", memberId)).isZero();
 		assertThat(count("member_settings", "member_id", memberId)).isZero();
 		verify(objectStore, times(0)).delete(anyString());
 	}
@@ -266,10 +266,8 @@ class WithdrawnMemberDataPurgeIntegrationTests {
 	}
 
 	private void assertPurged(Fixture fixture) {
-		Map<String, Object> member = member(fixture.memberId());
-		assertThat(member.get("status").toString()).isEqualTo("WITHDRAWN");
-		assertThat(member.get("purged_at")).isNotNull();
-		assertThat(count("social_accounts", "member_id", fixture.memberId())).isEqualTo(1);
+		assertThat(count("members", "id", fixture.memberId())).isZero();
+		assertThat(count("social_accounts", "member_id", fixture.memberId())).isZero();
 		for (String table : new String[]{"auth_sessions", "term_consents", "member_profiles", "citizen_cards",
 				"member_settings", "saved_places", "trips", "mission_photos", "point_transactions", "member_badges",
 				"notifications", "idempotency_requests"}) {

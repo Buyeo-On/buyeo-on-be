@@ -31,6 +31,8 @@ class SchemaMappingTests {
 			.of("src/main/resources/db/migration/V7__add_citizen_card_constraints.sql");
 	private static final Path MEMBER_PURGE_MIGRATION = Path
 			.of("src/main/resources/db/migration/V8__track_member_data_purge.sql");
+	private static final Path WITHDRAWN_SOCIAL_ACCOUNT_MIGRATION = Path
+			.of("src/main/resources/db/migration/V24__apply_withdrawal_rejoin_policy.sql");
 	private static final Path LOCATION_TERM_MIGRATION = Path
 			.of("src/main/resources/db/migration/V9.1__add_location_term_type.sql");
 	private static final Path POINT_SETTLEMENT_EXPIRATION_MIGRATION = Path
@@ -86,7 +88,7 @@ class SchemaMappingTests {
 				"        (status = 'ACTIVE' AND withdrawn_at IS NULL AND purge_after IS NULL)",
 				"        OR (status = 'WITHDRAWN' AND withdrawn_at IS NOT NULL AND purge_after IS NOT NULL)", "    )");
 		String currentMemberLifecycle = String.join("\n", "    purge_after timestamptz, -- 개인정보 파기 기한",
-				"    purged_at timestamptz, -- 개인정보 파기 완료 시각", "    CHECK (",
+				"    purged_at timestamptz, -- 이전 파기 완료 이력 호환용(현재 정책은 파기 완료 시 회원 행 삭제)", "    CHECK (",
 				"        (status = 'ACTIVE' AND withdrawn_at IS NULL AND purge_after IS NULL AND purged_at IS NULL)",
 				"        OR (", "            status = 'WITHDRAWN'", "            AND withdrawn_at IS NOT NULL",
 				"            AND purge_after IS NOT NULL",
@@ -188,9 +190,9 @@ class SchemaMappingTests {
 				.contains("ALTER TYPE term_type ADD VALUE 'LOCATION' AFTER 'PRIVACY'");
 	}
 
-	/** 탈퇴 회원 파기 완료 상태와 대상 조회 인덱스가 기준 스키마와 업그레이드 경로에 함께 존재하는지 검증한다. */
+	/** 탈퇴 회원 파기 대상 조회를 위한 기존 호환 컬럼과 인덱스가 스키마에 남아 있는지 검증한다. */
 	@Test
-	@DisplayName("회원 정보 파기 완료 상태는 기준 스키마와 마이그레이션에 정의되어 있다")
+	@DisplayName("회원 정보 파기 대상 조회 구조는 기준 스키마와 마이그레이션에 정의되어 있다")
 	void memberPurgeCompletionIsDefinedInSchemaAndMigration() throws IOException {
 		String canonicalSchema = Files.readString(SCHEMA_SOURCE, StandardCharsets.UTF_8);
 		String migration = Files.readString(MEMBER_PURGE_MIGRATION, StandardCharsets.UTF_8);
@@ -199,6 +201,16 @@ class SchemaMappingTests {
 				.contains("purged_at IS NULL");
 		assertThat(migration).contains("ADD COLUMN purged_at timestamptz").contains("members_lifecycle_ck")
 				.contains("members_due_purge_idx").contains("mission_photos_object_key_prefix_ck");
+	}
+
+	/** 정책 변경 전에 탈퇴한 회원의 연결과 기존 최소 이력도 배포 시 제거되는지 검증한다. */
+	@Test
+	@DisplayName("기존 탈퇴 회원의 연결과 파기 완료 이력을 제거하는 마이그레이션이 정의되어 있다")
+	void withdrawnSocialAccountsAreUnlinkedByMigration() throws IOException {
+		String migration = Files.readString(WITHDRAWN_SOCIAL_ACCOUNT_MIGRATION, StandardCharsets.UTF_8);
+
+		assertThat(migration).contains("DELETE FROM social_accounts").contains("DELETE FROM members")
+				.contains("WHERE status = 'WITHDRAWN'").contains("purged_at IS NOT NULL");
 	}
 
 	/** 이월 포인트 만료 처리 시각과 만료 대상 조회 인덱스가 기준 스키마와 업그레이드 경로에 함께 존재하는지 검증한다. */

@@ -48,6 +48,7 @@ public final class MemberWithdrawalService {
 				SET revoked_at = CURRENT_TIMESTAMP
 				WHERE member_id = ? AND revoked_at IS NULL
 				""", memberId);
+		jdbcOperations.update("DELETE FROM social_accounts WHERE member_id = ?", memberId);
 	}
 
 	private MemberStatus lockMember(UUID memberId) {

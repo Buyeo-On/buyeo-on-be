@@ -82,6 +82,7 @@ class MemberWithdrawalIntegrationTests {
 	@DisplayName("탈퇴는 회원을 즉시 차단하고 모든 세션과 푸시 토큰을 폐기한다")
 	void withdrawalBlocksMemberAndRevokesEverySession() throws Exception {
 		UUID memberId = insertMember();
+		insertSocialAccount(memberId, "withdrawal-member");
 		AuthenticatedSession current = insertSession(memberId);
 		AuthenticatedSession other = insertSession(memberId);
 		insertPushToken(current.sessionId(), "current-device-token");
@@ -97,6 +98,7 @@ class MemberWithdrawalIntegrationTests {
 		assertThat(Duration.between(withdrawnAt, purgeAfter)).isEqualTo(Duration.ofDays(30));
 		assertThat(activeSessionCount(memberId)).isZero();
 		assertThat(pushTokenCount(memberId)).isZero();
+		assertThat(socialAccountCount(memberId)).isZero();
 		assertThat(settingsCount(memberId)).isEqualTo(1);
 
 		for (AuthenticatedSession session : List.of(current, other)) {
@@ -125,6 +127,7 @@ class MemberWithdrawalIntegrationTests {
 	@DisplayName("동시 탈퇴 요청은 하나의 탈퇴 상태로 끝난다")
 	void concurrentWithdrawalsEndInOneWithdrawnState() throws Exception {
 		UUID memberId = insertMember();
+		insertSocialAccount(memberId, "concurrent-withdrawal-member");
 		AuthenticatedSession first = insertSession(memberId);
 		AuthenticatedSession second = insertSession(memberId);
 		CountDownLatch ready = new CountDownLatch(2);
@@ -148,6 +151,7 @@ class MemberWithdrawalIntegrationTests {
 		assertThat(statuses).allMatch(status -> status == 200 || status == 401).contains(200);
 		assertThat(member(memberId).get("status").toString()).isEqualTo("WITHDRAWN");
 		assertThat(activeSessionCount(memberId)).isZero();
+		assertThat(socialAccountCount(memberId)).isZero();
 	}
 
 	@Test
@@ -180,6 +184,7 @@ class MemberWithdrawalIntegrationTests {
 	@DisplayName("세션 폐기 실패는 회원 상태와 푸시 토큰 삭제를 모두 롤백한다")
 	void sessionRevocationFailureRollsBackWithdrawal() {
 		UUID memberId = insertMember();
+		insertSocialAccount(memberId, "rollback-member");
 		AuthenticatedSession session = insertSession(memberId);
 		insertPushToken(session.sessionId(), "rollback-device-token");
 		jdbcTemplate.execute("""
@@ -203,6 +208,7 @@ class MemberWithdrawalIntegrationTests {
 		assertThat(member.get("purge_after")).isNull();
 		assertThat(activeSessionCount(memberId)).isEqualTo(1);
 		assertThat(pushTokenCount(memberId)).isEqualTo(1);
+		assertThat(socialAccountCount(memberId)).isEqualTo(1);
 	}
 
 	private MvcResult concurrentRequest(CountDownLatch ready, CountDownLatch start, Request request) throws Exception {
@@ -253,6 +259,13 @@ class MemberWithdrawalIntegrationTests {
 		return new AuthenticatedSession(sessionId, accessTokenService.issue(memberId, sessionId), refreshToken.token());
 	}
 
+	private void insertSocialAccount(UUID memberId, String subject) {
+		jdbcTemplate.update("""
+				INSERT INTO social_accounts (member_id, provider, provider_subject)
+				VALUES (?, 'KAKAO', ?)
+				""", memberId, subject);
+	}
+
 	private void insertPushToken(UUID sessionId, String token) {
 		jdbcTemplate.update("INSERT INTO push_tokens (auth_session_id, registration_token) VALUES (?, ?)", sessionId,
 				token);
@@ -279,6 +292,11 @@ class MemberWithdrawalIntegrationTests {
 	private long settingsCount(UUID memberId) {
 		return Objects.requireNonNull(jdbcTemplate
 				.queryForObject("SELECT count(*) FROM member_settings WHERE member_id = ?", Long.class, memberId));
+	}
+
+	private long socialAccountCount(UUID memberId) {
+		return Objects.requireNonNull(jdbcTemplate
+				.queryForObject("SELECT count(*) FROM social_accounts WHERE member_id = ?", Long.class, memberId));
 	}
 
 	@DynamicPropertySource
