@@ -238,9 +238,10 @@ class MissionCompletionistBadgeAwardIntegrationTests {
 			Boolean oxCorrectAnswer) {
 		UUID id = UUID.randomUUID();
 		jdbcTemplate.update(
-				"INSERT INTO missions (id, place_id, type, title, description, reward_points, max_attempts, "
-						+ "ox_correct_answer) VALUES (?, ?, ?::mission_type, ?, '설명', ?, ?, ?)",
-				id, placeId, type, title, rewardPoints, maxAttempts, oxCorrectAnswer);
+				"INSERT INTO missions (id, place_id, location, type, title, description, reward_points, "
+						+ "max_attempts, ox_correct_answer) VALUES (?, ?, (SELECT location FROM places WHERE id = ?), "
+						+ "?::mission_type, ?, '설명', ?, ?, ?)",
+				id, placeId, placeId, type, title, rewardPoints, maxAttempts, oxCorrectAnswer);
 		return id;
 	}
 
