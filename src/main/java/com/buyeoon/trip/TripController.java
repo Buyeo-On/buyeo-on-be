@@ -56,6 +56,13 @@ public class TripController {
 		return ResponseEntity.status(HttpStatus.CREATED).body(SuccessResponse.of(trip));
 	}
 
+	@GetMapping("/trips/current")
+	public ResponseEntity<SuccessResponse<TripView>> current(@AuthenticationPrincipal Jwt jwt) {
+		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
+		TripView trip = tripQuery.getCurrentTrip(memberId);
+		return ResponseEntity.ok(SuccessResponse.of(trip));
+	}
+
 	@PostMapping("/trips/{tripId}/end")
 	public ResponseEntity<SuccessResponse<TripView>> end(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID tripId,
 			@RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey) {
