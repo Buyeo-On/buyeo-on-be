@@ -9,6 +9,6 @@ public enum NotificationType {
 	BUYEO_NEWS;
 
 	public String iconKey() {
-		return "public/notifications/" + name().toLowerCase() + ".png";
+		return "public/notifications/" + name().toLowerCase() + ".svg";
 	}
 }
