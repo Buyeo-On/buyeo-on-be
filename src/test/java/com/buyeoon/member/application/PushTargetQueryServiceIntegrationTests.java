@@ -80,15 +80,27 @@ class PushTargetQueryServiceIntegrationTests {
 	}
 
 	@Test
-	@DisplayName("근처 퀴즈 알림 설정이나 마케팅 동의 값과 무관하게 동일한 발송 대상 토큰을 반환한다")
-	void returnsSameTargetsRegardlessOfNotificationSettings() {
-		UUID optedOutMemberId = insertActiveMember(false, false);
+	@DisplayName("마케팅 동의 값과 무관하게 동일한 발송 대상 토큰을 반환한다")
+	void returnsSameTargetsRegardlessOfMarketingConsent() {
+		UUID memberId = insertActiveMember(true, false);
+		UUID session = insertSession(memberId, null, 30);
+		insertPushToken(session, "device-token");
+
+		List<String> tokens = pushTargetQueryService.findRegistrationTokens(memberId);
+
+		assertThat(tokens).containsExactly("device-token");
+	}
+
+	@Test
+	@DisplayName("알림 동의가 꺼진 회원의 등록 토큰은 반환하지 않는다")
+	void excludesMembersWithNotificationsDisabled() {
+		UUID optedOutMemberId = insertActiveMember(false, true);
 		UUID session = insertSession(optedOutMemberId, null, 30);
 		insertPushToken(session, "device-token");
 
 		List<String> tokens = pushTargetQueryService.findRegistrationTokens(optedOutMemberId);
 
-		assertThat(tokens).containsExactly("device-token");
+		assertThat(tokens).isEmpty();
 	}
 
 	private UUID insertActiveMember(boolean nearbyQuizNotificationEnabled, boolean marketingConsentAgreed) {
