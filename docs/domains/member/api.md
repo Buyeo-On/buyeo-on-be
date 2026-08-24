@@ -8,6 +8,7 @@ API 계약의 원본은 [`docs/raw/openapi.yaml`](../../raw/openapi.yaml)이다.
 | `refreshToken` | POST | `/auth/refresh` |
 | `logout` | POST | `/auth/logout` |
 | `getMyMember` | GET | `/members/me` |
+| `getWelcomeBack` | GET | `/members/me/welcome-back` |
 | `withdrawMember` | DELETE | `/members/me` |
 | `linkSocialAccount` | POST | `/members/me/social-accounts` |
 | `updateMyProfile` | PATCH | `/members/me/profile` |

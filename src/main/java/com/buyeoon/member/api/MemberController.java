@@ -10,6 +10,8 @@ import com.buyeoon.member.application.MemberWithdrawalService;
 import com.buyeoon.member.application.ProfileUpdateService;
 import com.buyeoon.member.application.ProfileUpdateService.ProfileUpdateCommand;
 import com.buyeoon.member.application.PushTokenService;
+import com.buyeoon.member.application.WelcomeBackQueryService;
+import com.buyeoon.member.application.WelcomeBackQueryService.WelcomeBackView;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -38,21 +40,29 @@ public class MemberController {
 	private final MemberWithdrawalService memberWithdrawalService;
 	private final ProfileUpdateService profileUpdateService;
 	private final PushTokenService pushTokenService;
+	private final WelcomeBackQueryService welcomeBackQueryService;
 
 	public MemberController(MemberQueryService memberQueryService,
 			MemberSettingsUpdateService memberSettingsUpdateService, ProfileUpdateService profileUpdateService,
-			PushTokenService pushTokenService, MemberWithdrawalService memberWithdrawalService) {
+			PushTokenService pushTokenService, MemberWithdrawalService memberWithdrawalService,
+			WelcomeBackQueryService welcomeBackQueryService) {
 		this.memberQueryService = memberQueryService;
 		this.memberSettingsUpdateService = memberSettingsUpdateService;
 		this.memberWithdrawalService = memberWithdrawalService;
 		this.profileUpdateService = profileUpdateService;
 		this.pushTokenService = pushTokenService;
+		this.welcomeBackQueryService = welcomeBackQueryService;
 	}
 
 	@GetMapping("/me")
 	public SuccessResponse<MemberView> getMyMember(@AuthenticationPrincipal Jwt jwt) {
 		return SuccessResponse
 				.of(memberQueryService.getActiveMember(UUID.fromString(Objects.requireNonNull(jwt.getSubject()))));
+	}
+
+	@GetMapping("/me/welcome-back")
+	public SuccessResponse<WelcomeBackView> getWelcomeBack(@AuthenticationPrincipal Jwt jwt) {
+		return SuccessResponse.of(welcomeBackQueryService.get(memberId(jwt), sessionId(jwt)));
 	}
 
 	@DeleteMapping("/me")
