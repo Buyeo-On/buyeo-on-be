@@ -372,7 +372,7 @@ class PushNotificationPublisherIntegrationTests {
 		jdbcTemplate.update("""
 				INSERT INTO member_settings
 				    (member_id, nearby_quiz_notification_enabled, dark_mode_enabled, version)
-				VALUES (?, false, false, 0)
+				VALUES (?, true, false, 0)
 				""", memberId);
 		return memberId;
 	}

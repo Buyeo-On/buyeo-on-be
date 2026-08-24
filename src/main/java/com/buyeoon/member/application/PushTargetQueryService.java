@@ -15,17 +15,19 @@ public class PushTargetQueryService {
 		this.jdbcOperations = jdbcOperations;
 	}
 
-	/** 활성 회원의 미폐기·미만료 인증 세션에 연결된 모든 등록 토큰을 반환한다. 알림 설정과 동의는 확인하지 않는다. */
+	/** 활성 회원의 미폐기·미만료 인증 세션에 연결되고 알림 동의가 켜진 등록 토큰만 반환한다. */
 	public List<String> findRegistrationTokens(UUID memberId) {
 		return jdbcOperations.query("""
 				SELECT push_token.registration_token
 				FROM push_tokens push_token
 				JOIN auth_sessions session ON session.id = push_token.auth_session_id
 				JOIN members member ON member.id = session.member_id
+				JOIN member_settings settings ON settings.member_id = member.id
 				WHERE member.id = ?
 				  AND member.status = 'ACTIVE'
 				  AND session.revoked_at IS NULL
 				  AND session.expires_at > CURRENT_TIMESTAMP
+				  AND settings.nearby_quiz_notification_enabled = true
 				""", (resultSet, rowNumber) -> resultSet.getString("registration_token"), memberId);
 	}
 
