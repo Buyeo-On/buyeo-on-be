@@ -50,3 +50,4 @@ adrs: [ADR-012]
 - `PATCH /members/me/settings`의 버전·권한·부분 변경 규칙은 UC-19가 소유하며 UC-11은 해당 API를 연결해 사용한다.
 - 기기 권한과 FCM 등록 토큰 발급은 Flutter와 Firebase SDK가 담당한다.
 - 실제 근처 퀴즈 판정, FCM 발송과 무효 토큰 정리는 알림 기능의 범위다.
+- 이 UC에서 켜는 동의 필드는 근처 퀴즈 알림에서 유래했지만, MVP에서는 push를 발송하는 다른 알림 유형(부여 진입 등)의 동의 여부도 함께 결정한다. 자세한 내용은 [알림 도메인 규칙](../../notification/rules.md)을 참고한다.
