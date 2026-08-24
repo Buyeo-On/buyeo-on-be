@@ -322,7 +322,8 @@ paths:
   /trips/current:
     get:
       tags: [Trips]
-      summary: 진행 중 여행 조회
+      summary: 진행 중이거나 미정산인 여행 조회
+      description: 진행 중이거나(IN_PROGRESS) 종료 후 아직 정산하지 않은(ENDED) 여행을 조회한다. 정산까지 끝났거나(SETTLED) 여행 이력이 없으면 404를 반환한다.
       operationId: getCurrentTrip
       responses:
         '200':
@@ -1139,7 +1140,7 @@ components:
               endedAt: null
               settledAt: null
     CurrentTripSuccess:
-      description: 진행 중 여행 정보
+      description: 진행 중이거나 미정산인 여행 정보
       content:
         application/json:
           schema:

@@ -25,7 +25,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
-/** UC-05 진행 중인 여행 조회(GET /trips/current)를 검증한다. */
+/** UC-05 진행 중이거나 미정산인 여행 조회(GET /trips/current)를 검증한다. */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
@@ -78,12 +78,25 @@ class TripCurrentIntegrationTests {
 		performCurrent(member).andExpect(status().isNotFound());
 	}
 
-	/** 종료된 여행만 있으면(진행 중 여행이 아니므로) 404를 반환한다. */
+	/** 종료됐지만 미정산인 여행이 있으면 그 여행 정보를 반환한다. */
 	@Test
-	@DisplayName("종료된 여행만 있으면 404를 반환한다")
-	void endedTripOnlyReturnsNotFound() throws Exception {
+	@DisplayName("미정산인 종료된 여행이 있으면 200과 여행 정보를 반환한다")
+	void endedUnsettledTripIsReturned() throws Exception {
 		AuthenticatedMember member = insertAuthenticatedMember();
-		insertTrip(member.memberId(), "ENDED");
+		UUID tripId = insertTrip(member.memberId(), "ENDED");
+
+		performCurrent(member).andExpect(status().isOk()).andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.data.tripId").value(tripId.toString()))
+				.andExpect(jsonPath("$.data.status").value("ENDED")).andExpect(jsonPath("$.data.startedAt").isString())
+				.andExpect(jsonPath("$.data.endedAt").isString());
+	}
+
+	/** 정산까지 끝난 여행만 있으면 404를 반환한다. */
+	@Test
+	@DisplayName("정산까지 끝난 여행만 있으면 404를 반환한다")
+	void settledTripOnlyReturnsNotFound() throws Exception {
+		AuthenticatedMember member = insertAuthenticatedMember();
+		insertTrip(member.memberId(), "SETTLED");
 
 		performCurrent(member).andExpect(status().isNotFound());
 	}
@@ -116,12 +129,13 @@ class TripCurrentIntegrationTests {
 	private UUID insertTrip(UUID memberId, String status) {
 		UUID tripId = UUID.randomUUID();
 		Instant startedAt = Instant.parse("2026-08-12T09:00:00Z");
-		Instant endedAt = "ENDED".equals(status) ? startedAt.plus(2, ChronoUnit.HOURS) : null;
+		Instant endedAt = "IN_PROGRESS".equals(status) ? null : startedAt.plus(2, ChronoUnit.HOURS);
+		Instant settledAt = "SETTLED".equals(status) ? startedAt.plus(3, ChronoUnit.HOURS) : null;
 		jdbcTemplate.update("""
-				INSERT INTO trips (id, member_id, status, started_at, ended_at)
-				VALUES (?, ?, ?::trip_status, ?, ?)
+				INSERT INTO trips (id, member_id, status, started_at, ended_at, settled_at)
+				VALUES (?, ?, ?::trip_status, ?, ?, ?)
 				""", tripId, memberId, status, Timestamp.from(startedAt),
-				endedAt == null ? null : Timestamp.from(endedAt));
+				endedAt == null ? null : Timestamp.from(endedAt), settledAt == null ? null : Timestamp.from(settledAt));
 		return tripId;
 	}
 
