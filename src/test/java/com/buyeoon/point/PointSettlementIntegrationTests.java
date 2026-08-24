@@ -181,14 +181,19 @@ class PointSettlementIntegrationTests {
 				.andExpect(jsonPath("$.data.code").value("INVALID_REQUEST"));
 	}
 
-	/** 정산 대상이 0인데 선택을 보내면 400을 반환한다. */
 	@Test
-	@DisplayName("정산 대상이 0인데 선택을 보내면 400을 반환한다")
-	void choiceForZeroSettleableReturnsBadRequest() throws Exception {
+	@DisplayName("정산 대상이 0이어도 CARRY_OVER 선택으로 정산한다")
+	void zeroSettleableCanCarryOver() throws Exception {
 		UUID tripId = insertEndedTrip(member.memberId());
 
-		performSettle(member, tripId, "bad-choice-key-02", "CARRY_OVER").andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.data.code").value("INVALID_REQUEST"));
+		performSettle(member, tripId, "zero-carry-key-01", "CARRY_OVER").andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.choice").value("CARRY_OVER"))
+				.andExpect(jsonPath("$.data.settledPoints").value(0))
+				.andExpect(jsonPath("$.data.remainingBalance").value(0))
+				.andExpect(jsonPath("$.data.expiresAt").isString());
+
+		assertThat(jdbcTemplate.queryForObject("SELECT status::text FROM trips WHERE id = ?", String.class, tripId))
+				.isEqualTo("SETTLED");
 	}
 
 	/** Idempotency-Key가 없으면 400을 반환한다. */

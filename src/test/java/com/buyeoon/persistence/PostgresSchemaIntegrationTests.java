@@ -357,7 +357,7 @@ class PostgresSchemaIntegrationTests {
 
 	/** 실제 마이그레이션 DB가 정산 선택별 포인트·만료 계약을 강제하는지 검증한다. */
 	@Test
-	@DisplayName("DB는 유효한 세 정산 선택만 허용하고 양수 정산의 0포인트를 거부한다")
+	@DisplayName("DB는 유효한 세 정산 선택을 허용하고 기부·이월의 0포인트 정산도 허용한다")
 	void pointSettlementChoicesEnforcePointsAndExpirationContract() {
 		UUID memberId = UUID.randomUUID();
 		UUID leaveTripId = UUID.randomUUID();
@@ -389,17 +389,15 @@ class PostgresSchemaIntegrationTests {
 					VALUES (?, 'NO_POINTS', 0, ?)
 					""", noPointsTripId, Timestamp.from(settledAt));
 
-			assertThatThrownBy(() -> jdbcTemplate.update("""
+			jdbcTemplate.update("""
 					INSERT INTO point_settlements (trip_id, choice, settled_points, settled_at)
 					VALUES (?, 'LEAVE_TO_BUYEO', 0, ?)
-					""", zeroLeaveTripId, Timestamp.from(settledAt)))
-					.isInstanceOf(DataIntegrityViolationException.class);
-			assertThatThrownBy(() -> jdbcTemplate.update("""
+					""", zeroLeaveTripId, Timestamp.from(settledAt));
+			jdbcTemplate.update("""
 					INSERT INTO point_settlements (trip_id, choice, settled_points, settled_at, expires_at)
 					VALUES (?, 'CARRY_OVER', 0, ?, ?)
 					""", zeroCarryTripId, Timestamp.from(settledAt),
-					Timestamp.from(settledAt.plus(240, ChronoUnit.HOURS))))
-					.isInstanceOf(DataIntegrityViolationException.class);
+					Timestamp.from(settledAt.plus(240, ChronoUnit.HOURS)));
 		} finally {
 			jdbcTemplate.update("DELETE FROM members WHERE id = ?", memberId);
 		}
@@ -419,20 +417,23 @@ class PostgresSchemaIntegrationTests {
 		try {
 			assertThatThrownBy(() -> jdbcTemplate.update("""
 					INSERT INTO missions
-					    (place_id, type, title, description, reward_points, max_attempts)
-					VALUES (?, 'PHOTO', 'Photo', 'Take a photo', 100, 1)
+					    (place_id, location, type, title, description, reward_points, max_attempts)
+					VALUES (?, ST_SetSRID(ST_MakePoint(126.91, 36.28), 4326)::geography, 'PHOTO', 'Photo',
+					        'Take a photo', 100, 1)
 					""", placeId)).isInstanceOf(DataIntegrityViolationException.class);
 
 			jdbcTemplate.update("""
 					INSERT INTO missions
-					    (place_id, type, title, description, reward_points, max_attempts)
-					VALUES (?, 'MULTIPLE_CHOICE', 'Multiple choice', 'Choose one', 100, 3)
+					    (place_id, location, type, title, description, reward_points, max_attempts)
+					VALUES (?, ST_SetSRID(ST_MakePoint(126.91, 36.28), 4326)::geography, 'MULTIPLE_CHOICE',
+					        'Multiple choice', 'Choose one', 100, 3)
 					""", placeId);
 			jdbcTemplate.update("""
 					INSERT INTO missions
-					    (place_id, type, title, description, reward_points, max_attempts,
+					    (place_id, location, type, title, description, reward_points, max_attempts,
 					     ox_correct_answer)
-					VALUES (?, 'OX', 'OX', 'True or false', 100, NULL, true)
+					VALUES (?, ST_SetSRID(ST_MakePoint(126.91, 36.28), 4326)::geography, 'OX', 'OX',
+					        'True or false', 100, NULL, true)
 					""", placeId);
 
 			assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM missions WHERE place_id = ?", Long.class,

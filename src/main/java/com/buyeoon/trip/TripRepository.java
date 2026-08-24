@@ -15,6 +15,9 @@ public interface TripRepository extends JpaRepository<TripEntity, UUID> {
 
 	Optional<TripEntity> findByMemberIdAndStatus(UUID memberId, TripStatus status);
 
+	/** 회원이 진행 중이거나 종료 후 미정산인 여행을 조회한다. 이 두 상태는 동시에 최대 하나만 존재한다. */
+	Optional<TripEntity> findByMemberIdAndStatusIn(UUID memberId, Collection<TripStatus> statuses);
+
 	/** 회원이 여행 시작을 막는 상태의 여행을 소유하는지 확인한다. */
 	boolean existsByMemberIdAndStatusIn(UUID memberId, Collection<TripStatus> statuses);
 

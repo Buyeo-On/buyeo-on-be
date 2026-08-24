@@ -21,6 +21,7 @@
 - [UC-17 여행 통계 조회](./domains/trip/use-cases/uc-17-view-trip-statistics.md)
 - [UC-23 여행 끝내기](./domains/trip/use-cases/uc-23-end-trip.md)
 - [UC-25 발자취 조회](./domains/trip/use-cases/uc-25-view-footprint.md)
+- [UC-26 여행 사진 조회](./domains/trip/use-cases/uc-26-view-trip-photos.md)
 
 ## 장소
 

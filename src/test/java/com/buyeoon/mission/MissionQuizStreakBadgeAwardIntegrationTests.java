@@ -223,9 +223,10 @@ class MissionQuizStreakBadgeAwardIntegrationTests {
 	private UUID insertOxMission(UUID placeId, String title, int rewardPoints, boolean correctAnswer) {
 		UUID id = UUID.randomUUID();
 		jdbcTemplate.update(
-				"INSERT INTO missions (id, place_id, type, title, description, reward_points, max_attempts, "
-						+ "ox_correct_answer) VALUES (?, ?, 'OX'::mission_type, ?, '설명', ?, NULL, ?)",
-				id, placeId, title, rewardPoints, correctAnswer);
+				"INSERT INTO missions (id, place_id, location, type, title, description, reward_points, "
+						+ "max_attempts, ox_correct_answer) VALUES (?, ?, (SELECT location FROM places WHERE id = ?), "
+						+ "'OX'::mission_type, ?, '설명', ?, NULL, ?)",
+				id, placeId, placeId, title, rewardPoints, correctAnswer);
 		return id;
 	}
 
