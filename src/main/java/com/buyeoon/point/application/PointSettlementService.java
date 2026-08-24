@@ -118,10 +118,7 @@ public class PointSettlementService {
 		if (settleablePoints > 0 && choice == null) {
 			throw new InvalidPointRequestException();
 		}
-		if (settleablePoints == 0 && choice != null) {
-			throw new InvalidPointRequestException();
-		}
-		SettlementChoice finalChoice = settleablePoints == 0 ? SettlementChoice.NO_POINTS : choice;
+		SettlementChoice finalChoice = choice != null ? choice : SettlementChoice.NO_POINTS;
 
 		long balance = pointTransactions.sumAmountByMemberId(memberId);
 		if (balance < settleablePoints) {
@@ -132,13 +129,14 @@ public class PointSettlementService {
 				settledAt);
 		pointSettlements.save(settlement);
 
-		if (finalChoice == SettlementChoice.LEAVE_TO_BUYEO) {
+		if (finalChoice == SettlementChoice.LEAVE_TO_BUYEO && settleablePoints > 0) {
 			leaveToBuyeo(memberId, tripId, settleablePoints, settledAt);
 		}
 
 		tripSettlementService.settle(tripId, settledAt);
 
-		List<AwardedBadgeResult> newlyAwardedBadges = awardDonationBadges(memberId, tripId, finalChoice);
+		List<AwardedBadgeResult> newlyAwardedBadges = awardDonationBadges(memberId, tripId, finalChoice,
+				settleablePoints);
 
 		long remainingBalance = pointTransactions.sumAmountByMemberId(memberId);
 		TripSettlementResult result = new TripSettlementResult(tripId, finalChoice, settleablePoints, remainingBalance,
@@ -164,8 +162,9 @@ public class PointSettlementService {
 	 * 양수 포인트를 부여에 남기는 정산만 {@code POINT_DONATION_COUNT}를 판정한다(UC-14, ADR-003). badge
 	 * Provider query가 방금 확정한 정산 row를 포함하도록 flush한 뒤 같은 transaction에서 판정한다.
 	 */
-	private List<AwardedBadgeResult> awardDonationBadges(UUID memberId, UUID tripId, SettlementChoice choice) {
-		if (choice != SettlementChoice.LEAVE_TO_BUYEO) {
+	private List<AwardedBadgeResult> awardDonationBadges(UUID memberId, UUID tripId, SettlementChoice choice,
+			long settleablePoints) {
+		if (choice != SettlementChoice.LEAVE_TO_BUYEO || settleablePoints <= 0) {
 			return List.of();
 		}
 		pointSettlements.flush();
