@@ -357,7 +357,7 @@ class PostgresSchemaIntegrationTests {
 
 	/** 실제 마이그레이션 DB가 정산 선택별 포인트·만료 계약을 강제하는지 검증한다. */
 	@Test
-	@DisplayName("DB는 유효한 세 정산 선택만 허용하고 양수 정산의 0포인트를 거부한다")
+	@DisplayName("DB는 유효한 세 정산 선택을 허용하고 기부·이월의 0포인트 정산도 허용한다")
 	void pointSettlementChoicesEnforcePointsAndExpirationContract() {
 		UUID memberId = UUID.randomUUID();
 		UUID leaveTripId = UUID.randomUUID();
@@ -389,17 +389,15 @@ class PostgresSchemaIntegrationTests {
 					VALUES (?, 'NO_POINTS', 0, ?)
 					""", noPointsTripId, Timestamp.from(settledAt));
 
-			assertThatThrownBy(() -> jdbcTemplate.update("""
+			jdbcTemplate.update("""
 					INSERT INTO point_settlements (trip_id, choice, settled_points, settled_at)
 					VALUES (?, 'LEAVE_TO_BUYEO', 0, ?)
-					""", zeroLeaveTripId, Timestamp.from(settledAt)))
-					.isInstanceOf(DataIntegrityViolationException.class);
-			assertThatThrownBy(() -> jdbcTemplate.update("""
+					""", zeroLeaveTripId, Timestamp.from(settledAt));
+			jdbcTemplate.update("""
 					INSERT INTO point_settlements (trip_id, choice, settled_points, settled_at, expires_at)
 					VALUES (?, 'CARRY_OVER', 0, ?, ?)
 					""", zeroCarryTripId, Timestamp.from(settledAt),
-					Timestamp.from(settledAt.plus(240, ChronoUnit.HOURS))))
-					.isInstanceOf(DataIntegrityViolationException.class);
+					Timestamp.from(settledAt.plus(240, ChronoUnit.HOURS)));
 		} finally {
 			jdbcTemplate.update("DELETE FROM members WHERE id = ?", memberId);
 		}
