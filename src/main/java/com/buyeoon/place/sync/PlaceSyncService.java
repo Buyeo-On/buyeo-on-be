@@ -13,10 +13,13 @@ public class PlaceSyncService {
 	private static final Logger log = LoggerFactory.getLogger(PlaceSyncService.class);
 
 	private final TourApiClient tourApiClient;
+	private final KakaoImageSearchClient kakaoImageSearchClient;
 	private final PlaceUpsertService placeUpsertService;
 
-	public PlaceSyncService(TourApiClient tourApiClient, PlaceUpsertService placeUpsertService) {
+	public PlaceSyncService(TourApiClient tourApiClient, KakaoImageSearchClient kakaoImageSearchClient,
+			PlaceUpsertService placeUpsertService) {
 		this.tourApiClient = tourApiClient;
+		this.kakaoImageSearchClient = kakaoImageSearchClient;
 		this.placeUpsertService = placeUpsertService;
 	}
 
@@ -32,6 +35,10 @@ public class PlaceSyncService {
 			}
 			try {
 				TourApiPlaceDetail detail = tourApiClient.fetchPlaceDetail(item);
+				if (detail.firstImageUrl() == null || detail.firstImageUrl().isBlank()) {
+					detail = detail.withFirstImageUrl(
+							kakaoImageSearchClient.findFirstImageUrl(detail.title(), detail.address()).orElse(null));
+				}
 				placeUpsertService.upsert(category, detail);
 				successCount++;
 			} catch (RuntimeException exception) {
