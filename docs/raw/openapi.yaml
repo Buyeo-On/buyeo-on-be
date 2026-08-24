@@ -100,6 +100,19 @@ paths:
           $ref: '#/components/responses/EmptySuccess'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /members/me/welcome-back:
+    get:
+      tags: [Members]
+      summary: 기존 회원 복귀 요약 조회
+      description: 현재 인증 세션 직전 로그인 시각과 군민증·포인트·누적 방문 장소·획득 배지 수를 반환한다.
+      operationId: getWelcomeBack
+      responses:
+        '200':
+          $ref: '#/components/responses/WelcomeBackSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /members/me/social-accounts:
     post:
       tags: [Members]
@@ -928,6 +941,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/MemberEnvelope'
+    WelcomeBackSuccess:
+      description: 기존 회원 복귀 요약
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/WelcomeBackEnvelope'
     SettingsSuccess:
       description: 서비스 설정
       content:
@@ -2000,6 +2019,24 @@ components:
         notice:
           type: string
           example: 실제 상점에서의 사용은 제한됩니다.
+    WelcomeBackData:
+      type: object
+      required: [citizenCard, pointBalance, visitedPlaceCount, earnedBadgeCount]
+      properties:
+        lastVisitedAt:
+          type: [string, 'null']
+          format: date-time
+        citizenCard:
+          $ref: '#/components/schemas/CitizenCard'
+        pointBalance:
+          type: integer
+          minimum: 0
+        visitedPlaceCount:
+          type: integer
+          minimum: 0
+        earnedBadgeCount:
+          type: integer
+          minimum: 0
     TripStatus:
       type: string
       enum: [IN_PROGRESS, ENDED, SETTLED]
@@ -2674,6 +2711,13 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/Member'
+    WelcomeBackEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/WelcomeBackData'
     SettingsEnvelope:
       allOf:
         - $ref: '#/components/schemas/SuccessEnvelope'

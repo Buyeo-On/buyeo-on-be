@@ -15,6 +15,8 @@ public interface MemberBadgeRepository extends JpaRepository<MemberBadgeEntity, 
 	/** 회원이 획득한 모든 배지 이력을 조회한다. */
 	List<MemberBadgeEntity> findByIdMemberId(UUID memberId);
 
+	long countByIdMemberId(UUID memberId);
+
 	/** 회원이 특정 배지를 획득했는지와 획득 시각을 조회한다. */
 	Optional<MemberBadgeEntity> findByIdMemberIdAndIdBadgeId(UUID memberId, UUID badgeId);
 
