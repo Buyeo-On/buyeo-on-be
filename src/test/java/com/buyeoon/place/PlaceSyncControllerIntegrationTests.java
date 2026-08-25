@@ -87,15 +87,38 @@ class PlaceSyncControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.failureCount").value(0));
 
 		Map<String, Object> row = jdbcTemplate.queryForMap(
-				"SELECT name, category::text, opens_at, closes_at, admission_fee, operating_hours_raw, source_image_href "
+				"SELECT name, summary, category::text, opens_at, closes_at, always_open, admission_fee, operating_hours_raw, source_image_href "
 						+ "FROM places WHERE source_name = 'TOUR_API' AND external_id = '1001'");
 		assertThat(row.get("name")).isEqualTo("부소산성");
+		assertThat(row.get("summary")).isEqualTo("백제의 마지막 왕성");
 		assertThat(row.get("category")).isEqualTo("HERITAGE");
 		assertThat(row.get("opens_at")).isEqualTo(Time.valueOf(LocalTime.of(9, 0)));
 		assertThat(row.get("closes_at")).isEqualTo(Time.valueOf(LocalTime.of(18, 0)));
+		assertThat(row.get("always_open")).isEqualTo(false);
 		assertThat(row.get("admission_fee")).isEqualTo(0);
 		assertThat(row.get("operating_hours_raw")).isEqualTo("09:00~18:00");
 		assertThat(row.get("source_image_href")).isEqualTo("https://tourapi.example.com/image.jpg");
+	}
+
+	@Test
+	@DisplayName("상시 개방과 무료 입장 정보는 구조화 필드로 저장된다")
+	void syncsAlwaysOpenAndFreeAdmission() throws Exception {
+		TourApiAreaItem item = new TourApiAreaItem("1002", "12", null);
+		given(tourApiClient.fetchAreaItems()).willReturn(List.of(item));
+		given(tourApiClient.fetchPlaceDetail(item)).willReturn(new TourApiPlaceDetail("1002", "정림사지",
+				"백제 문화의 정수, 정림사지 오층석탑이 있는 절터예요. 국보 제9호로 사비 백제를 대표해요.", "충남 부여군",
+				null, 36.2, 126.9, "상시 개방", "입장료 없음"));
+
+		mockMvc.perform(syncRequest()).andExpect(status().isOk());
+
+		Map<String, Object> row = jdbcTemplate.queryForMap(
+				"SELECT summary, always_open, opens_at, closes_at, admission_fee FROM places "
+						+ "WHERE source_name = 'TOUR_API' AND external_id = '1002'");
+		assertThat(row.get("summary")).isEqualTo("백제 문화의 정수, 정림사지 오층석탑이 있는 절터예요");
+		assertThat(row.get("always_open")).isEqualTo(true);
+		assertThat(row.get("opens_at")).isNull();
+		assertThat(row.get("closes_at")).isNull();
+		assertThat(row.get("admission_fee")).isEqualTo(0);
 	}
 
 	/** 기존 external_id를 가진 장소는 새로 삽입되지 않고 모든 필드가 최신값으로 덮어써진다. */

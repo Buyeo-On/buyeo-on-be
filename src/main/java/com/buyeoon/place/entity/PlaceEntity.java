@@ -64,6 +64,9 @@ public class PlaceEntity {
 	@Column(name = "operating_hours_raw", columnDefinition = "text")
 	private String operatingHoursRaw;
 
+	@Column(name = "always_open", nullable = false)
+	private boolean alwaysOpen;
+
 	@Column(name = "opens_at")
 	private LocalTime opensAt;
 
@@ -90,9 +93,10 @@ public class PlaceEntity {
 		return place;
 	}
 
-	public void applyOperatingInfo(String operatingHoursRaw, LocalTime opensAt, LocalTime closesAt,
+	public void applyOperatingInfo(String operatingHoursRaw, boolean alwaysOpen, LocalTime opensAt, LocalTime closesAt,
 			Integer admissionFee) {
 		this.operatingHoursRaw = operatingHoursRaw;
+		this.alwaysOpen = alwaysOpen;
 		this.opensAt = opensAt;
 		this.closesAt = closesAt;
 		this.admissionFee = admissionFee;

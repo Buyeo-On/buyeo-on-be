@@ -32,14 +32,16 @@ class PlaceUpsertService {
 		Point location = geometryFactory.createPoint(new Coordinate(detail.longitude(), detail.latitude()));
 		ParsedOperatingHours parsedHours = OperatingHoursParser.parse(detail.useTime());
 		Integer admissionFee = OperatingHoursParser.parseFee(detail.useFee());
+		String summary = PlaceSummaryGenerator.fromOverview(detail.overview());
 
 		PlaceEntity place = placeQueryRepository.findBySourceNameAndExternalId(SOURCE_NAME, detail.contentId())
-				.orElseGet(() -> PlaceEntity.createFromSync(category, detail.title(), null, detail.overview(),
+				.orElseGet(() -> PlaceEntity.createFromSync(category, detail.title(), summary, detail.overview(),
 						detail.address(), location, SOURCE_NAME, detail.contentId(), null, detail.firstImageUrl()));
 
-		place.overwriteFrom(category, detail.title(), null, detail.overview(), detail.address(), location, null,
+		place.overwriteFrom(category, detail.title(), summary, detail.overview(), detail.address(), location, null,
 				detail.firstImageUrl());
-		place.applyOperatingInfo(detail.useTime(), parsedHours.opensAt(), parsedHours.closesAt(), admissionFee);
+		place.applyOperatingInfo(detail.useTime(), parsedHours.alwaysOpen(), parsedHours.opensAt(), parsedHours.closesAt(),
+				admissionFee);
 		placeQueryRepository.saveAndFlush(place);
 	}
 }

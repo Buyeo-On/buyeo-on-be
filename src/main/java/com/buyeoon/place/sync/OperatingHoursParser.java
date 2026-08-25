@@ -13,25 +13,29 @@ final class OperatingHoursParser {
 
 	private static final Pattern RANGE_PATTERN = Pattern.compile("(\\d{1,2}:\\d{2})\\s*[~\\-]\\s*(\\d{1,2}:\\d{2})");
 	private static final Pattern FEE_DIGITS_PATTERN = Pattern.compile("([\\d,]+)\\s*원");
-	private static final Pattern FREE_PATTERN = Pattern.compile("무료");
+	private static final Pattern ALWAYS_OPEN_PATTERN = Pattern.compile("상시\\s*개방|연중\\s*무휴");
+	private static final Pattern FREE_PATTERN = Pattern.compile("무\\s*료|입장\\s*료\\s*(없음|없다|면제)");
 
 	private OperatingHoursParser() {
 	}
 
 	static ParsedOperatingHours parse(String raw) {
 		if (raw == null || raw.isBlank()) {
-			return new ParsedOperatingHours(null, null);
+			return new ParsedOperatingHours(false, null, null);
+		}
+		if (ALWAYS_OPEN_PATTERN.matcher(raw).find()) {
+			return new ParsedOperatingHours(true, null, null);
 		}
 		Matcher matcher = RANGE_PATTERN.matcher(raw);
 		if (!matcher.find()) {
-			return new ParsedOperatingHours(null, null);
+			return new ParsedOperatingHours(false, null, null);
 		}
 		try {
 			LocalTime opensAt = LocalTime.parse(normalize(matcher.group(1)));
 			LocalTime closesAt = LocalTime.parse(normalize(matcher.group(2)));
-			return new ParsedOperatingHours(opensAt, closesAt);
+			return new ParsedOperatingHours(false, opensAt, closesAt);
 		} catch (DateTimeParseException exception) {
-			return new ParsedOperatingHours(null, null);
+			return new ParsedOperatingHours(false, null, null);
 		}
 	}
 
@@ -57,6 +61,6 @@ final class OperatingHoursParser {
 		return hhmm.length() == 4 ? "0" + hhmm : hhmm;
 	}
 
-	record ParsedOperatingHours(LocalTime opensAt, LocalTime closesAt) {
+	record ParsedOperatingHours(boolean alwaysOpen, LocalTime opensAt, LocalTime closesAt) {
 	}
 }

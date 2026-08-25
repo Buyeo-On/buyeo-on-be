@@ -145,6 +145,7 @@ CREATE TABLE places (
     source_url text, -- 관광데이터 원문 URL
     source_image_href text, -- 외부 출처의 대표이미지 URL(S3 객체 키가 아님)
     operating_hours_raw text, -- 관람시간 원문(TourAPI usetime 등, 파싱 실패 시 UI 표시용)
+    always_open boolean NOT NULL DEFAULT false,
     opens_at time, -- 파싱에 성공한 경우의 관람 시작 시각
     closes_at time, -- 파싱에 성공한 경우의 관람 종료 시각
     admission_fee integer, -- 입장료(원), 무료는 0
