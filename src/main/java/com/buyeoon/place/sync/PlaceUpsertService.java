@@ -42,6 +42,7 @@ class PlaceUpsertService {
 				detail.firstImageUrl());
 		place.applyOperatingInfo(detail.useTime(), parsedHours.alwaysOpen(), parsedHours.opensAt(), parsedHours.closesAt(),
 				admissionFee);
+		place.applyDetailInfo(detail.detailInfo());
 		placeQueryRepository.saveAndFlush(place);
 	}
 }

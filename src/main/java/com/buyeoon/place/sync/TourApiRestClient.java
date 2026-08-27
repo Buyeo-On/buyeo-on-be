@@ -53,7 +53,8 @@ class TourApiRestClient implements TourApiClient {
 
 		return new TourApiPlaceDetail(item.contentId(), commonItem.title(), commonItem.overview(), commonItem.addr1(),
 				commonItem.firstimage(), Double.parseDouble(commonItem.mapy()), Double.parseDouble(commonItem.mapx()),
-				introItem == null ? null : introItem.usetime(), introItem == null ? null : introItem.usefee());
+				introItem == null ? null : introItem.usetime(), introItem == null ? null : introItem.usefee(),
+				Map.of());
 	}
 
 	@Override

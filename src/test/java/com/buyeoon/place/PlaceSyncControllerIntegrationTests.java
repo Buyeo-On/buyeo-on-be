@@ -12,6 +12,7 @@ import com.buyeoon.place.sync.TourApiClient;
 import com.buyeoon.place.sync.TourApiPlaceDetail;
 import java.sql.Time;
 import java.time.LocalTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterAll;
@@ -80,7 +81,7 @@ class PlaceSyncControllerIntegrationTests {
 		TourApiAreaItem item = new TourApiAreaItem("1001", "12", null);
 		given(tourApiClient.fetchAreaItems()).willReturn(List.of(item));
 		given(tourApiClient.fetchPlaceDetail(item)).willReturn(new TourApiPlaceDetail("1001", "부소산성", "백제의 마지막 왕성",
-				"충남 부여군 부여읍", "https://tourapi.example.com/image.jpg", 36.2754, 126.9098, "09:00~18:00", "무료"));
+				"충남 부여군 부여읍", "https://tourapi.example.com/image.jpg", 36.2754, 126.9098, "09:00~18:00", "무료", Map.of()));
 
 		mockMvc.perform(syncRequest()).andExpect(status().isOk()).andExpect(jsonPath("$.success").value(true))
 				.andExpect(jsonPath("$.data.successCount").value(1))
@@ -107,7 +108,7 @@ class PlaceSyncControllerIntegrationTests {
 		given(tourApiClient.fetchAreaItems()).willReturn(List.of(item));
 		given(tourApiClient.fetchPlaceDetail(item)).willReturn(new TourApiPlaceDetail("1002", "정림사지",
 				"백제 문화의 정수, 정림사지 오층석탑이 있는 절터예요. 국보 제9호로 사비 백제를 대표해요.", "충남 부여군",
-				null, 36.2, 126.9, "상시 개방", "입장료 없음"));
+				null, 36.2, 126.9, "상시 개방", "입장료 없음", Map.of()));
 
 		mockMvc.perform(syncRequest()).andExpect(status().isOk());
 
@@ -134,7 +135,7 @@ class PlaceSyncControllerIntegrationTests {
 		TourApiAreaItem item = new TourApiAreaItem("2002", "12", null);
 		given(tourApiClient.fetchAreaItems()).willReturn(List.of(item));
 		given(tourApiClient.fetchPlaceDetail(item))
-				.willReturn(new TourApiPlaceDetail("2002", "새 이름", "새 설명", "새 주소", null, 36.5, 126.5, null, null));
+				.willReturn(new TourApiPlaceDetail("2002", "새 이름", "새 설명", "새 주소", null, 36.5, 126.5, null, null, Map.of()));
 
 		mockMvc.perform(syncRequest()).andExpect(status().isOk()).andExpect(jsonPath("$.data.successCount").value(1));
 
@@ -154,7 +155,7 @@ class PlaceSyncControllerIntegrationTests {
 		TourApiAreaItem item = new TourApiAreaItem("3003", "14", null);
 		given(tourApiClient.fetchAreaItems()).willReturn(List.of(item));
 		given(tourApiClient.fetchPlaceDetail(item)).willReturn(
-				new TourApiPlaceDetail("3003", "박물관", "설명", "주소", null, 36.3, 126.3, "매주 월요일 휴관, 문의 요망", null));
+				new TourApiPlaceDetail("3003", "박물관", "설명", "주소", null, 36.3, 126.3, "매주 월요일 휴관, 문의 요망", null, Map.of()));
 
 		mockMvc.perform(syncRequest()).andExpect(status().isOk()).andExpect(jsonPath("$.data.successCount").value(1));
 
@@ -166,6 +167,62 @@ class PlaceSyncControllerIntegrationTests {
 		assertThat(row.get("operating_hours_raw")).isEqualTo("매주 월요일 휴관, 문의 요망");
 	}
 
+	/** detailInfo2 이용안내가 jsonb 컬럼에 항목명 -> 내용으로 저장된다. */
+	@Test
+	@DisplayName("detailInfo2 이용안내가 detail_info에 저장된다")
+	void storesDetailInfo() throws Exception {
+		TourApiAreaItem item = new TourApiAreaItem("5005", "12", null);
+		given(tourApiClient.fetchAreaItems()).willReturn(List.of(item));
+		given(tourApiClient.fetchPlaceDetail(item))
+				.willReturn(new TourApiPlaceDetail("5005", "금강 문화관", "설명", "주소", null, 36.4, 126.4, null, null,
+						Map.of()));
+		given(tourApiClient.fetchPlaceInfo(item))
+				.willReturn(new LinkedHashMap<>(Map.of("입장료", "무료", "화장실", "있음")));
+
+		mockMvc.perform(syncRequest()).andExpect(status().isOk()).andExpect(jsonPath("$.data.successCount").value(1));
+
+		String detailInfo = jdbcTemplate.queryForObject("SELECT detail_info::text FROM places "
+				+ "WHERE source_name = 'TOUR_API' AND external_id = '5005'", String.class);
+		assertThat(detailInfo).contains("\"입장료\": \"무료\"").contains("\"화장실\": \"있음\"");
+	}
+
+	/** 이용안내가 없는 장소는 빈 jsonb 객체로 남고 나머지 필드는 정상 저장된다. */
+	@Test
+	@DisplayName("이용안내가 없으면 detail_info는 빈 객체로 남는다")
+	void storesEmptyDetailInfoWhenAbsent() throws Exception {
+		TourApiAreaItem item = new TourApiAreaItem("5006", "39", null);
+		given(tourApiClient.fetchAreaItems()).willReturn(List.of(item));
+		given(tourApiClient.fetchPlaceDetail(item))
+				.willReturn(new TourApiPlaceDetail("5006", "식당", "설명", "주소", null, 36.5, 126.5, null, null, Map.of()));
+		given(tourApiClient.fetchPlaceInfo(item)).willReturn(Map.of());
+
+		mockMvc.perform(syncRequest()).andExpect(status().isOk()).andExpect(jsonPath("$.data.successCount").value(1));
+
+		Map<String, Object> row = jdbcTemplate.queryForMap("SELECT name, detail_info::text AS detail_info FROM places "
+				+ "WHERE source_name = 'TOUR_API' AND external_id = '5006'");
+		assertThat(row.get("name")).isEqualTo("식당");
+		assertThat(row.get("detail_info")).isEqualTo("{}");
+	}
+
+	/** 재동기화하면 이용안내는 병합하지 않고 최신 응답으로 통째로 교체된다. */
+	@Test
+	@DisplayName("재동기화 시 이용안내는 최신 응답으로 교체된다")
+	void replacesDetailInfoOnResync() throws Exception {
+		TourApiAreaItem item = new TourApiAreaItem("5007", "12", null);
+		given(tourApiClient.fetchAreaItems()).willReturn(List.of(item));
+		given(tourApiClient.fetchPlaceDetail(item))
+				.willReturn(new TourApiPlaceDetail("5007", "박물관", "설명", "주소", null, 36.6, 126.6, null, null, Map.of()));
+		given(tourApiClient.fetchPlaceInfo(item)).willReturn(Map.of("입장료", "무료", "등산로", "있음"));
+		mockMvc.perform(syncRequest()).andExpect(status().isOk());
+
+		given(tourApiClient.fetchPlaceInfo(item)).willReturn(Map.of("입장료", "2,000원"));
+		mockMvc.perform(syncRequest()).andExpect(status().isOk());
+
+		String detailInfo = jdbcTemplate.queryForObject("SELECT detail_info::text FROM places "
+				+ "WHERE source_name = 'TOUR_API' AND external_id = '5007'", String.class);
+		assertThat(detailInfo).contains("2,000원").doesNotContain("등산로");
+	}
+
 	/** 특정 항목 호출이 실패해도 나머지 항목은 계속 진행되고 실패한 contentId가 응답에 포함된다. */
 	@Test
 	@DisplayName("일부 항목이 실패해도 나머지는 계속 진행되고 실패 목록에 포함된다")
@@ -174,7 +231,7 @@ class PlaceSyncControllerIntegrationTests {
 		TourApiAreaItem failingItem = new TourApiAreaItem("4005", "12", null);
 		given(tourApiClient.fetchAreaItems()).willReturn(List.of(okItem, failingItem));
 		given(tourApiClient.fetchPlaceDetail(okItem))
-				.willReturn(new TourApiPlaceDetail("4004", "정림사지", "설명", "주소", null, 36.1, 126.1, null, null));
+				.willReturn(new TourApiPlaceDetail("4004", "정림사지", "설명", "주소", null, 36.1, 126.1, null, null, Map.of()));
 		willThrow(new IllegalStateException("TourAPI 호출 실패")).given(tourApiClient).fetchPlaceDetail(failingItem);
 
 		mockMvc.perform(syncRequest()).andExpect(status().isOk()).andExpect(jsonPath("$.data.successCount").value(1))
