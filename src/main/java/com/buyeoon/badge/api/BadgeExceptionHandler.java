@@ -7,10 +7,10 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(assignableTypes = BadgeController.class)
+@RestControllerAdvice(assignableTypes = {BadgeController.class, BadgeAdminController.class})
 public class BadgeExceptionHandler {
 
-	@ExceptionHandler(InvalidBadgeRequestException.class)
+	@ExceptionHandler({InvalidBadgeRequestException.class, InvalidBadgeAdminRequestException.class})
 	@ResponseStatus(HttpStatus.BAD_REQUEST)
 	public ErrorResponse handleInvalidRequest() {
 		return ErrorResponse.invalidRequest();

@@ -10,4 +10,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface BadgeConditionRepository extends JpaRepository<BadgeConditionEntity, BadgeConditionId> {
 
 	List<BadgeConditionEntity> findByIdBadgeIdIn(Collection<UUID> badgeIds);
+
+	void deleteByIdBadgeId(UUID badgeId);
 }

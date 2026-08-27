@@ -4,6 +4,8 @@ import com.buyeoon.mission.entity.MissionEntity;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -23,7 +25,8 @@ public interface MissionQueryRepository extends JpaRepository<MissionEntity, UUI
 			JOIN PlaceEntity p ON p.id = m.placeId
 			LEFT JOIN MissionParticipationEntity participation
 			    ON participation.missionId = m.id AND participation.tripId = :tripId
-			WHERE ST_Distance(m.location,
+			WHERE m.deletedAt IS NULL
+			  AND ST_Distance(m.location,
 			          ST_SetSRID(ST_MakePoint(cast(:longitude as double), cast(:latitude as double)), 4326)) <= 500
 			ORDER BY 3 ASC, m.id ASC
 			""")
@@ -40,6 +43,7 @@ public interface MissionQueryRepository extends JpaRepository<MissionEntity, UUI
 			LEFT JOIN MissionParticipationEntity participation
 			    ON participation.missionId = m.id AND participation.tripId = :tripId
 			WHERE m.id = :missionId
+			  AND m.deletedAt IS NULL
 			""")
 	Optional<NearbyMissionProjection> findDetail(@Param("missionId") UUID missionId, @Param("tripId") UUID tripId,
 			@Param("latitude") double latitude, @Param("longitude") double longitude);
@@ -51,7 +55,10 @@ public interface MissionQueryRepository extends JpaRepository<MissionEntity, UUI
 			FROM MissionEntity m
 			JOIN PlaceEntity p ON p.id = m.placeId
 			WHERE m.id = :missionId
+			  AND m.deletedAt IS NULL
 			""")
 	Optional<MissionPlaceDistanceProjection> findWithDistance(@Param("missionId") UUID missionId,
 			@Param("latitude") double latitude, @Param("longitude") double longitude);
+
+	Page<MissionEntity> findByPlaceId(UUID placeId, Pageable pageable);
 }

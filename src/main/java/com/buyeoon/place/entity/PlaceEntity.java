@@ -7,6 +7,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import java.time.LocalTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -82,6 +83,9 @@ public class PlaceEntity {
 	@Column(name = "detail_info", nullable = false, columnDefinition = "jsonb")
 	private Map<String, String> detailInfo = new LinkedHashMap<>();
 
+	@Column(name = "deleted_at")
+	private Instant deletedAt;
+
 	public static PlaceEntity create(PlaceCategory category, String name, String summary, String description,
 			String address, String imageKey, Point location, String sourceName, String externalId, String sourceUrl) {
 		location.setSRID(4326);
@@ -143,5 +147,26 @@ public class PlaceEntity {
 		place.sourceUrl = sourceUrl;
 		place.sourceImageHref = sourceImageHref;
 		return place;
+	}
+
+	@SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "JTS Point는 PostGIS geography 매핑을 위해 그대로 보관한다.")
+	public void applyAdminUpdate(PlaceCategory category, String name, String summary, String description,
+			String address, String imageKey, Point location) {
+		location.setSRID(4326);
+		this.category = category;
+		this.name = name;
+		this.summary = summary;
+		this.description = description;
+		this.address = address;
+		this.imageKey = imageKey;
+		this.location = location;
+	}
+
+	public void softDelete() {
+		this.deletedAt = Instant.now();
+	}
+
+	public boolean isDeleted() {
+		return deletedAt != null;
 	}
 }

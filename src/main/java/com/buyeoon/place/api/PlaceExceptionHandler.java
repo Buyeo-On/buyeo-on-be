@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
-@RestControllerAdvice(assignableTypes = PlaceController.class)
+@RestControllerAdvice(assignableTypes = {PlaceController.class, PlaceAdminController.class})
 public class PlaceExceptionHandler {
 
 	@ExceptionHandler({InvalidPlaceRequestException.class, MissingServletRequestParameterException.class,

@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
-@RestControllerAdvice(assignableTypes = MissionController.class)
+@RestControllerAdvice(assignableTypes = {MissionController.class, MissionAdminController.class})
 public class MissionExceptionHandler {
 
 	@ExceptionHandler({InvalidMissionRequestException.class, InvalidMissionSubmissionException.class,

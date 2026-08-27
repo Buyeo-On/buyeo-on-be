@@ -53,4 +53,21 @@ public class BadgeEntity {
 		badge.conditionText = conditionText;
 		return badge;
 	}
+
+	public void updateMetadata(BadgeCategory category, String name, String description, String imageKey,
+			String conditionText) {
+		this.category = category;
+		this.name = name;
+		this.description = description;
+		this.imageKey = imageKey;
+		this.conditionText = conditionText;
+	}
+
+	public void retire() {
+		this.retiredAt = Instant.now();
+	}
+
+	public void activate() {
+		this.retiredAt = null;
+	}
 }
