@@ -1,12 +1,14 @@
 package com.buyeoon.place.sync;
 
 import java.util.List;
+import java.util.Map;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriBuilder;
 
 /**
- * 공공데이터포털 TourAPI 2.0(areaBasedList2, detailCommon2, detailIntro2) 호출 구현체. 표준
- * JSON 응답 포맷 {@code response.body.items.item}과 표준 필드명(usetime, usefee)을 따른다.
+ * 공공데이터포털 TourAPI 2.0(areaBasedList2, detailCommon2, detailIntro2, detailInfo2) 호출
+ * 구현체. 표준 JSON 응답 포맷 {@code response.body.items.item}과 표준 필드명(usetime, usefee)을
+ * 따른다.
  */
 class TourApiRestClient implements TourApiClient {
 
@@ -54,6 +56,16 @@ class TourApiRestClient implements TourApiClient {
 				introItem == null ? null : introItem.usetime(), introItem == null ? null : introItem.usefee());
 	}
 
+	@Override
+	public Map<String, String> fetchPlaceInfo(TourApiAreaItem item) {
+		TourApiInfoResponse response = restClient.get()
+				.uri(uriBuilder -> withCommonParams(uriBuilder.path("/detailInfo2"))
+						.queryParam("contentId", item.contentId()).queryParam("contentTypeId", item.contentTypeId())
+						.queryParam("numOfRows", "30").build())
+				.retrieve().body(TourApiInfoResponse.class);
+		return TourApiInfoSanitizer.sanitize(infoItems(response));
+	}
+
 	private UriBuilder withCommonParams(UriBuilder uriBuilder) {
 		return uriBuilder.queryParam("serviceKey", serviceKey).queryParam("MobileOS", "ETC")
 				.queryParam("MobileApp", "BuyeoOn").queryParam("_type", "json");
@@ -76,6 +88,14 @@ class TourApiRestClient implements TourApiClient {
 	}
 
 	private List<TourApiIntroItem> introItems(TourApiIntroResponse response) {
+		if (response == null || response.response() == null || response.response().body() == null
+				|| response.response().body().items() == null) {
+			return List.of();
+		}
+		return response.response().body().items().item();
+	}
+
+	private List<TourApiInfoItem> infoItems(TourApiInfoResponse response) {
 		if (response == null || response.response() == null || response.response().body() == null
 				|| response.response().body().items() == null) {
 			return List.of();
@@ -124,5 +144,16 @@ class TourApiRestClient implements TourApiClient {
 	}
 
 	private record TourApiIntroItem(String usetime, String usefee) {
+	}
+
+	private record TourApiInfoResponse(TourApiInfoResponseBody response) {
+		record TourApiInfoResponseBody(TourApiInfoBody body) {
+		}
+
+		record TourApiInfoBody(TourApiInfoItems items) {
+		}
+
+		record TourApiInfoItems(List<TourApiInfoItem> item) {
+		}
 	}
 }
