@@ -96,6 +96,21 @@ class MissionControllerIntegrationTests {
 						.value(org.hamcrest.Matchers.containsInAnyOrder("OX", "MULTIPLE_CHOICE", "PHOTO")));
 	}
 
+	/** soft delete된 미션은 근처 미션 목록에서 제외된다. */
+	@Test
+	@DisplayName("soft delete된 미션은 근처 목록에서 제외된다")
+	void excludesSoftDeletedMissionFromNearbyList() throws Exception {
+		UUID tripId = startTrip(member.memberId());
+		UUID place = insertPlace("장소", ORIGIN_LATITUDE + 0.001, ORIGIN_LONGITUDE);
+		UUID visible = insertOxMission(place, "노출 미션", 100, null, true);
+		UUID deleted = insertOxMission(place, "삭제된 미션", 100, null, true);
+		jdbcTemplate.update("UPDATE missions SET deleted_at = now() WHERE id = ?", deleted);
+
+		mockMvc.perform(nearbyRequest(tripId)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.items.length()").value(1))
+				.andExpect(jsonPath("$.data.items[0].missionId").value(visible.toString()));
+	}
+
 	/** 500m 직전 미션은 포함되고 직후 미션은 제외된다. */
 	@Test
 	@DisplayName("500m 경계 안쪽 미션은 포함되고 바깥쪽 미션은 제외된다")

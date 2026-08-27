@@ -225,6 +225,28 @@ class PlaceControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.items[0].category").value("CAFE"));
 	}
 
+	/**
+	 * soft delete된 장소는 사용자용 목록에서 제외된다. 시드 마이그레이션이 넣어 둔 부여 장소도 같은 카테고리로 함께
+	 * 잡히므로, 전체 개수가 아니라 삭제된 장소의 노출 여부만 확인한다.
+	 */
+	@Test
+	@DisplayName("soft delete된 장소는 목록에서 제외된다")
+	void excludesSoftDeletedPlaceFromList() throws Exception {
+		startTrip(member.memberId());
+		UUID visible = savePlace(PlaceCategory.HERITAGE, "노출 장소", ORIGIN_LATITUDE + 0.001, ORIGIN_LONGITUDE + 0.001);
+		UUID deleted = savePlace(PlaceCategory.HERITAGE, "삭제된 장소", ORIGIN_LATITUDE + 0.002, ORIGIN_LONGITUDE + 0.002);
+		softDeletePlace(deleted);
+
+		mockMvc.perform(placeRequest().param("latitude", String.valueOf(ORIGIN_LATITUDE)).param("longitude",
+				String.valueOf(ORIGIN_LONGITUDE))).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.items[?(@.placeId=='" + visible + "')]").exists())
+				.andExpect(jsonPath("$.data.items[?(@.placeId=='" + deleted + "')]").doesNotExist());
+	}
+
+	private void softDeletePlace(UUID placeId) {
+		jdbcTemplate.update("UPDATE places SET deleted_at = now() WHERE id = ?", placeId);
+	}
+
 	/** size만큼 끊어 반환하고, 커서로 이어받으면 남은 장소가 중복 없이 나온다. */
 	@Test
 	@DisplayName("size만큼 페이지네이션된 결과와 다음 커서를 받는다")

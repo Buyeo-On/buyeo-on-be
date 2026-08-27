@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -50,6 +51,9 @@ public class MissionEntity {
 	@Column(name = "ox_correct_answer")
 	private Boolean oxCorrectAnswer;
 
+	@Column(name = "deleted_at")
+	private Instant deletedAt;
+
 	public static MissionEntity multipleChoice(UUID placeId, Point location, String title, String description,
 			int rewardPoints, Integer maxAttempts) {
 		return create(placeId, location, MissionType.MULTIPLE_CHOICE, title, description, rewardPoints, maxAttempts,
@@ -69,9 +73,7 @@ public class MissionEntity {
 
 	private static MissionEntity create(UUID placeId, Point location, MissionType type, String title,
 			String description, int rewardPoints, Integer maxAttempts, Boolean oxCorrectAnswer) {
-		if (maxAttempts != null && maxAttempts <= 0) {
-			throw new IllegalArgumentException("Maximum attempts must be positive");
-		}
+		validateMaxAttempts(maxAttempts);
 		location.setSRID(4326);
 		MissionEntity mission = new MissionEntity();
 		mission.placeId = placeId;
@@ -83,5 +85,52 @@ public class MissionEntity {
 		mission.maxAttempts = maxAttempts;
 		mission.oxCorrectAnswer = oxCorrectAnswer;
 		return mission;
+	}
+
+	public void updateMultipleChoice(String title, String description, int rewardPoints, Integer maxAttempts) {
+		if (type != MissionType.MULTIPLE_CHOICE) {
+			throw new IllegalStateException("객관식 미션이 아닙니다.");
+		}
+		validateMaxAttempts(maxAttempts);
+		this.title = title;
+		this.description = description;
+		this.rewardPoints = rewardPoints;
+		this.maxAttempts = maxAttempts;
+	}
+
+	public void updateOx(String title, String description, int rewardPoints, Integer maxAttempts,
+			boolean correctAnswer) {
+		if (type != MissionType.OX) {
+			throw new IllegalStateException("OX 미션이 아닙니다.");
+		}
+		validateMaxAttempts(maxAttempts);
+		this.title = title;
+		this.description = description;
+		this.rewardPoints = rewardPoints;
+		this.maxAttempts = maxAttempts;
+		this.oxCorrectAnswer = correctAnswer;
+	}
+
+	public void updatePhoto(String title, String description, int rewardPoints) {
+		if (type != MissionType.PHOTO) {
+			throw new IllegalStateException("사진 인증 미션이 아닙니다.");
+		}
+		this.title = title;
+		this.description = description;
+		this.rewardPoints = rewardPoints;
+	}
+
+	public void softDelete() {
+		this.deletedAt = Instant.now();
+	}
+
+	public boolean isDeleted() {
+		return deletedAt != null;
+	}
+
+	private static void validateMaxAttempts(Integer maxAttempts) {
+		if (maxAttempts != null && maxAttempts <= 0) {
+			throw new IllegalArgumentException("Maximum attempts must be positive");
+		}
 	}
 }

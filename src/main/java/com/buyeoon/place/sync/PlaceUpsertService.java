@@ -4,6 +4,7 @@ import com.buyeoon.place.entity.PlaceCategory;
 import com.buyeoon.place.entity.PlaceEntity;
 import com.buyeoon.place.repository.PlaceQueryRepository;
 import com.buyeoon.place.sync.OperatingHoursParser.ParsedOperatingHours;
+import java.util.Optional;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
@@ -29,14 +30,21 @@ class PlaceUpsertService {
 
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	void upsert(PlaceCategory category, TourApiPlaceDetail detail) {
+		Optional<PlaceEntity> existing = placeQueryRepository.findBySourceNameAndExternalId(SOURCE_NAME,
+				detail.contentId());
+		if (existing.isPresent() && existing.get().isDeleted()) {
+			// 관리자가 soft delete한 장소는 sync가 되살리지 않는다.
+			return;
+		}
+
 		Point location = geometryFactory.createPoint(new Coordinate(detail.longitude(), detail.latitude()));
 		ParsedOperatingHours parsedHours = OperatingHoursParser.parse(detail.useTime());
 		Integer admissionFee = OperatingHoursParser.parseFee(detail.useFee());
 		String summary = PlaceSummaryGenerator.fromOverview(detail.overview());
 
-		PlaceEntity place = placeQueryRepository.findBySourceNameAndExternalId(SOURCE_NAME, detail.contentId())
-				.orElseGet(() -> PlaceEntity.createFromSync(category, detail.title(), summary, detail.overview(),
-						detail.address(), location, SOURCE_NAME, detail.contentId(), null, detail.firstImageUrl()));
+		PlaceEntity place = existing.orElseGet(() -> PlaceEntity.createFromSync(category, detail.title(), summary,
+				detail.overview(), detail.address(), location, SOURCE_NAME, detail.contentId(), null,
+				detail.firstImageUrl()));
 
 		place.overwriteFrom(category, detail.title(), summary, detail.overview(), detail.address(), location, null,
 				detail.firstImageUrl());
