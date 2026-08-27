@@ -40,8 +40,9 @@ class PlaceUpsertService {
 
 		place.overwriteFrom(category, detail.title(), summary, detail.overview(), detail.address(), location, null,
 				detail.firstImageUrl());
-		place.applyOperatingInfo(detail.useTime(), parsedHours.alwaysOpen(), parsedHours.opensAt(), parsedHours.closesAt(),
-				admissionFee);
+		place.applyOperatingInfo(detail.useTime(), parsedHours.alwaysOpen(), parsedHours.opensAt(),
+				parsedHours.closesAt(), admissionFee);
+		place.applyDetailInfo(detail.detailInfo());
 		placeQueryRepository.saveAndFlush(place);
 	}
 }

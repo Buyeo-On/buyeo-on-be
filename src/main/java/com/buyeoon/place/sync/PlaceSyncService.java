@@ -34,10 +34,12 @@ public class PlaceSyncService {
 				continue;
 			}
 			try {
-				TourApiPlaceDetail detail = tourApiClient.fetchPlaceDetail(item);
+				TourApiPlaceDetail detail = tourApiClient.fetchPlaceDetail(item)
+						.withDetailInfo(tourApiClient.fetchPlaceInfo(item));
 				if (detail.firstImageUrl() == null || detail.firstImageUrl().isBlank()) {
-					detail = detail.withFirstImageUrl(
-							kakaoImageSearchClient.findFirstImageUrl(detail.title(), detail.address()).orElse(null));
+					String fallbackImageUrl = kakaoImageSearchClient.findFirstImageUrl(detail.title(), detail.address())
+							.orElse(null);
+					detail = detail.withFirstImageUrl(fallbackImageUrl);
 				}
 				placeUpsertService.upsert(category, detail);
 				successCount++;

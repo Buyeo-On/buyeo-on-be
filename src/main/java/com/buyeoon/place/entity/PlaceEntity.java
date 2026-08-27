@@ -8,6 +8,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -76,6 +78,10 @@ public class PlaceEntity {
 	@Column(name = "admission_fee")
 	private Integer admissionFee;
 
+	@JdbcTypeCode(SqlTypes.JSON)
+	@Column(name = "detail_info", nullable = false, columnDefinition = "jsonb")
+	private Map<String, String> detailInfo = new LinkedHashMap<>();
+
 	public static PlaceEntity create(PlaceCategory category, String name, String summary, String description,
 			String address, String imageKey, Point location, String sourceName, String externalId, String sourceUrl) {
 		location.setSRID(4326);
@@ -100,6 +106,11 @@ public class PlaceEntity {
 		this.opensAt = opensAt;
 		this.closesAt = closesAt;
 		this.admissionFee = admissionFee;
+	}
+
+	/** detailInfo2 이용안내를 통째로 교체한다. TourAPI 응답이 원본이므로 병합하지 않는다. */
+	public void applyDetailInfo(Map<String, String> detailInfo) {
+		this.detailInfo = detailInfo == null ? new LinkedHashMap<>() : new LinkedHashMap<>(detailInfo);
 	}
 
 	@SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "JTS Point는 PostGIS geography 매핑을 위해 그대로 보관한다.")
