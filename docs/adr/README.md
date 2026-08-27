@@ -15,3 +15,4 @@
 - [ADR-008: 이미지는 Private S3와 Presigned URL로 제공한다](./adr-008-private-mission-photos.md)
 - [ADR-011: iOS 단일 출시를 Flutter 기능 중심 구조로 구현한다](./adr-011-flutter-ios-architecture.md)
 - [ADR-013: 장소 데이터는 관리자 API로 TourAPI를 동기화한다](./adr-013-tourapi-place-sync.md)
+- [ADR-014: detailImage2 도입을 보류하고 대표이미지 결측은 폴백·큐레이션으로 처리한다](./adr-014-tourapi-detail-image-deferred.md)
