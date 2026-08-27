@@ -6,8 +6,10 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * detailInfo2 응답의 표기 흔들림을 정리한다. TourAPI는 항목명을 "입 장 료"처럼 한 글자씩 띄어 보내기도
- * 하고, 본문에 {@code <br>}·{@code <br />}를 섞어 보내기도 한다. 내용이 빈 항목은 보관하지 않는다.
+ * detailInfo2 응답의 표기 흔들림을 정리한다. TourAPI는 항목명을 "입 장 료"처럼 한 글자씩 띄어 보내기도 하고, 본문에
+ * {@code <br>
+ * }·{@code <br />
+ * }를 섞어 보내기도 한다. 내용이 빈 항목은 보관하지 않는다.
  */
 final class TourApiInfoSanitizer {
 

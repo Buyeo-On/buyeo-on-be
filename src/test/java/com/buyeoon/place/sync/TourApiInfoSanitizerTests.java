@@ -23,9 +23,8 @@ class TourApiInfoSanitizerTests {
 	@Test
 	@DisplayName("내용이 빈 항목은 제외한다")
 	void dropsItemsWithoutText() {
-		assertThat(TourApiInfoSanitizer.sanitize(
-				List.of(new TourApiInfoItem("등산로", ""), new TourApiInfoItem("화장실", "  "),
-						new TourApiInfoItem("입 장 료", "무료"))))
+		assertThat(TourApiInfoSanitizer.sanitize(List.of(new TourApiInfoItem("등산로", ""),
+				new TourApiInfoItem("화장실", "  "), new TourApiInfoItem("입 장 료", "무료"))))
 				.containsExactly(entry("입장료", "무료"));
 	}
 

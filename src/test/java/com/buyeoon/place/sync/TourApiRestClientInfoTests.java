@@ -31,17 +31,15 @@ class TourApiRestClientInfoTests {
 	}
 
 	/**
-	 * detailInfo2 응답을 항목명 -> 내용 맵으로 읽는다. 항목명의 낱글자 공백은 붙이고, br 태그는 개행으로
-	 * 바꾸며, 내용이 빈 항목은 결과에서 제외한다.
+	 * detailInfo2 응답을 항목명 -> 내용 맵으로 읽는다. 항목명의 낱글자 공백은 붙이고, br 태그는 개행으로 바꾸며, 내용이 빈
+	 * 항목은 결과에서 제외한다.
 	 */
 	@Test
 	@DisplayName("detailInfo2 응답을 정제된 이용안내 맵으로 읽는다")
 	void readsDetailInfoResponse() {
-		server.expect(once(), requestTo(Matchers.containsString("/detailInfo2")))
-				.andExpect(method(GET))
+		server.expect(once(), requestTo(Matchers.containsString("/detailInfo2"))).andExpect(method(GET))
 				.andExpect(requestTo(Matchers.containsString("contentId=126463")))
-				.andExpect(requestTo(Matchers.containsString("contentTypeId=12")))
-				.andRespond(withSuccess("""
+				.andExpect(requestTo(Matchers.containsString("contentTypeId=12"))).andRespond(withSuccess("""
 						{"response":{"header":{"resultCode":"0000"},"body":{"items":{"item":[
 						{"contentid":"126463","infoname":"입 장 료","infotext":"무료"},
 						{"contentid":"126463","infoname":"등산로","infotext":""},
@@ -58,26 +56,24 @@ class TourApiRestClientInfoTests {
 	@Test
 	@DisplayName("items가 없는 응답이면 빈 맵을 돌려준다")
 	void returnsEmptyMapWhenNoItems() {
-		server.expect(once(), requestTo(Matchers.containsString("/detailInfo2")))
-				.andRespond(withSuccess("""
-						{"response":{"header":{"resultCode":"0000"},"body":{"numOfRows":0,"pageNo":1,"totalCount":0}}}""",
-						MediaType.APPLICATION_JSON));
+		server.expect(once(), requestTo(Matchers.containsString("/detailInfo2"))).andRespond(withSuccess("""
+				{"response":{"header":{"resultCode":"0000"},"body":{"numOfRows":0,"pageNo":1,"totalCount":0}}}""",
+				MediaType.APPLICATION_JSON));
 
 		assertThat(client.fetchPlaceInfo(new TourApiAreaItem("999", "39", null))).isEmpty();
 		server.verify();
 	}
 
 	/**
-	 * 이용안내가 등록되지 않은 장소는 items를 객체가 아니라 빈 문자열로 돌려준다. 역직렬화 실패로 항목 전체가
-	 * 동기화 실패 처리되지 않도록 빈 맵으로 읽는다.
+	 * 이용안내가 등록되지 않은 장소는 items를 객체가 아니라 빈 문자열로 돌려준다. 역직렬화 실패로 항목 전체가 동기화 실패 처리되지 않도록
+	 * 빈 맵으로 읽는다.
 	 */
 	@Test
 	@DisplayName("items가 빈 문자열인 응답이면 빈 맵을 돌려준다")
 	void returnsEmptyMapWhenItemsIsEmptyString() {
-		server.expect(once(), requestTo(Matchers.containsString("/detailInfo2")))
-				.andRespond(withSuccess("""
-						{"response":{"header":{"resultCode":"0000"},"body":{"items":"","numOfRows":0,"pageNo":1,"totalCount":0}}}""",
-						MediaType.APPLICATION_JSON));
+		server.expect(once(), requestTo(Matchers.containsString("/detailInfo2"))).andRespond(withSuccess("""
+				{"response":{"header":{"resultCode":"0000"},"body":{\
+				"items":"","numOfRows":0,"pageNo":1,"totalCount":0}}}""", MediaType.APPLICATION_JSON));
 
 		assertThat(client.fetchPlaceInfo(new TourApiAreaItem("2926985", "39", null))).isEmpty();
 		server.verify();

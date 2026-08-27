@@ -9,9 +9,9 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriBuilder;
 
 /**
- * 공공데이터포털 TourAPI 2.0(areaBasedList2, detailCommon2, detailIntro2, detailInfo2) 호출
- * 구현체. 표준 JSON 응답 포맷 {@code response.body.items.item}과 표준 필드명(usetime, usefee)을
- * 따른다.
+ * 공공데이터포털 TourAPI 2.0(areaBasedList2, detailCommon2, detailIntro2, detailInfo2)
+ * 호출 구현체. 표준 JSON 응답 포맷 {@code response.body.items.item}과 표준 필드명(usetime,
+ * usefee)을 따른다.
  */
 class TourApiRestClient implements TourApiClient {
 
@@ -164,12 +164,11 @@ class TourApiRestClient implements TourApiClient {
 	}
 
 	/**
-	 * TourAPI는 결과가 없을 때 {@code "items": ""}처럼 객체 자리에 빈 문자열을 돌려준다. 역직렬화 실패로
-	 * 항목 전체가 동기화 실패 처리되지 않도록 빈 문자열을 null 객체로 받는다.
+	 * TourAPI는 결과가 없을 때 {@code "items": ""}처럼 객체 자리에 빈 문자열을 돌려준다. 역직렬화 실패로 항목 전체가
+	 * 동기화 실패 처리되지 않도록 빈 문자열을 null 객체로 받는다.
 	 */
 	private static MappingJackson2HttpMessageConverter jsonConverter() {
-		ObjectMapper objectMapper = new ObjectMapper()
-				.enable(DeserializationFeature.ACCEPT_EMPTY_STRING_AS_NULL_OBJECT)
+		ObjectMapper objectMapper = new ObjectMapper().enable(DeserializationFeature.ACCEPT_EMPTY_STRING_AS_NULL_OBJECT)
 				.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 		return new MappingJackson2HttpMessageConverter(objectMapper);
 	}
