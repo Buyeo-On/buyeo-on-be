@@ -66,4 +66,20 @@ class TourApiRestClientInfoTests {
 		assertThat(client.fetchPlaceInfo(new TourApiAreaItem("999", "39", null))).isEmpty();
 		server.verify();
 	}
+
+	/**
+	 * 이용안내가 등록되지 않은 장소는 items를 객체가 아니라 빈 문자열로 돌려준다. 역직렬화 실패로 항목 전체가
+	 * 동기화 실패 처리되지 않도록 빈 맵으로 읽는다.
+	 */
+	@Test
+	@DisplayName("items가 빈 문자열인 응답이면 빈 맵을 돌려준다")
+	void returnsEmptyMapWhenItemsIsEmptyString() {
+		server.expect(once(), requestTo(Matchers.containsString("/detailInfo2")))
+				.andRespond(withSuccess("""
+						{"response":{"header":{"resultCode":"0000"},"body":{"items":"","numOfRows":0,"pageNo":1,"totalCount":0}}}""",
+						MediaType.APPLICATION_JSON));
+
+		assertThat(client.fetchPlaceInfo(new TourApiAreaItem("2926985", "39", null))).isEmpty();
+		server.verify();
+	}
 }

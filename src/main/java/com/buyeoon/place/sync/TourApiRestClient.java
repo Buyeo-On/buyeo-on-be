@@ -1,7 +1,10 @@
 package com.buyeoon.place.sync;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriBuilder;
 
@@ -19,7 +22,8 @@ class TourApiRestClient implements TourApiClient {
 
 	TourApiRestClient(RestClient.Builder restClientBuilder, String baseUrl, String serviceKey, String areaCode,
 			String signguCode) {
-		this.restClient = restClientBuilder.baseUrl(baseUrl).build();
+		this.restClient = restClientBuilder.baseUrl(baseUrl)
+				.messageConverters(converters -> converters.addFirst(jsonConverter())).build();
 		this.serviceKey = serviceKey;
 		this.areaCode = areaCode;
 		this.signguCode = signguCode;
@@ -151,10 +155,22 @@ class TourApiRestClient implements TourApiClient {
 		record TourApiInfoResponseBody(TourApiInfoBody body) {
 		}
 
+		/** 이용안내가 없는 장소는 items를 객체가 아닌 빈 문자열로 돌려주므로 null로 받는다. */
 		record TourApiInfoBody(TourApiInfoItems items) {
 		}
 
 		record TourApiInfoItems(List<TourApiInfoItem> item) {
 		}
+	}
+
+	/**
+	 * TourAPI는 결과가 없을 때 {@code "items": ""}처럼 객체 자리에 빈 문자열을 돌려준다. 역직렬화 실패로
+	 * 항목 전체가 동기화 실패 처리되지 않도록 빈 문자열을 null 객체로 받는다.
+	 */
+	private static MappingJackson2HttpMessageConverter jsonConverter() {
+		ObjectMapper objectMapper = new ObjectMapper()
+				.enable(DeserializationFeature.ACCEPT_EMPTY_STRING_AS_NULL_OBJECT)
+				.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+		return new MappingJackson2HttpMessageConverter(objectMapper);
 	}
 }
