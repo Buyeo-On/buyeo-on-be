@@ -156,14 +156,15 @@ public class MemberController {
 	}
 
 	private ProfileUpdateCommand parseProfileUpdate(JsonNode request) {
-		Set<String> fields = Set.of("displayName", "characterId");
+		Set<String> fields = Set.of("displayName", "characterId", "themeId");
 		if (request == null || !request.isObject() || request.isEmpty()
 				|| request.properties().stream().anyMatch(property -> !fields.contains(property.getKey()))) {
 			throw new InvalidProfileRequestException();
 		}
 		String displayName = request.has("displayName") ? displayName(request.get("displayName")) : null;
-		UUID characterId = request.has("characterId") ? profileCharacterId(request.get("characterId")) : null;
-		return new ProfileUpdateCommand(displayName, characterId);
+		UUID characterId = request.has("characterId") ? profileOptionId(request.get("characterId")) : null;
+		UUID themeId = request.has("themeId") ? profileOptionId(request.get("themeId")) : null;
+		return new ProfileUpdateCommand(displayName, characterId, themeId);
 	}
 
 	private String displayName(JsonNode node) {
@@ -178,7 +179,7 @@ public class MemberController {
 		return displayName;
 	}
 
-	private UUID profileCharacterId(JsonNode node) {
+	private UUID profileOptionId(JsonNode node) {
 		if (node == null || !node.isString()) {
 			throw new InvalidProfileRequestException();
 		}
