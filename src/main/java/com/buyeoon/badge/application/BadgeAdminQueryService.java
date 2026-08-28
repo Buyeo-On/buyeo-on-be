@@ -10,7 +10,9 @@ import com.buyeoon.badge.repository.BadgeRepository;
 import com.buyeoon.common.storage.PublicImageUrlService;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -35,7 +37,11 @@ public class BadgeAdminQueryService {
 	public BadgeAdminListView list(int page, int size) {
 		PageRequest pageRequest = PageRequest.of(page, size);
 		Page<BadgeEntity> result = badgeRepository.findAll(pageRequest);
-		List<BadgeAdminView> items = result.getContent().stream().map(badge -> toView(badge, List.of())).toList();
+		List<UUID> badgeIds = result.getContent().stream().map(BadgeEntity::getId).toList();
+		Map<UUID, List<BadgeConditionEntity>> conditionsByBadgeId = badgeConditionRepository.findByIdBadgeIdIn(badgeIds)
+				.stream().collect(Collectors.groupingBy(condition -> condition.getId().badgeId()));
+		List<BadgeAdminView> items = result.getContent().stream()
+				.map(badge -> toView(badge, conditionsByBadgeId.getOrDefault(badge.getId(), List.of()))).toList();
 		return new BadgeAdminListView(items, page, size, result.getTotalElements(), result.getTotalPages());
 	}
 
