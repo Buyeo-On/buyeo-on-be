@@ -1,10 +1,13 @@
 package com.buyeoon.mission;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.buyeoon.mission.application.SpecialQuizExposureDecider;
 import com.buyeoon.member.auth.AccessTokenService;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -22,6 +25,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.testcontainers.junit.jupiter.Container;
@@ -62,11 +66,15 @@ class MissionControllerIntegrationTests {
 	@Autowired
 	private ObjectMapper objectMapper;
 
+	@MockitoBean
+	private SpecialQuizExposureDecider specialQuizExposureDecider;
+
 	private AuthenticatedMember member;
 
 	@BeforeEach
 	void setUpMember() {
 		member = insertAuthenticatedMember();
+		when(specialQuizExposureDecider.isExposedToday(any(), any())).thenReturn(true);
 	}
 
 	@AfterEach
@@ -247,6 +255,36 @@ class MissionControllerIntegrationTests {
 
 		mockMvc.perform(nearbyRequest(tripId)).andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.items[0].remainingAttempts").value(0));
+	}
+
+	/** 도전 가능한 스페셜 퀴즈는 오늘 노출 여부 판정에 따라 목록·상세 모두에서 제외된다. */
+	@Test
+	@DisplayName("오늘 노출 대상이 아닌 도전 가능한 스페셜 퀴즈는 목록과 상세에서 제외된다")
+	void challengeableSpecialQuizIsExcludedWhenNotExposedToday() throws Exception {
+		when(specialQuizExposureDecider.isExposedToday(any(), any())).thenReturn(false);
+		UUID tripId = startTrip(member.memberId());
+		UUID place = insertPlace("스페셜 퀴즈 장소", ORIGIN_LATITUDE + 0.001, ORIGIN_LONGITUDE);
+		UUID missionId = insertOxMission(place, "스페셜 퀴즈", 100, 3, true);
+
+		mockMvc.perform(nearbyRequest(tripId)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.items.length()").value(0));
+		mockMvc.perform(detailRequest(missionId, tripId)).andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.data.code").value("RESOURCE_NOT_FOUND"));
+	}
+
+	/** 완료·기회 소진된 스페셜 퀴즈는 오늘 노출 대상이 아니어도 목록과 상세에서 계속 보인다. */
+	@Test
+	@DisplayName("완료·소진된 스페셜 퀴즈는 오늘 노출 대상이 아니어도 계속 보인다")
+	void completedOrExhaustedSpecialQuizIsAlwaysVisibleRegardlessOfExposure() throws Exception {
+		when(specialQuizExposureDecider.isExposedToday(any(), any())).thenReturn(false);
+		UUID tripId = startTrip(member.memberId());
+		UUID place = insertPlace("스페셜 퀴즈 장소", ORIGIN_LATITUDE + 0.001, ORIGIN_LONGITUDE);
+		UUID missionId = insertOxMission(place, "스페셜 퀴즈", 100, 3, true);
+		insertParticipation(tripId, missionId, "EXHAUSTED", 3);
+
+		mockMvc.perform(nearbyRequest(tripId)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.items.length()").value(1));
+		mockMvc.perform(detailRequest(missionId, tripId)).andExpect(status().isOk());
 	}
 
 	/** 일반 퀴즈와 사진 인증 미션의 남은 도전 횟수는 항상 null이다. */
