@@ -1,6 +1,9 @@
 package com.buyeoon.place;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -8,10 +11,18 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.buyeoon.common.storage.PublicImageObjectStore;
+import com.buyeoon.common.storage.PublicImageObjectStore.PublicImageObject;
+import com.buyeoon.common.storage.PublicImageUploadPresigner;
+import com.buyeoon.common.storage.PublicImageUploadPresigner.PublicImageUploadTarget;
+import java.time.Instant;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +32,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -54,10 +66,22 @@ class PlaceAdminControllerIntegrationTests {
 	@Autowired
 	private ObjectMapper objectMapper;
 
+	@MockitoBean
+	private PublicImageObjectStore publicImageObjectStore;
+
+	@MockitoBean
+	private PublicImageUploadPresigner publicImageUploadPresigner;
+
 	@BeforeAll
 	static void configureAwsCredentials() {
 		System.setProperty("aws.accessKeyId", "test-access-key");
 		System.setProperty("aws.secretAccessKey", "test-secret-key");
+	}
+
+	@BeforeEach
+	void stubPublicImageObjectStore() {
+		when(publicImageObjectStore.head(anyString()))
+				.thenReturn(Optional.of(new PublicImageObject("image/jpeg", 100, "image/jpeg", 100)));
 	}
 
 	@AfterAll
@@ -137,6 +161,44 @@ class PlaceAdminControllerIntegrationTests {
 	void returns404WhenPlaceDoesNotExist() throws Exception {
 		mockMvc.perform(getDetailRequest(UUID.randomUUID().toString())).andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.data.code").value("RESOURCE_NOT_FOUND"));
+	}
+
+	@Test
+	@DisplayName("이미지 업로드 URL을 발급받는다")
+	void issuesImageUploadUrl() throws Exception {
+		when(publicImageUploadPresigner.presign(anyString(), anyString(), anyLong()))
+				.thenReturn(new PublicImageUploadTarget("https://s3.example.com/upload",
+						Map.of("Content-Type", "image/jpeg"), Instant.now().plusSeconds(600)));
+
+		MvcResult result = mockMvc
+				.perform(post("/admin/places/images/upload-url").header("X-Admin-Api-Key", VALID_API_KEY)
+						.contentType(MediaType.APPLICATION_JSON).content("""
+								{"contentType":"image/jpeg","fileSizeBytes":100}"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.uploadUrl").value("https://s3.example.com/upload")).andReturn();
+		String imageKey = objectMapper.readTree(result.getResponse().getContentAsString()).path("data")
+				.path("imageKey").asString();
+		assertThat(imageKey).startsWith("public/places/");
+	}
+
+	@Test
+	@DisplayName("S3에 존재하지 않는 imageKey로 생성하면 400을 받는다")
+	void returns400WhenImageKeyDoesNotExistInS3() throws Exception {
+		when(publicImageObjectStore.head("public/missing.jpg")).thenReturn(Optional.empty());
+
+		mockMvc.perform(createRequest("""
+				{"category":"HERITAGE","name":"장소","summary":"요약","description":"설명",
+				"address":"주소","imageKey":"public/missing.jpg","latitude":-75.0,"longitude":0.0}"""))
+				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.data.code").value("INVALID_REQUEST"));
+	}
+
+	@Test
+	@DisplayName("public/로 시작하지 않는 imageKey로 생성하면 400을 받는다")
+	void returns400WhenImageKeyPrefixInvalid() throws Exception {
+		mockMvc.perform(createRequest("""
+				{"category":"HERITAGE","name":"장소","summary":"요약","description":"설명",
+				"address":"주소","imageKey":"private/place.jpg","latitude":-75.0,"longitude":0.0}"""))
+				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.data.code").value("INVALID_REQUEST"));
 	}
 
 	private MockHttpServletRequestBuilder createRequest(String body) {

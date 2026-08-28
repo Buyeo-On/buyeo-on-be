@@ -7,6 +7,7 @@ import com.buyeoon.badge.entity.BadgeConditionEntity;
 import com.buyeoon.badge.entity.BadgeEntity;
 import com.buyeoon.badge.repository.BadgeConditionRepository;
 import com.buyeoon.badge.repository.BadgeRepository;
+import com.buyeoon.common.storage.PublicImageUrlService;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.List;
 import java.util.UUID;
@@ -21,11 +22,14 @@ public class BadgeAdminQueryService {
 
 	private final BadgeRepository badgeRepository;
 	private final BadgeConditionRepository badgeConditionRepository;
+	private final PublicImageUrlService imageUrls;
 
 	@SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring 싱글턴 빈을 그대로 주입받아 저장한다.")
-	public BadgeAdminQueryService(BadgeRepository badgeRepository, BadgeConditionRepository badgeConditionRepository) {
+	public BadgeAdminQueryService(BadgeRepository badgeRepository, BadgeConditionRepository badgeConditionRepository,
+			PublicImageUrlService imageUrls) {
 		this.badgeRepository = badgeRepository;
 		this.badgeConditionRepository = badgeConditionRepository;
+		this.imageUrls = imageUrls;
 	}
 
 	public BadgeAdminListView list(int page, int size) {
@@ -45,7 +49,8 @@ public class BadgeAdminQueryService {
 		List<BadgeAdminConditionView> conditionViews = conditions.stream()
 				.map(condition -> new BadgeAdminConditionView(condition.getId().metricKey(), condition.getThreshold()))
 				.toList();
+		String imageUrl = badge.getImageKey() != null ? imageUrls.create(badge.getImageKey()) : null;
 		return new BadgeAdminView(badge.getId(), badge.getCategory(), badge.getName(), badge.getDescription(),
-				badge.getImageKey(), badge.getConditionText(), badge.getRetiredAt() != null, conditionViews);
+				imageUrl, badge.getConditionText(), badge.getRetiredAt() != null, conditionViews);
 	}
 }
