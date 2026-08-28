@@ -4,6 +4,7 @@ import com.buyeoon.common.api.SuccessResponse;
 import com.buyeoon.common.storage.PublicImageUrlService;
 import com.buyeoon.member.api.InvalidCitizenCardRequestException;
 import com.buyeoon.member.application.CitizenCardQueryService.CardOptionView;
+import com.buyeoon.notification.NotificationCreationService;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -40,15 +41,18 @@ public final class CitizenCardCreationService implements CitizenCardCreator {
 	private final TransactionTemplate transactions;
 	private final CitizenCardLocationVerifier locationVerifier;
 	private final PublicImageUrlService imageUrls;
+	private final NotificationCreationService notificationCreationService;
 	private final ObjectReader objectReader;
 	private final ObjectWriter objectWriter;
 
 	public CitizenCardCreationService(JdbcOperations jdbcOperations, PlatformTransactionManager transactionManager,
-			CitizenCardLocationVerifier locationVerifier, PublicImageUrlService imageUrls, ObjectMapper objectMapper) {
+			CitizenCardLocationVerifier locationVerifier, PublicImageUrlService imageUrls,
+			NotificationCreationService notificationCreationService, ObjectMapper objectMapper) {
 		this.jdbcOperations = jdbcOperations;
 		this.transactions = new TransactionTemplate(transactionManager);
 		this.locationVerifier = locationVerifier;
 		this.imageUrls = imageUrls;
+		this.notificationCreationService = notificationCreationService;
 		this.objectReader = objectMapper.reader();
 		this.objectWriter = objectMapper.writer();
 	}
@@ -101,6 +105,7 @@ public final class CitizenCardCreationService implements CitizenCardCreator {
 				INSERT INTO citizen_cards (id, member_id, theme_id, barcode_value, issued_at)
 				VALUES (?, ?, ?, ?, ?)
 				""", cardId, memberId, command.themeId(), barcodeValue, timestamp);
+		notificationCreationService.createCitizenCardIssued(memberId, cardId);
 
 		CitizenCardView result = new CitizenCardView(cardId, command.displayName(), toView(character), toView(theme),
 				issuedAt.atZone(ASIA_SEOUL));

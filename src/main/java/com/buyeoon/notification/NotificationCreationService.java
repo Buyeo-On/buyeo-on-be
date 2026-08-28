@@ -21,4 +21,10 @@ public class NotificationCreationService {
 		notifications.save(NotificationEntity.create(memberId, NotificationType.BADGE, "새로운 배지를 획득했어요!",
 				badgeName + " 배지를 획득했어요.", "BADGE", badgeId));
 	}
+
+	/** 군민증을 발급할 때마다 {@code CITIZEN_CARD} 알림을 한 건 생성한다. */
+	public void createCitizenCardIssued(UUID memberId, UUID cardId) {
+		notifications.save(NotificationEntity.create(memberId, NotificationType.CITIZEN_CARD, "군민증이 발급됐어요!",
+				"디지털 군민증이 발급됐어요.", "CITIZEN_CARD", cardId));
+	}
 }
