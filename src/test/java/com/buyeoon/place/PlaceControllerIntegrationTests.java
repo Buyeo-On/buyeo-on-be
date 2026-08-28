@@ -115,6 +115,35 @@ class PlaceControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.items[1].placeId").value(farPlace.toString()));
 	}
 
+	/** detailInfo2 이용안내가 저장돼 있으면 목록 응답의 detailInfo 필드로 그대로 나간다. */
+	@Test
+	@DisplayName("이용안내가 있는 장소는 detailInfo가 응답에 포함된다")
+	void includesDetailInfoWhenPresent() throws Exception {
+		startTrip(member.memberId());
+		UUID placeId = savePlace(PlaceCategory.HERITAGE, "이용안내 있는 장소", ORIGIN_LATITUDE + 0.001,
+				ORIGIN_LONGITUDE + 0.001);
+		jdbcTemplate.update("UPDATE places SET detail_info = ?::jsonb WHERE id = ?",
+				"{\"입장료\": \"무료\", \"화장실\": \"있음\"}", placeId);
+
+		mockMvc.perform(placeRequest().param("latitude", String.valueOf(ORIGIN_LATITUDE)).param("longitude",
+				String.valueOf(ORIGIN_LONGITUDE))).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.items[0].detailInfo.입장료").value("무료"))
+				.andExpect(jsonPath("$.data.items[0].detailInfo.화장실").value("있음"));
+	}
+
+	/** 이용안내가 없는 장소(default '{}')는 detailInfo가 빈 객체로 나가지 null이 아니다. */
+	@Test
+	@DisplayName("이용안내가 없으면 detailInfo는 빈 객체로 나간다")
+	void includesEmptyDetailInfoWhenAbsent() throws Exception {
+		startTrip(member.memberId());
+		savePlace(PlaceCategory.HERITAGE, "이용안내 없는 장소", ORIGIN_LATITUDE + 0.001, ORIGIN_LONGITUDE + 0.001);
+
+		mockMvc.perform(placeRequest().param("latitude", String.valueOf(ORIGIN_LATITUDE)).param("longitude",
+				String.valueOf(ORIGIN_LONGITUDE))).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.items[0].detailInfo").isMap())
+				.andExpect(jsonPath("$.data.items[0].detailInfo").isEmpty());
+	}
+
 	/**
 	 * 커서 다음 페이지의 동점 조건이 등호(=)면 재계산된 거리가 원래 값과 부동소수점 마지막 자리까지 일치하지 않는 경우 동점 그룹 나머지가
 	 * 통째로 누락된다. 좌표가 완전히 같은 두 장소로 동점을 만들어 id 가드(>=+id>)가 실제로 그 그룹을 넘기는지 확인한다.
@@ -226,8 +255,8 @@ class PlaceControllerIntegrationTests {
 	}
 
 	/**
-	 * soft delete된 장소는 사용자용 목록에서 제외된다. 시드 마이그레이션이 넣어 둔 부여 장소도 같은 카테고리로 함께
-	 * 잡히므로, 전체 개수가 아니라 삭제된 장소의 노출 여부만 확인한다.
+	 * soft delete된 장소는 사용자용 목록에서 제외된다. 시드 마이그레이션이 넣어 둔 부여 장소도 같은 카테고리로 함께 잡히므로, 전체
+	 * 개수가 아니라 삭제된 장소의 노출 여부만 확인한다.
 	 */
 	@Test
 	@DisplayName("soft delete된 장소는 목록에서 제외된다")

@@ -1,5 +1,6 @@
 package com.buyeoon.place.sync;
 
+import com.buyeoon.common.location.BuyeoBoundary;
 import com.buyeoon.place.entity.PlaceCategory;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,12 +16,14 @@ public class PlaceSyncService {
 	private final TourApiClient tourApiClient;
 	private final KakaoImageSearchClient kakaoImageSearchClient;
 	private final PlaceUpsertService placeUpsertService;
+	private final BuyeoBoundary buyeoBoundary;
 
 	public PlaceSyncService(TourApiClient tourApiClient, KakaoImageSearchClient kakaoImageSearchClient,
-			PlaceUpsertService placeUpsertService) {
+			PlaceUpsertService placeUpsertService, BuyeoBoundary buyeoBoundary) {
 		this.tourApiClient = tourApiClient;
 		this.kakaoImageSearchClient = kakaoImageSearchClient;
 		this.placeUpsertService = placeUpsertService;
+		this.buyeoBoundary = buyeoBoundary;
 	}
 
 	public PlaceSyncResult sync() {
@@ -30,7 +33,7 @@ public class PlaceSyncService {
 
 		for (TourApiAreaItem item : items) {
 			PlaceCategory category = TourApiCategoryMapper.map(item);
-			if (category == null) {
+			if (category == null || outsideBuyeo(item)) {
 				continue;
 			}
 			try {
@@ -50,5 +53,13 @@ public class PlaceSyncService {
 		}
 
 		return new PlaceSyncResult(successCount, failedContentIds.size(), failedContentIds);
+	}
+
+	/**
+	 * 위치기반 조회는 반경 안에 청양·논산 등 인접 시군을 함께 돌려주므로 부여 경계 밖 항목을 상세 조회 전에 걸러 호출을 아낀다. 좌표를
+	 * 모르는 항목은 판정할 수 없으므로 통과시키고 이후 단계에 맡긴다.
+	 */
+	private boolean outsideBuyeo(TourApiAreaItem item) {
+		return item.hasCoordinates() && !buyeoBoundary.covers(item.latitude(), item.longitude());
 	}
 }

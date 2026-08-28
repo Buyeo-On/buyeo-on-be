@@ -2,6 +2,7 @@ package com.buyeoon.place.sync;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
@@ -19,24 +20,84 @@ class TourApiRestClient implements TourApiClient {
 	private final String serviceKey;
 	private final String areaCode;
 	private final String signguCode;
+	private final String lDongRegnCode;
+	private final String lDongSignguCode;
+	private final String centerLongitude;
+	private final String centerLatitude;
+	private final String radiusMeters;
 
 	TourApiRestClient(RestClient.Builder restClientBuilder, String baseUrl, String serviceKey, String areaCode,
-			String signguCode) {
+			String signguCode, String lDongRegnCode, String lDongSignguCode, String centerLongitude,
+			String centerLatitude, String radiusMeters) {
 		this.restClient = restClientBuilder.baseUrl(baseUrl)
 				.messageConverters(converters -> converters.addFirst(jsonConverter())).build();
 		this.serviceKey = serviceKey;
 		this.areaCode = areaCode;
 		this.signguCode = signguCode;
+		this.lDongRegnCode = lDongRegnCode;
+		this.lDongSignguCode = lDongSignguCode;
+		this.centerLongitude = centerLongitude;
+		this.centerLatitude = centerLatitude;
+		this.radiusMeters = radiusMeters;
 	}
 
+	/**
+	 * 같은 부여를 가리키는 조회 세 가지를 합쳐 contentId 기준으로 중복을 제거한다. 관광공사 지역코드와 법정동 코드는 등록 주체가 어느
+	 * 쪽으로 태깅했는지에 따라 잡히는 항목이 달라, 한쪽만 쓰면 절반가량을 놓친다. 위치기반 조회는 반경 안에 인접 시군이 섞이므로 호출자가
+	 * 경계로 걸러야 한다.
+	 */
 	@Override
 	public List<TourApiAreaItem> fetchAreaItems() {
-		TourApiListResponse response = restClient.get()
+		Map<String, TourApiAreaItem> merged = new LinkedHashMap<>();
+		collectInto(merged, areaBasedByAreaCode());
+		collectInto(merged, areaBasedByLegalDong());
+		collectInto(merged, locationBased());
+		return List.copyOf(merged.values());
+	}
+
+	private void collectInto(Map<String, TourApiAreaItem> merged, TourApiListResponse response) {
+		for (TourApiAreaItemDto item : items(response)) {
+			if (item.contentid() == null || item.contentid().isBlank()) {
+				continue;
+			}
+			merged.putIfAbsent(item.contentid(), new TourApiAreaItem(item.contentid(), item.contenttypeid(),
+					item.cat3(), parseCoordinate(item.mapy()), parseCoordinate(item.mapx())));
+		}
+	}
+
+	private TourApiListResponse areaBasedByAreaCode() {
+		return restClient.get()
 				.uri(uriBuilder -> withCommonParams(uriBuilder.path("/areaBasedList2")).queryParam("areaCode", areaCode)
 						.queryParam("sigunguCode", signguCode).queryParam("numOfRows", "1000").build())
 				.retrieve().body(TourApiListResponse.class);
-		return items(response).stream()
-				.map(item -> new TourApiAreaItem(item.contentid(), item.contenttypeid(), item.cat3())).toList();
+	}
+
+	private TourApiListResponse areaBasedByLegalDong() {
+		return restClient.get()
+				.uri(uriBuilder -> withCommonParams(uriBuilder.path("/areaBasedList2"))
+						.queryParam("lDongRegnCd", lDongRegnCode).queryParam("lDongSignguCd", lDongSignguCode)
+						.queryParam("numOfRows", "1000").build())
+				.retrieve().body(TourApiListResponse.class);
+	}
+
+	private TourApiListResponse locationBased() {
+		return restClient.get()
+				.uri(uriBuilder -> withCommonParams(uriBuilder.path("/locationBasedList2"))
+						.queryParam("mapX", centerLongitude).queryParam("mapY", centerLatitude)
+						.queryParam("radius", radiusMeters).queryParam("numOfRows", "1000").build())
+				.retrieve().body(TourApiListResponse.class);
+	}
+
+	/** 좌표가 비었거나 숫자가 아니면 경계 판정을 포기하고 null로 둔다. */
+	private static Double parseCoordinate(String raw) {
+		if (raw == null || raw.isBlank()) {
+			return null;
+		}
+		try {
+			return Double.valueOf(raw);
+		} catch (NumberFormatException exception) {
+			return null;
+		}
 	}
 
 	@Override
@@ -119,7 +180,7 @@ class TourApiRestClient implements TourApiClient {
 		}
 	}
 
-	private record TourApiAreaItemDto(String contentid, String contenttypeid, String cat3) {
+	private record TourApiAreaItemDto(String contentid, String contenttypeid, String cat3, String mapx, String mapy) {
 	}
 
 	private record TourApiCommonResponse(TourApiCommonResponseBody response) {
