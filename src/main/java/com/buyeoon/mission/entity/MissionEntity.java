@@ -120,6 +120,11 @@ public class MissionEntity {
 		this.rewardPoints = rewardPoints;
 	}
 
+	public void updateLocation(Point location) {
+		location.setSRID(4326);
+		this.location = location;
+	}
+
 	public void softDelete() {
 		this.deletedAt = Instant.now();
 	}

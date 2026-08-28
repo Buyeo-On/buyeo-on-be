@@ -14,6 +14,9 @@ import com.buyeoon.place.repository.PlaceQueryRepository;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.List;
 import java.util.UUID;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.GeometryFactory;
+import org.locationtech.jts.geom.Point;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +26,7 @@ public class MissionAdminCommandService {
 	private final MissionQueryRepository missionQueryRepository;
 	private final MissionChoiceRepository missionChoiceRepository;
 	private final PlaceQueryRepository placeQueryRepository;
+	private final GeometryFactory geometryFactory = new GeometryFactory();
 
 	@SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring 싱글턴 빈을 그대로 주입받아 저장한다.")
 	public MissionAdminCommandService(MissionQueryRepository missionQueryRepository,
@@ -42,13 +46,14 @@ public class MissionAdminCommandService {
 		MissionType type = missionType(request.type());
 		String title = requiredText(request.title());
 		String description = requiredText(request.description());
+		Point location = point(request.latitude(), request.longitude(), place.getLocation());
 
 		MissionEntity mission;
 		try {
 			mission = switch (type) {
 				case MULTIPLE_CHOICE -> {
 					requireNoOxAnswer(request.oxCorrectAnswer());
-					yield MissionEntity.multipleChoice(place.getId(), place.getLocation(), title, description,
+					yield MissionEntity.multipleChoice(place.getId(), location, title, description,
 							request.rewardPoints(), request.maxAttempts());
 				}
 				case OX -> {
@@ -56,8 +61,8 @@ public class MissionAdminCommandService {
 						throw new InvalidMissionRequestException();
 					}
 					requireNoChoices(request.choices());
-					yield MissionEntity.ox(place.getId(), place.getLocation(), title, description,
-							request.rewardPoints(), request.maxAttempts(), request.oxCorrectAnswer());
+					yield MissionEntity.ox(place.getId(), location, title, description, request.rewardPoints(),
+							request.maxAttempts(), request.oxCorrectAnswer());
 				}
 				case PHOTO -> {
 					requireNoOxAnswer(request.oxCorrectAnswer());
@@ -65,8 +70,7 @@ public class MissionAdminCommandService {
 					if (request.maxAttempts() != null) {
 						throw new InvalidMissionRequestException();
 					}
-					yield MissionEntity.photo(place.getId(), place.getLocation(), title, description,
-							request.rewardPoints());
+					yield MissionEntity.photo(place.getId(), location, title, description, request.rewardPoints());
 				}
 			};
 		} catch (IllegalArgumentException exception) {
@@ -86,6 +90,7 @@ public class MissionAdminCommandService {
 				.orElseThrow(MissionNotFoundException::new);
 		String title = requiredText(request.title());
 		String description = requiredText(request.description());
+		mission.updateLocation(point(request.latitude(), request.longitude(), mission.getLocation()));
 
 		try {
 			switch (mission.getType()) {
@@ -168,5 +173,19 @@ public class MissionAdminCommandService {
 			throw new InvalidMissionRequestException();
 		}
 		return value;
+	}
+
+	/** 좌표가 둘 다 없으면 {@code fallback}(장소 좌표 등)을 쓰고, 있으면 범위를 검증해 새 좌표를 만든다. */
+	private Point point(Double latitude, Double longitude, Point fallback) {
+		if (latitude == null && longitude == null) {
+			return fallback;
+		}
+		if (latitude == null || longitude == null) {
+			throw new InvalidMissionRequestException();
+		}
+		if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+			throw new InvalidMissionRequestException();
+		}
+		return geometryFactory.createPoint(new Coordinate(longitude, latitude));
 	}
 }
