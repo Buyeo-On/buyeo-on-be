@@ -54,6 +54,7 @@ public class MissionAdminQueryService {
 				.toList();
 		return new MissionAdminView(mission.getId(), mission.getPlaceId(), mission.getType(), mission.getTitle(),
 				mission.getDescription(), mission.getRewardPoints(), mission.getMaxAttempts(),
-				mission.getOxCorrectAnswer(), choiceViews, mission.isDeleted());
+				mission.getOxCorrectAnswer(), choiceViews, mission.getLocation().getY(), mission.getLocation().getX(),
+				mission.isDeleted());
 	}
 }

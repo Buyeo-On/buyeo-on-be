@@ -94,16 +94,21 @@ class MissionAdminControllerIntegrationTests {
 
 		mockMvc.perform(getDetailRequest(missionId)).andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.type").value("MULTIPLE_CHOICE"))
-				.andExpect(jsonPath("$.data.choices.length()").value(2));
+				.andExpect(jsonPath("$.data.choices.length()").value(2))
+				.andExpect(jsonPath("$.data.latitude").value(-75.0))
+				.andExpect(jsonPath("$.data.longitude").value(0.0));
 
 		mockMvc.perform(updateRequest(missionId, """
 				{"title":"수정된 문제","description":"수정된 설명","rewardPoints":200,"maxAttempts":5,
-				"choices":[{"label":"새 보기","correct":true,"sortOrder":0}]}
+				"choices":[{"label":"새 보기","correct":true,"sortOrder":0}],
+				"latitude":-74.5,"longitude":1.0}
 				""")).andExpect(status().isOk());
 
 		mockMvc.perform(getDetailRequest(missionId)).andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.title").value("수정된 문제"))
-				.andExpect(jsonPath("$.data.choices.length()").value(1));
+				.andExpect(jsonPath("$.data.choices.length()").value(1))
+				.andExpect(jsonPath("$.data.latitude").value(-74.5))
+				.andExpect(jsonPath("$.data.longitude").value(1.0));
 
 		mockMvc.perform(listRequest(placeId.toString())).andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.items[?(@.missionId=='" + missionId + "')]").exists());
@@ -125,6 +130,34 @@ class MissionAdminControllerIntegrationTests {
 
 		mockMvc.perform(createRequest("""
 				{"placeId":"%s","type":"PHOTO","title":"사진미션","description":"설명","rewardPoints":100,"maxAttempts":3}
+				""".formatted(placeId))).andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.data.code").value("INVALID_REQUEST"));
+	}
+
+	@Test
+	@DisplayName("좌표를 지정해 생성하면 장소 좌표가 아니라 지정한 좌표가 저장된다")
+	void createsMissionWithCustomLocation() throws Exception {
+		UUID placeId = insertPlace();
+
+		MvcResult createResult = mockMvc.perform(createRequest("""
+				{"placeId":"%s","type":"OX","title":"OX 미션","description":"설명","rewardPoints":100,
+				"oxCorrectAnswer":true,"latitude":-74.9,"longitude":0.5}
+				""".formatted(placeId))).andExpect(status().isOk()).andReturn();
+		String missionId = objectMapper.readTree(createResult.getResponse().getContentAsString()).path("data")
+				.path("missionId").asString();
+
+		mockMvc.perform(getDetailRequest(missionId)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.latitude").value(-74.9)).andExpect(jsonPath("$.data.longitude").value(0.5));
+	}
+
+	@Test
+	@DisplayName("위도만 있고 경도가 없으면 400을 받는다")
+	void returns400WhenOnlyLatitudeProvided() throws Exception {
+		UUID placeId = insertPlace();
+
+		mockMvc.perform(createRequest("""
+				{"placeId":"%s","type":"OX","title":"OX 미션","description":"설명","rewardPoints":100,
+				"oxCorrectAnswer":true,"latitude":-74.9}
 				""".formatted(placeId))).andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.data.code").value("INVALID_REQUEST"));
 	}
