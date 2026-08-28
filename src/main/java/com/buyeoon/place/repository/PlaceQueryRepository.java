@@ -93,4 +93,6 @@ public interface PlaceQueryRepository extends JpaRepository<PlaceEntity, UUID> {
 	Page<PlaceEntity> findByDeletedAtIsNull(Pageable pageable);
 
 	Page<PlaceEntity> findByDeletedAtIsNullAndCategory(PlaceCategory category, Pageable pageable);
+
+	Page<PlaceEntity> findByCategory(PlaceCategory category, Pageable pageable);
 }

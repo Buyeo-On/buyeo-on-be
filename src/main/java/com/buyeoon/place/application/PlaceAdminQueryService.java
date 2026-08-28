@@ -28,16 +28,14 @@ public class PlaceAdminQueryService {
 
 	public PlaceAdminListView list(PlaceCategory category, int page, int size) {
 		PageRequest pageRequest = PageRequest.of(page, size);
-		Page<PlaceEntity> result = category == null
-				? placeQueryRepository.findByDeletedAtIsNull(pageRequest)
-				: placeQueryRepository.findByDeletedAtIsNullAndCategory(category, pageRequest);
+		Page<PlaceEntity> result = category == null ? placeQueryRepository.findAll(pageRequest)
+				: placeQueryRepository.findByCategory(category, pageRequest);
 		return new PlaceAdminListView(result.getContent().stream().map(this::toView).toList(), page, size,
 				result.getTotalElements(), result.getTotalPages());
 	}
 
 	public PlaceAdminView get(UUID placeId) {
-		PlaceEntity place = placeQueryRepository.findById(placeId).filter(candidate -> !candidate.isDeleted())
-				.orElseThrow(PlaceNotFoundException::new);
+		PlaceEntity place = placeQueryRepository.findById(placeId).orElseThrow(PlaceNotFoundException::new);
 		return toView(place);
 	}
 

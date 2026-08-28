@@ -128,11 +128,49 @@ class PlaceAdminControllerIntegrationTests {
 
 		mockMvc.perform(deleteRequest(placeId)).andExpect(status().isOk());
 
-		mockMvc.perform(getDetailRequest(placeId)).andExpect(status().isNotFound());
+		mockMvc.perform(getDetailRequest(placeId)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.deleted").value(true));
 
 		Boolean deleted = jdbcTemplate.queryForObject("SELECT deleted_at IS NOT NULL FROM places WHERE id = ?::uuid",
 				Boolean.class, placeId);
 		assertThat(deleted).isTrue();
+
+		mockMvc.perform(restoreRequest(placeId)).andExpect(status().isOk());
+
+		mockMvc.perform(getDetailRequest(placeId)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.deleted").value(false));
+	}
+
+	@Test
+	@DisplayName("장소를 삭제하면 딸린 미션도 함께 삭제되고, 장소를 복구해도 미션은 그대로 삭제 상태다")
+	void deletingPlaceCascadesToMissionsButRestoringPlaceDoesNot() throws Exception {
+		MvcResult createResult = mockMvc
+				.perform(createRequest("""
+						{"category":"HERITAGE","name":"관리자 생성 장소2","summary":"요약","description":"설명",
+						"address":"주소","latitude":-76.0,"longitude":0.0}"""))
+				.andExpect(status().isOk()).andReturn();
+		String placeId = objectMapper.readTree(createResult.getResponse().getContentAsString()).path("data")
+				.path("placeId").asString();
+
+		String missionId = jdbcTemplate.queryForObject("""
+				INSERT INTO missions (place_id, type, title, description, reward_points, location)
+				VALUES (?::uuid, 'PHOTO', '테스트 미션', '설명', 10, (SELECT location FROM places WHERE id = ?::uuid))
+				RETURNING id
+				""", String.class, placeId, placeId);
+
+		mockMvc.perform(deleteRequest(placeId)).andExpect(status().isOk());
+
+		Boolean missionDeleted = jdbcTemplate.queryForObject(
+				"SELECT deleted_at IS NOT NULL FROM missions WHERE id = ?::uuid", Boolean.class, missionId);
+		assertThat(missionDeleted).isTrue();
+
+		mockMvc.perform(restoreRequest(placeId)).andExpect(status().isOk());
+
+		Boolean stillDeleted = jdbcTemplate.queryForObject(
+				"SELECT deleted_at IS NOT NULL FROM missions WHERE id = ?::uuid", Boolean.class, missionId);
+		assertThat(stillDeleted).isTrue();
+
+		jdbcTemplate.update("DELETE FROM missions WHERE id = ?::uuid", missionId);
 	}
 
 	@Test
@@ -213,6 +251,10 @@ class PlaceAdminControllerIntegrationTests {
 
 	private MockHttpServletRequestBuilder deleteRequest(String placeId) {
 		return delete("/admin/places/{placeId}", placeId).header("X-Admin-Api-Key", VALID_API_KEY);
+	}
+
+	private MockHttpServletRequestBuilder restoreRequest(String placeId) {
+		return post("/admin/places/{placeId}/restore", placeId).header("X-Admin-Api-Key", VALID_API_KEY);
 	}
 
 	private MockHttpServletRequestBuilder getDetailRequest(String placeId) {

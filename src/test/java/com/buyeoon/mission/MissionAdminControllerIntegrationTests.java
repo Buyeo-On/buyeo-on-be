@@ -194,6 +194,44 @@ class MissionAdminControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.code").value("RESOURCE_NOT_FOUND"));
 	}
 
+	@Test
+	@DisplayName("삭제한 미션을 복구하면 다시 활성 상태가 된다")
+	void restoresDeletedMission() throws Exception {
+		UUID placeId = insertPlace();
+
+		MvcResult createResult = mockMvc.perform(createRequest("""
+				{"placeId":"%s","type":"OX","title":"OX 미션","description":"설명","rewardPoints":100,
+				"oxCorrectAnswer":true}
+				""".formatted(placeId))).andExpect(status().isOk()).andReturn();
+		String missionId = objectMapper.readTree(createResult.getResponse().getContentAsString()).path("data")
+				.path("missionId").asString();
+
+		mockMvc.perform(deleteRequest(missionId)).andExpect(status().isOk());
+		mockMvc.perform(restoreRequest(missionId)).andExpect(status().isOk());
+
+		mockMvc.perform(getDetailRequest(missionId)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.deleted").value(false));
+	}
+
+	@Test
+	@DisplayName("소속 장소가 삭제된 상태면 미션을 복구할 수 없다")
+	void returns400WhenRestoringMissionWithDeletedPlace() throws Exception {
+		UUID placeId = insertPlace();
+
+		MvcResult createResult = mockMvc.perform(createRequest("""
+				{"placeId":"%s","type":"OX","title":"OX 미션","description":"설명","rewardPoints":100,
+				"oxCorrectAnswer":true}
+				""".formatted(placeId))).andExpect(status().isOk()).andReturn();
+		String missionId = objectMapper.readTree(createResult.getResponse().getContentAsString()).path("data")
+				.path("missionId").asString();
+
+		mockMvc.perform(deleteRequest(missionId)).andExpect(status().isOk());
+		jdbcTemplate.update("UPDATE places SET deleted_at = now() WHERE id = ?", placeId);
+
+		mockMvc.perform(restoreRequest(missionId)).andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.data.code").value("INVALID_REQUEST"));
+	}
+
 	private UUID insertPlace() {
 		UUID id = UUID.randomUUID();
 		jdbcTemplate.update(
@@ -223,6 +261,10 @@ class MissionAdminControllerIntegrationTests {
 
 	private MockHttpServletRequestBuilder listRequest(String placeId) {
 		return get("/admin/missions").param("placeId", placeId).header("X-Admin-Api-Key", VALID_API_KEY);
+	}
+
+	private MockHttpServletRequestBuilder restoreRequest(String missionId) {
+		return post("/admin/missions/{missionId}/restore", missionId).header("X-Admin-Api-Key", VALID_API_KEY);
 	}
 
 	@DynamicPropertySource

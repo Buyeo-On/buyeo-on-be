@@ -130,6 +130,16 @@ public class MissionAdminCommandService {
 		mission.softDelete();
 	}
 
+	@Transactional
+	public void restore(UUID missionId) {
+		MissionEntity mission = missionQueryRepository.findById(missionId).orElseThrow(MissionNotFoundException::new);
+		PlaceEntity place = placeQueryRepository.findById(mission.getPlaceId()).orElseThrow(MissionNotFoundException::new);
+		if (place.isDeleted()) {
+			throw new InvalidMissionRequestException();
+		}
+		mission.restore();
+	}
+
 	private void saveChoices(UUID missionId, List<MissionChoiceRequest> choices) {
 		if (choices == null || choices.isEmpty()) {
 			throw new InvalidMissionRequestException();

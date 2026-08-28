@@ -52,6 +52,12 @@ public class PlaceAdminController {
 		return SuccessResponse.of(Map.of());
 	}
 
+	@PostMapping("/admin/places/{placeId}/restore")
+	public SuccessResponse<Map<String, Object>> restore(@PathVariable UUID placeId) {
+		placeAdminCommandService.restore(placeId);
+		return SuccessResponse.of(Map.of());
+	}
+
 	@GetMapping("/admin/places")
 	public SuccessResponse<PlaceAdminListView> list(@RequestParam(required = false) String category,
 			@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
