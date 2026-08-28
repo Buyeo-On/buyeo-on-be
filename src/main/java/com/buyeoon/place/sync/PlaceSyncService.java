@@ -14,14 +14,12 @@ public class PlaceSyncService {
 	private static final Logger log = LoggerFactory.getLogger(PlaceSyncService.class);
 
 	private final TourApiClient tourApiClient;
-	private final KakaoImageSearchClient kakaoImageSearchClient;
 	private final PlaceUpsertService placeUpsertService;
 	private final BuyeoBoundary buyeoBoundary;
 
-	public PlaceSyncService(TourApiClient tourApiClient, KakaoImageSearchClient kakaoImageSearchClient,
-			PlaceUpsertService placeUpsertService, BuyeoBoundary buyeoBoundary) {
+	public PlaceSyncService(TourApiClient tourApiClient, PlaceUpsertService placeUpsertService,
+			BuyeoBoundary buyeoBoundary) {
 		this.tourApiClient = tourApiClient;
-		this.kakaoImageSearchClient = kakaoImageSearchClient;
 		this.placeUpsertService = placeUpsertService;
 		this.buyeoBoundary = buyeoBoundary;
 	}
@@ -39,11 +37,6 @@ public class PlaceSyncService {
 			try {
 				TourApiPlaceDetail detail = tourApiClient.fetchPlaceDetail(item)
 						.withDetailInfo(tourApiClient.fetchPlaceInfo(item));
-				if (detail.firstImageUrl() == null || detail.firstImageUrl().isBlank()) {
-					String fallbackImageUrl = kakaoImageSearchClient.findFirstImageUrl(detail.title(), detail.address())
-							.orElse(null);
-					detail = detail.withFirstImageUrl(fallbackImageUrl);
-				}
 				placeUpsertService.upsert(category, detail);
 				successCount++;
 			} catch (RuntimeException exception) {
