@@ -73,6 +73,7 @@ class CitizenCardCreationIntegrationTests {
 	@BeforeEach
 	void cleanUp() {
 		jdbcTemplate.update("DELETE FROM idempotency_requests");
+		jdbcTemplate.update("DELETE FROM notifications");
 		jdbcTemplate.update("DELETE FROM citizen_cards");
 		jdbcTemplate.update("DELETE FROM member_profiles");
 		jdbcTemplate.update("DELETE FROM term_consents");
@@ -108,6 +109,11 @@ class CitizenCardCreationIntegrationTests {
 		assertThat(
 				jdbcTemplate.queryForObject("SELECT barcode_value::uuid IS NOT NULL FROM citizen_cards", Boolean.class))
 				.isTrue();
+		assertThat(jdbcTemplate.queryForObject("""
+				SELECT count(*) FROM notifications n
+				JOIN citizen_cards c ON c.id = n.target_id
+				WHERE n.member_id = c.member_id AND n.type = 'CITIZEN_CARD' AND n.target_type = 'CITIZEN_CARD'
+				""", Long.class)).isEqualTo(1L);
 		assertThat(jdbcTemplate.queryForObject("""
 				SELECT profile.updated_at = card.issued_at
 				   AND card.issued_at = request.created_at
@@ -201,6 +207,8 @@ class CitizenCardCreationIntegrationTests {
 
 		assertThat(retried).isEqualTo(first);
 		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM citizen_cards", Long.class)).isEqualTo(1L);
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM notifications WHERE type = 'CITIZEN_CARD'",
+				Long.class)).isEqualTo(1L);
 	}
 
 	/** 보관 중인 키를 다른 본문·작업에 쓰거나 발급 후 다른 키로 다시 만들 수 없다. */
@@ -430,6 +438,8 @@ class CitizenCardCreationIntegrationTests {
 				memberId)).isZero();
 		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM idempotency_requests WHERE member_id = ?",
 				Long.class, memberId)).isZero();
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM notifications WHERE member_id = ?", Long.class,
+				memberId)).isZero();
 	}
 
 	@DynamicPropertySource
