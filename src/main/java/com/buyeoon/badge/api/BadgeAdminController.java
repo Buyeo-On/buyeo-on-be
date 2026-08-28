@@ -4,6 +4,7 @@ import com.buyeoon.badge.BadgeMetric;
 import com.buyeoon.badge.application.BadgeAdminCommandService;
 import com.buyeoon.badge.application.BadgeAdminQueryService;
 import com.buyeoon.common.api.SuccessResponse;
+import com.buyeoon.common.storage.PublicImageUploadUrlView;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.List;
 import java.util.Map;
@@ -74,5 +75,12 @@ public class BadgeAdminController {
 	@GetMapping("/admin/badge-metrics")
 	public SuccessResponse<List<BadgeMetric>> getBadgeMetrics() {
 		return SuccessResponse.of(List.of(BadgeMetric.values()));
+	}
+
+	@PostMapping("/admin/badges/images/upload-url")
+	public SuccessResponse<PublicImageUploadUrlView> createImageUploadUrl(
+			@RequestBody BadgeAdminImageUploadUrlRequest request) {
+		return SuccessResponse
+				.of(badgeAdminCommandService.createImageUploadUrl(request.contentType(), request.fileSizeBytes()));
 	}
 }

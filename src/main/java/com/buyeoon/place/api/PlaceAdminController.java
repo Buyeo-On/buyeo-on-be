@@ -1,6 +1,7 @@
 package com.buyeoon.place.api;
 
 import com.buyeoon.common.api.SuccessResponse;
+import com.buyeoon.common.storage.PublicImageUploadUrlView;
 import com.buyeoon.place.application.PlaceAdminCommandService;
 import com.buyeoon.place.application.PlaceAdminQueryService;
 import com.buyeoon.place.entity.PlaceCategory;
@@ -63,6 +64,13 @@ public class PlaceAdminController {
 	@GetMapping("/admin/places/{placeId}")
 	public SuccessResponse<PlaceAdminView> get(@PathVariable UUID placeId) {
 		return SuccessResponse.of(placeAdminQueryService.get(placeId));
+	}
+
+	@PostMapping("/admin/places/images/upload-url")
+	public SuccessResponse<PublicImageUploadUrlView> createImageUploadUrl(
+			@RequestBody PlaceAdminImageUploadUrlRequest request) {
+		return SuccessResponse
+				.of(placeAdminCommandService.createImageUploadUrl(request.contentType(), request.fileSizeBytes()));
 	}
 
 	private PlaceCategory parseCategory(String category) {
