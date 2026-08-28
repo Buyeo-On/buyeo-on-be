@@ -50,6 +50,12 @@ public class MissionAdminController {
 		return SuccessResponse.of(Map.of());
 	}
 
+	@PostMapping("/admin/missions/{missionId}/restore")
+	public SuccessResponse<Map<String, Object>> restore(@PathVariable UUID missionId) {
+		missionAdminCommandService.restore(missionId);
+		return SuccessResponse.of(Map.of());
+	}
+
 	@GetMapping("/admin/missions")
 	public SuccessResponse<MissionAdminListView> list(@RequestParam(required = false) UUID placeId,
 			@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {

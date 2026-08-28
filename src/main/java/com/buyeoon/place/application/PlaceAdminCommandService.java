@@ -8,12 +8,15 @@ import com.buyeoon.common.storage.PublicImageUploadUrlView;
 import com.buyeoon.place.api.InvalidPlaceRequestException;
 import com.buyeoon.place.api.PlaceAdminCreateRequest;
 import com.buyeoon.place.api.PlaceAdminUpdateRequest;
+import com.buyeoon.mission.entity.MissionEntity;
+import com.buyeoon.mission.repository.MissionQueryRepository;
 import com.buyeoon.place.entity.PlaceCategory;
 import com.buyeoon.place.entity.PlaceEntity;
 import com.buyeoon.place.repository.PlaceQueryRepository;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.time.LocalTime;
 import java.time.format.DateTimeParseException;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -33,6 +36,7 @@ public class PlaceAdminCommandService {
 	private static final String IMAGE_KEY_PREFIX = "public/places/";
 
 	private final PlaceQueryRepository placeQueryRepository;
+	private final MissionQueryRepository missionQueryRepository;
 	private final PublicImageUploadPresigner publicImageUploadPresigner;
 	private final PublicImageObjectStore publicImageObjectStore;
 	private final long maxUploadBytes;
@@ -40,9 +44,11 @@ public class PlaceAdminCommandService {
 
 	@SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring 싱글턴 빈을 그대로 주입받아 저장한다.")
 	public PlaceAdminCommandService(PlaceQueryRepository placeQueryRepository,
-			PublicImageUploadPresigner publicImageUploadPresigner, PublicImageObjectStore publicImageObjectStore,
+			MissionQueryRepository missionQueryRepository, PublicImageUploadPresigner publicImageUploadPresigner,
+			PublicImageObjectStore publicImageObjectStore,
 			@Value("${storage.images.max-upload-bytes:10485760}") long maxUploadBytes) {
 		this.placeQueryRepository = placeQueryRepository;
+		this.missionQueryRepository = missionQueryRepository;
 		this.publicImageUploadPresigner = publicImageUploadPresigner;
 		this.publicImageObjectStore = publicImageObjectStore;
 		this.maxUploadBytes = maxUploadBytes;
@@ -112,6 +118,14 @@ public class PlaceAdminCommandService {
 		PlaceEntity place = placeQueryRepository.findById(placeId).filter(candidate -> !candidate.isDeleted())
 				.orElseThrow(PlaceNotFoundException::new);
 		place.softDelete();
+		List<MissionEntity> missions = missionQueryRepository.findByPlaceIdAndDeletedAtIsNull(placeId);
+		missions.forEach(MissionEntity::softDelete);
+	}
+
+	@Transactional
+	public void restore(UUID placeId) {
+		PlaceEntity place = placeQueryRepository.findById(placeId).orElseThrow(PlaceNotFoundException::new);
+		place.restore();
 	}
 
 	private PlaceCategory category(String value) {
