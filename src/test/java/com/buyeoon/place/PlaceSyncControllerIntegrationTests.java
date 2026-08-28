@@ -2,6 +2,8 @@ package com.buyeoon.place;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.BDDMockito.willThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -223,6 +225,27 @@ class PlaceSyncControllerIntegrationTests {
 				"SELECT detail_info::text FROM places " + "WHERE source_name = 'TOUR_API' AND external_id = '5007'",
 				String.class);
 		assertThat(detailInfo).contains("2,000원").doesNotContain("등산로");
+	}
+
+	/**
+	 * 위치기반 조회는 반경 안에 인접 시군(청양·논산 등)을 함께 돌려주므로, 부여 경계 밖 좌표를 가진 항목은 상세 조회 없이 건너뛴다.
+	 * TourApiClient.fetchPlaceDetail이 아예 호출되지 않아야 한다.
+	 */
+	@Test
+	@DisplayName("부여 경계 밖 좌표의 장소는 동기화하지 않는다")
+	void skipsItemsOutsideBuyeoBoundary() throws Exception {
+		TourApiAreaItem inside = new TourApiAreaItem("6001", "12", null, 36.2754, 126.9098);
+		TourApiAreaItem outside = new TourApiAreaItem("6002", "12", null, 36.2046, 127.0844); // 논산시청 인근
+		given(tourApiClient.fetchAreaItems()).willReturn(List.of(inside, outside));
+		given(tourApiClient.fetchPlaceDetail(inside)).willReturn(
+				new TourApiPlaceDetail("6001", "부여 안쪽", "설명", "주소", null, 36.2754, 126.9098, null, null, Map.of()));
+
+		mockMvc.perform(syncRequest()).andExpect(status().isOk()).andExpect(jsonPath("$.data.successCount").value(1));
+
+		verify(tourApiClient, never()).fetchPlaceDetail(outside);
+		Integer count = jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM places WHERE source_name = 'TOUR_API' AND external_id = '6002'", Integer.class);
+		assertThat(count).isZero();
 	}
 
 	/** 특정 항목 호출이 실패해도 나머지 항목은 계속 진행되고 실패한 contentId가 응답에 포함된다. */

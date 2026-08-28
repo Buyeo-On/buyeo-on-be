@@ -27,7 +27,8 @@ class TourApiRestClientInfoTests {
 	void setUp() {
 		RestClient.Builder builder = RestClient.builder();
 		server = MockRestServiceServer.bindTo(builder).build();
-		client = new TourApiRestClient(builder, BASE_URL, "test-key", "34", "6");
+		client = new TourApiRestClient(builder, BASE_URL, "test-key", "34", "6", "44", "760", "126.9098", "36.2754",
+				"20000");
 	}
 
 	/**

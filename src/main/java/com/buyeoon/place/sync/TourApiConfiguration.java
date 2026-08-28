@@ -15,12 +15,18 @@ public class TourApiConfiguration {
 	TourApiClient tourApiClient(@Value("${tourapi.base-url}") String baseUrl,
 			@Value("${tourapi.service-key}") String serviceKey, @Value("${tourapi.area-code}") String areaCode,
 			@Value("${tourapi.signgu-code}") String signguCode,
+			@Value("${tourapi.ldong-regn-code}") String lDongRegnCode,
+			@Value("${tourapi.ldong-signgu-code}") String lDongSignguCode,
+			@Value("${tourapi.center-longitude}") String centerLongitude,
+			@Value("${tourapi.center-latitude}") String centerLatitude,
+			@Value("${tourapi.radius-meters}") String radiusMeters,
 			@Value("${tourapi.connect-timeout}") Duration connectTimeout,
 			@Value("${tourapi.read-timeout}") Duration readTimeout) {
 		HttpClient httpClient = HttpClient.newBuilder().connectTimeout(connectTimeout).build();
 		JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
 		requestFactory.setReadTimeout(readTimeout);
 		RestClient.Builder restClientBuilder = RestClient.builder().requestFactory(requestFactory);
-		return new TourApiRestClient(restClientBuilder, baseUrl, serviceKey, areaCode, signguCode);
+		return new TourApiRestClient(restClientBuilder, baseUrl, serviceKey, areaCode, signguCode, lDongRegnCode,
+				lDongSignguCode, centerLongitude, centerLatitude, radiusMeters);
 	}
 }
