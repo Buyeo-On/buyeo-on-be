@@ -25,12 +25,15 @@ public class MissionQueryService {
 	private final MissionQueryRepository missionQueryRepository;
 	private final MissionChoiceRepository missionChoiceRepository;
 	private final TripQueryService tripQueryService;
+	private final SpecialQuizExposureDecider specialQuizExposureDecider;
 
 	public MissionQueryService(MissionQueryRepository missionQueryRepository,
-			MissionChoiceRepository missionChoiceRepository, TripQueryService tripQueryService) {
+			MissionChoiceRepository missionChoiceRepository, TripQueryService tripQueryService,
+			SpecialQuizExposureDecider specialQuizExposureDecider) {
 		this.missionQueryRepository = missionQueryRepository;
 		this.missionChoiceRepository = missionChoiceRepository;
 		this.tripQueryService = tripQueryService;
+		this.specialQuizExposureDecider = specialQuizExposureDecider;
 	}
 
 	public MissionListView listNearby(UUID memberId, UUID tripId, double latitude, double longitude) {
@@ -41,7 +44,7 @@ public class MissionQueryService {
 		}
 
 		List<MissionItemView> items = missionQueryRepository.findNearby(tripId, latitude, longitude).stream()
-				.map(row -> toView(tripId, row)).toList();
+				.filter(row -> isExposedToday(tripId, row)).map(row -> toView(tripId, row)).toList();
 		return new MissionListView(items);
 	}
 
@@ -53,7 +56,7 @@ public class MissionQueryService {
 		}
 
 		NearbyMissionProjection row = missionQueryRepository.findDetail(missionId, tripId, latitude, longitude)
-				.orElseThrow(MissionNotFoundException::new);
+				.filter(candidate -> isExposedToday(tripId, candidate)).orElseThrow(MissionNotFoundException::new);
 		MissionCommon common = computeCommon(row);
 
 		if (!common.withinParticipationRadius()) {
@@ -108,6 +111,23 @@ public class MissionQueryService {
 
 	private MissionChoiceView toChoiceView(MissionChoiceEntity choice) {
 		return new MissionChoiceView(choice.getId(), choice.getLabel());
+	}
+
+	/**
+	 * 스페셜 퀴즈(최대 도전 횟수가 있는 객관식·OX 미션)는 여행·KST 날짜·미션 ID로 정해지는 시드로 하루 20%만
+	 * 노출한다. 완료·기회 소진 상태는 이미 참여한 기록이라 노출 대상에서 빼지 않고 항상 보여준다.
+	 */
+	private boolean isExposedToday(UUID tripId, NearbyMissionProjection row) {
+		MissionEntity mission = row.mission();
+		if (mission.getMaxAttempts() == null) {
+			return true;
+		}
+		MissionParticipationEntity participation = row.participation();
+		MissionStatus persistedStatus = participation == null ? MissionStatus.AVAILABLE : participation.getStatus();
+		if (persistedStatus != MissionStatus.AVAILABLE) {
+			return true;
+		}
+		return specialQuizExposureDecider.isExposedToday(tripId, mission.getId());
 	}
 
 	private MissionCommon computeCommon(NearbyMissionProjection row) {
