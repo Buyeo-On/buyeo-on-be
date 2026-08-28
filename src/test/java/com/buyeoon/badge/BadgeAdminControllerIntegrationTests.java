@@ -186,6 +186,25 @@ class BadgeAdminControllerIntegrationTests {
 	}
 
 	@Test
+	@DisplayName("목록 조회 시 각 배지의 조건이 함께 반환된다")
+	void listIncludesConditionsForEachBadge() throws Exception {
+		MvcResult createResult = mockMvc
+				.perform(createRequest("""
+						{"category":"EXPLORATION","name":"테스트 배지","description":"설명","conditionText":"조건 설명",
+						"active":true,
+						"conditions":[{"metricKey":"MISSION_COMPLETED_COUNT","threshold":5}]}
+						"""))
+				.andExpect(status().isOk()).andReturn();
+		String badgeId = objectMapper.readTree(createResult.getResponse().getContentAsString()).path("data")
+				.path("badgeId").asString();
+
+		mockMvc.perform(listRequest()).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.items[?(@.badgeId=='" + badgeId + "')].conditions[0].metricKey")
+						.value("MISSION_COMPLETED_COUNT"))
+				.andExpect(jsonPath("$.data.items[?(@.badgeId=='" + badgeId + "')].conditions[0].threshold").value(5));
+	}
+
+	@Test
 	@DisplayName("이미지 업로드 URL을 발급받는다")
 	void issuesImageUploadUrl() throws Exception {
 		when(publicImageUploadPresigner.presign(anyString(), anyString(), anyLong()))
@@ -234,6 +253,10 @@ class BadgeAdminControllerIntegrationTests {
 
 	private MockHttpServletRequestBuilder getDetailRequest(String badgeId) {
 		return get("/admin/badges/{badgeId}", badgeId).header("X-Admin-Api-Key", VALID_API_KEY);
+	}
+
+	private MockHttpServletRequestBuilder listRequest() {
+		return get("/admin/badges").header("X-Admin-Api-Key", VALID_API_KEY);
 	}
 
 	@DynamicPropertySource
