@@ -32,7 +32,11 @@ public final class ProfileUpdateService {
 		StoredProfile current = currentIssuedProfile(memberId);
 		String displayName = command.displayName() == null ? current.displayName() : command.displayName();
 		UUID characterId = command.characterId() == null ? current.characterId() : command.characterId();
+		UUID themeId = command.themeId() == null ? current.themeId() : command.themeId();
 		if (command.characterId() != null && !characterExists(characterId)) {
+			throw new InvalidProfileRequestException();
+		}
+		if (command.themeId() != null && !themeExists(themeId)) {
 			throw new InvalidProfileRequestException();
 		}
 		if (!displayName.equals(current.displayName()) || !characterId.equals(current.characterId())) {
@@ -43,6 +47,13 @@ public final class ProfileUpdateService {
 					""", displayName, characterId, memberId);
 			if (updated != 1) {
 				throw new IllegalStateException("프로필을 변경할 수 없습니다.");
+			}
+		}
+		if (!themeId.equals(current.themeId())) {
+			int updated = jdbcOperations.update("UPDATE citizen_cards SET theme_id = ? WHERE member_id = ?", themeId,
+					memberId);
+			if (updated != 1) {
+				throw new IllegalStateException("군민증 테마를 변경할 수 없습니다.");
 			}
 		}
 		return memberQueryService.getActiveMember(memberId);
@@ -61,18 +72,17 @@ public final class ProfileUpdateService {
 	}
 
 	private StoredProfile currentIssuedProfile(UUID memberId) {
-		return jdbcOperations
-				.query("""
-						SELECT profile.display_name, profile.character_id
-						FROM member_profiles profile
-						JOIN citizen_cards card ON card.member_id = profile.member_id
-						WHERE profile.member_id = ?
-						FOR UPDATE OF profile
-						""",
-						(resultSet, rowNumber) -> new StoredProfile(resultSet.getString("display_name"),
-								resultSet.getObject("character_id", UUID.class)),
-						memberId)
-				.stream().findFirst().orElseThrow(InvalidStateTransitionException::new);
+		return jdbcOperations.query("""
+				SELECT profile.display_name, profile.character_id, card.theme_id
+				FROM member_profiles profile
+				JOIN citizen_cards card ON card.member_id = profile.member_id
+				WHERE profile.member_id = ?
+				FOR UPDATE OF profile, card
+				""", (resultSet, rowNumber) -> {
+			UUID characterId = resultSet.getObject("character_id", UUID.class);
+			UUID themeId = resultSet.getObject("theme_id", UUID.class);
+			return new StoredProfile(resultSet.getString("display_name"), characterId, themeId);
+		}, memberId).stream().findFirst().orElseThrow(InvalidStateTransitionException::new);
 	}
 
 	private boolean characterExists(UUID characterId) {
@@ -80,9 +90,14 @@ public final class ProfileUpdateService {
 				"SELECT EXISTS (SELECT 1 FROM card_characters WHERE id = ?)", Boolean.class, characterId));
 	}
 
-	public record ProfileUpdateCommand(String displayName, UUID characterId) {
+	private boolean themeExists(UUID themeId) {
+		return Boolean.TRUE.equals(jdbcOperations
+				.queryForObject("SELECT EXISTS (SELECT 1 FROM card_themes WHERE id = ?)", Boolean.class, themeId));
 	}
 
-	private record StoredProfile(String displayName, UUID characterId) {
+	public record ProfileUpdateCommand(String displayName, UUID characterId, UUID themeId) {
+	}
+
+	private record StoredProfile(String displayName, UUID characterId, UUID themeId) {
 	}
 }

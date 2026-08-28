@@ -72,7 +72,7 @@ class ProfileUpdateIntegrationTests {
 	}
 
 	@Test
-	@DisplayName("표시 이름과 캐릭터를 각각 또는 함께 부분 변경한다")
+	@DisplayName("표시 이름과 캐릭터, 카드 테마를 각각 또는 함께 부분 변경한다")
 	void updatesProfileFieldsPartiallyAndTogether() throws Exception {
 		Fixture fixture = insertIssuedMember();
 
@@ -83,13 +83,15 @@ class ProfileUpdateIntegrationTests {
 		performPatch(fixture, "{\"characterId\":\"" + fixture.secondCharacterId() + "\"}").andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.displayName").value("새이름"))
 				.andExpect(jsonPath("$.data.characterId").value(fixture.secondCharacterId().toString()));
-		performPatch(fixture, "{\"displayName\":\"최종이름\",\"characterId\":\"" + fixture.firstCharacterId() + "\"}")
+		performPatch(fixture,
+				"{\"displayName\":\"최종이름\",\"characterId\":\"" + fixture.firstCharacterId() + "\",\"themeId\":\""
+						+ fixture.secondThemeId() + "\"}")
 				.andExpect(status().isOk()).andExpect(jsonPath("$.data.displayName").value("최종이름"));
 
 		assertThat(profile(fixture.memberId())).containsEntry("display_name", "최종이름").containsEntry("character_id",
 				fixture.firstCharacterId());
-		assertThat(card(fixture.memberId())).containsEntry("theme_id", fixture.themeId()).containsEntry("barcode_value",
-				fixture.barcodeValue());
+		assertThat(card(fixture.memberId())).containsEntry("theme_id", fixture.secondThemeId())
+				.containsEntry("barcode_value", fixture.barcodeValue());
 	}
 
 	@Test
@@ -97,36 +99,42 @@ class ProfileUpdateIntegrationTests {
 	void sameValuesAreNoOp() throws Exception {
 		Fixture fixture = insertIssuedMember();
 		Map<String, Object> before = profile(fixture.memberId());
+		Map<String, Object> cardBefore = card(fixture.memberId());
 
-		performPatch(fixture, "{\"displayName\":\"기존이름\",\"characterId\":\"" + fixture.firstCharacterId() + "\"}")
-				.andExpect(status().isOk());
+		performPatch(fixture, "{\"displayName\":\"기존이름\",\"characterId\":\"" + fixture.firstCharacterId()
+				+ "\",\"themeId\":\"" + fixture.themeId() + "\"}").andExpect(status().isOk());
 
 		assertThat(profile(fixture.memberId())).isEqualTo(before);
+		assertThat(card(fixture.memberId())).isEqualTo(cardBefore);
 	}
 
 	@Test
-	@DisplayName("서로 다른 필드의 동시 부분 변경은 모두 보존한다")
+	@DisplayName("서로 다른 프로필 필드의 동시 부분 변경은 모두 보존한다")
 	void concurrentPartialUpdatesPreserveBothFields() throws Exception {
 		Fixture fixture = insertIssuedMember();
-		CountDownLatch ready = new CountDownLatch(2);
+		CountDownLatch ready = new CountDownLatch(3);
 		CountDownLatch start = new CountDownLatch(1);
-		ExecutorService executor = Executors.newFixedThreadPool(2);
+		ExecutorService executor = Executors.newFixedThreadPool(3);
 
 		try {
 			Future<MvcResult> name = executor
 					.submit(() -> concurrentPatch(fixture, "{\"displayName\":\"동시이름\"}", ready, start));
 			Future<MvcResult> character = executor.submit(() -> concurrentPatch(fixture,
 					"{\"characterId\":\"" + fixture.secondCharacterId() + "\"}", ready, start));
+			Future<MvcResult> theme = executor.submit(
+					() -> concurrentPatch(fixture, "{\"themeId\":\"" + fixture.secondThemeId() + "\"}", ready, start));
 			assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
 			start.countDown();
 			assertThat(List.of(name.get(10, TimeUnit.SECONDS).getResponse().getStatus(),
-					character.get(10, TimeUnit.SECONDS).getResponse().getStatus())).containsOnly(200);
+					character.get(10, TimeUnit.SECONDS).getResponse().getStatus(),
+					theme.get(10, TimeUnit.SECONDS).getResponse().getStatus())).containsOnly(200);
 		} finally {
 			executor.shutdownNow();
 		}
 
 		assertThat(profile(fixture.memberId())).containsEntry("display_name", "동시이름").containsEntry("character_id",
 				fixture.secondCharacterId());
+		assertThat(card(fixture.memberId())).containsEntry("theme_id", fixture.secondThemeId());
 	}
 
 	@Test
@@ -134,20 +142,25 @@ class ProfileUpdateIntegrationTests {
 	void invalidRequestsDoNotChangeProfile() throws Exception {
 		Fixture fixture = insertIssuedMember();
 		Map<String, Object> before = profile(fixture.memberId());
+		Map<String, Object> cardBefore = card(fixture.memberId());
 		List<String> invalidRequests = List.of("{}", "{\"displayName\":null}", "{\"displayName\":123}",
 				"{\"displayName\":\"   \"}", "{\"displayName\":\"123456789\"}", "{\"displayName\":\"이름\\u0001\"}",
-				"{\"characterId\":null}", "{\"characterId\":\"not-uuid\"}", "{\"displayName\":\"이름\",\"unknown\":true}",
-				"{");
+				"{\"characterId\":null}", "{\"characterId\":\"not-uuid\"}", "{\"themeId\":null}",
+				"{\"themeId\":\"not-uuid\"}", "{\"displayName\":\"이름\",\"unknown\":true}", "{");
 
 		for (String request : invalidRequests) {
 			performPatch(fixture, request).andExpect(status().isBadRequest())
 					.andExpect(jsonPath("$.data.code").value("INVALID_REQUEST"));
 			assertThat(profile(fixture.memberId())).isEqualTo(before);
+			assertThat(card(fixture.memberId())).isEqualTo(cardBefore);
 		}
 
 		performPatch(fixture, "{\"characterId\":\"" + UUID.randomUUID() + "\"}").andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.data.code").value("INVALID_REQUEST"));
 		assertThat(profile(fixture.memberId())).isEqualTo(before);
+		performPatch(fixture, "{\"themeId\":\"" + UUID.randomUUID() + "\"}").andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.data.code").value("INVALID_REQUEST"));
+		assertThat(card(fixture.memberId())).isEqualTo(cardBefore);
 	}
 
 	@Test
@@ -218,6 +231,7 @@ class ProfileUpdateIntegrationTests {
 		UUID firstCharacterId = UUID.randomUUID();
 		UUID secondCharacterId = UUID.randomUUID();
 		UUID themeId = UUID.randomUUID();
+		UUID secondThemeId = UUID.randomUUID();
 		String barcodeValue = UUID.randomUUID().toString();
 		jdbcTemplate.update("INSERT INTO members (id, status) VALUES (?, 'ACTIVE')", memberId);
 		jdbcTemplate.update("""
@@ -237,8 +251,9 @@ class ProfileUpdateIntegrationTests {
 				""", firstCharacterId, secondCharacterId);
 		jdbcTemplate.update("""
 				INSERT INTO card_themes (id, name, image_key, sort_order)
-				VALUES (?, '테마', 'public/themes/theme.webp', 1)
-				""", themeId);
+				VALUES (?, '첫 테마', 'public/themes/first.webp', 1),
+				       (?, '둘째 테마', 'public/themes/second.webp', 2)
+				""", themeId, secondThemeId);
 		jdbcTemplate.update("""
 				INSERT INTO member_profiles (member_id, display_name, character_id, updated_at)
 				VALUES (?, '기존이름', ?, CURRENT_TIMESTAMP - INTERVAL '1 hour')
@@ -247,7 +262,7 @@ class ProfileUpdateIntegrationTests {
 				INSERT INTO citizen_cards (member_id, theme_id, barcode_value)
 				VALUES (?, ?, ?)
 				""", memberId, themeId, barcodeValue);
-		return new Fixture(memberId, firstCharacterId, secondCharacterId, themeId, barcodeValue,
+		return new Fixture(memberId, firstCharacterId, secondCharacterId, themeId, secondThemeId, barcodeValue,
 				accessTokenService.issue(memberId, sessionId));
 	}
 
@@ -271,6 +286,6 @@ class ProfileUpdateIntegrationTests {
 	}
 
 	private record Fixture(UUID memberId, UUID firstCharacterId, UUID secondCharacterId, UUID themeId,
-			String barcodeValue, String accessToken) {
+			UUID secondThemeId, String barcodeValue, String accessToken) {
 	}
 }

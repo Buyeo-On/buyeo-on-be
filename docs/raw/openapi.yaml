@@ -140,7 +140,7 @@ paths:
     patch:
       tags: [Members]
       summary: 프로필 수정
-      description: 군민증을 발급한 회원의 표시 이름 또는 캐릭터를 부분 변경한다. 표시 이름은 앞뒤 공백을 제거한 뒤 저장한다.
+      description: 군민증을 발급한 회원의 표시 이름, 캐릭터 또는 카드 테마를 부분 변경한다. 표시 이름은 앞뒤 공백을 제거한 뒤 저장한다.
       operationId: updateMyProfile
       requestBody:
         required: true
@@ -285,7 +285,7 @@ paths:
     get:
       tags: [CitizenCards]
       summary: 내 디지털 군민증 조회
-      description: 현재 프로필의 표시 이름·캐릭터와 발급 시 선택한 카드 테마를 반환한다.
+      description: 현재 프로필의 표시 이름·캐릭터와 현재 선택한 카드 테마를 반환한다.
       operationId: getMyCitizenCard
       responses:
         '200':
@@ -1902,6 +1902,9 @@ components:
           minLength: 1
           maxLength: 8
         characterId:
+          type: string
+          format: uuid
+        themeId:
           type: string
           format: uuid
     Settings:
