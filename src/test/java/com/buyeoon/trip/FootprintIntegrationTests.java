@@ -110,7 +110,8 @@ class FootprintIntegrationTests {
 				.andExpect(jsonPath("$.data.photos.length()").value(1))
 				.andExpect(jsonPath("$.data.photos[0].photoId").exists())
 				.andExpect(jsonPath("$.data.photos[0].uploadedAt").exists())
-				.andExpect(jsonPath("$.data.photos[0].url").value("https://signed-url.example.com/photo"));
+				.andExpect(jsonPath("$.data.photos[0].url").value("https://signed-url.example.com/photo"))
+				.andExpect(jsonPath("$.data.photos[0].placeName").value("정림사지"));
 	}
 
 	/** IN_PROGRESS 상태의 여행을 조회하면 409를 반환한다. */

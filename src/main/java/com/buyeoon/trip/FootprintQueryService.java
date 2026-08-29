@@ -125,12 +125,14 @@ public class FootprintQueryService {
 	}
 
 	private List<PhotoView> photos(UUID memberId, UUID tripId) {
-		return photoRepository.findByMemberIdAndTripIdOrderByUploadedAtAsc(memberId, tripId).stream()
-				.map(this::toPhotoView).toList();
+		return photoRepository.findWithPlaceNameByMemberIdAndTripId(memberId, tripId).stream().map(this::toPhotoView)
+				.toList();
 	}
 
-	private PhotoView toPhotoView(MissionPhotoEntity photo) {
-		return new PhotoView(photo.getId(), privateImageUrls.create(photo.getObjectKey()), photo.getUploadedAt());
+	private PhotoView toPhotoView(TripPhotoProjection projection) {
+		MissionPhotoEntity photo = projection.photo();
+		return new PhotoView(photo.getId(), privateImageUrls.create(photo.getObjectKey()), photo.getUploadedAt(),
+				projection.placeName());
 	}
 
 	public record FootprintView(FootprintTripView trip, TripStatisticsView statistics, List<VisitView> visits,
@@ -160,6 +162,6 @@ public class FootprintQueryService {
 	public record BadgeView(UUID badgeId, String name, String imageUrl, String condition, Instant earnedAt) {
 	}
 
-	public record PhotoView(UUID photoId, String url, Instant uploadedAt) {
+	public record PhotoView(UUID photoId, String url, Instant uploadedAt, String placeName) {
 	}
 }
