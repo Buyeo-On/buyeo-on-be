@@ -2452,7 +2452,7 @@ components:
           format: date-time
     MissionPhotoData:
       type: object
-      required: [photoId, url, uploadedAt]
+      required: [photoId, url, uploadedAt, placeName]
       properties:
         photoId:
           type: string
@@ -2464,6 +2464,9 @@ components:
         uploadedAt:
           type: string
           format: date-time
+        placeName:
+          type: string
+          description: 사진을 찍은 미션이 연결된 문화재 장소명
     MultipleChoiceMissionSubmissionRequest:
       type: object
       additionalProperties: false

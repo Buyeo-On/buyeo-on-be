@@ -155,9 +155,9 @@ public class TripController {
 		}
 	}
 
-	private record FootprintPhotoResponse(UUID photoId, String url, Instant uploadedAt) {
+	private record FootprintPhotoResponse(UUID photoId, String url, Instant uploadedAt, String placeName) {
 		static FootprintPhotoResponse from(PhotoView photo) {
-			return new FootprintPhotoResponse(photo.photoId(), photo.url(), photo.uploadedAt());
+			return new FootprintPhotoResponse(photo.photoId(), photo.url(), photo.uploadedAt(), photo.placeName());
 		}
 	}
 
