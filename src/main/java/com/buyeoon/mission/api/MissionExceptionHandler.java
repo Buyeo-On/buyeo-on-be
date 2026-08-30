@@ -4,6 +4,7 @@ import com.buyeoon.common.api.ErrorResponse;
 import com.buyeoon.member.application.IdempotencyKeyReusedException;
 import com.buyeoon.member.application.InvalidStateTransitionException;
 import com.buyeoon.mission.application.InvalidMissionSubmissionException;
+import com.buyeoon.mission.application.MissionChoiceInUseException;
 import com.buyeoon.mission.application.MissionNotFoundException;
 import com.buyeoon.mission.application.MissionPhotoNotFoundException;
 import com.buyeoon.mission.application.MissionPhotoTooLargeException;
@@ -65,6 +66,12 @@ public class MissionExceptionHandler {
 	@ResponseStatus(HttpStatus.CONFLICT)
 	public ErrorResponse handleIdempotencyKeyReused() {
 		return ErrorResponse.idempotencyKeyReused();
+	}
+
+	@ExceptionHandler(MissionChoiceInUseException.class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	public ErrorResponse handleMissionChoiceInUse() {
+		return ErrorResponse.missionChoiceInUse();
 	}
 
 	/** 회원 행 잠금 시 활성 상태가 아니면 인증 실패 응답을 반환한다. */
