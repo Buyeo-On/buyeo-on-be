@@ -9,11 +9,13 @@ import com.buyeoon.mission.entity.MissionEntity;
 import com.buyeoon.mission.entity.MissionType;
 import com.buyeoon.mission.repository.MissionChoiceRepository;
 import com.buyeoon.mission.repository.MissionQueryRepository;
+import com.buyeoon.mission.repository.MissionSubmissionRepository;
 import com.buyeoon.place.entity.PlaceEntity;
 import com.buyeoon.place.repository.PlaceQueryRepository;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
@@ -25,14 +27,17 @@ public class MissionAdminCommandService {
 
 	private final MissionQueryRepository missionQueryRepository;
 	private final MissionChoiceRepository missionChoiceRepository;
+	private final MissionSubmissionRepository missionSubmissionRepository;
 	private final PlaceQueryRepository placeQueryRepository;
 	private final GeometryFactory geometryFactory = new GeometryFactory();
 
 	@SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring 싱글턴 빈을 그대로 주입받아 저장한다.")
 	public MissionAdminCommandService(MissionQueryRepository missionQueryRepository,
-			MissionChoiceRepository missionChoiceRepository, PlaceQueryRepository placeQueryRepository) {
+			MissionChoiceRepository missionChoiceRepository, MissionSubmissionRepository missionSubmissionRepository,
+			PlaceQueryRepository placeQueryRepository) {
 		this.missionQueryRepository = missionQueryRepository;
 		this.missionChoiceRepository = missionChoiceRepository;
+		this.missionSubmissionRepository = missionSubmissionRepository;
 		this.placeQueryRepository = placeQueryRepository;
 	}
 
@@ -96,6 +101,7 @@ public class MissionAdminCommandService {
 			switch (mission.getType()) {
 				case MULTIPLE_CHOICE -> {
 					requireNoOxAnswer(request.oxCorrectAnswer());
+					requireNoSubmittedChoices(missionId);
 					mission.updateMultipleChoice(title, description, request.rewardPoints(), request.maxAttempts());
 					missionChoiceRepository.deleteByMissionId(missionId);
 					missionChoiceRepository.flush();
@@ -152,6 +158,14 @@ public class MissionAdminCommandService {
 			String label = requiredText(choice.label());
 			missionChoiceRepository.save(MissionChoiceEntity.create(missionId, label, choice.correct(),
 					choice.sortOrder()));
+		}
+	}
+
+	private void requireNoSubmittedChoices(UUID missionId) {
+		List<UUID> choiceIds = missionChoiceRepository.findByMissionIdOrderBySortOrderAsc(missionId).stream()
+				.map(MissionChoiceEntity::getId).collect(Collectors.toList());
+		if (!choiceIds.isEmpty() && missionSubmissionRepository.existsByChoiceIdIn(choiceIds)) {
+			throw new MissionChoiceInUseException();
 		}
 	}
 

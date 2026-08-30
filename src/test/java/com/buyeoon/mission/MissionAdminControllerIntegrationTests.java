@@ -68,6 +68,8 @@ class MissionAdminControllerIntegrationTests {
 
 	@AfterEach
 	void cleanUp() {
+		jdbcTemplate.update("DELETE FROM trips");
+		jdbcTemplate.update("DELETE FROM members");
 		jdbcTemplate.update(
 				"DELETE FROM mission_choices WHERE mission_id IN "
 						+ "(SELECT id FROM missions WHERE place_id IN (SELECT id FROM places WHERE ST_Y(location::geometry) < -70))");
@@ -121,6 +123,50 @@ class MissionAdminControllerIntegrationTests {
 		Boolean deleted = jdbcTemplate.queryForObject("SELECT deleted_at IS NOT NULL FROM missions WHERE id = ?::uuid",
 				Boolean.class, missionId);
 		assertThat(deleted).isTrue();
+	}
+
+	@Test
+	@DisplayName("제출 기록이 있는 보기를 포함한 객관식 미션을 수정하면 409를 받는다")
+	void returns409WhenUpdatingMultipleChoiceMissionWithSubmittedChoice() throws Exception {
+		UUID placeId = insertPlace();
+
+		MvcResult createResult = mockMvc
+				.perform(createRequest("""
+						{"placeId":"%s","type":"MULTIPLE_CHOICE","title":"문제1","description":"설명",
+						"rewardPoints":100,"maxAttempts":3,
+						"choices":[{"label":"보기1","correct":true,"sortOrder":0},
+						           {"label":"보기2","correct":false,"sortOrder":1}]}
+						""".formatted(placeId)))
+				.andExpect(status().isOk()).andReturn();
+		String missionId = objectMapper.readTree(createResult.getResponse().getContentAsString()).path("data")
+				.path("missionId").asString();
+
+		UUID choiceId = jdbcTemplate.queryForObject(
+				"SELECT id FROM mission_choices WHERE mission_id = ?::uuid ORDER BY sort_order ASC LIMIT 1", UUID.class,
+				missionId);
+		submitChoice(UUID.fromString(missionId), choiceId);
+
+		mockMvc.perform(updateRequest(missionId, """
+				{"title":"수정된 문제","description":"수정된 설명","rewardPoints":200,"maxAttempts":5,
+				"choices":[{"label":"새 보기","correct":true,"sortOrder":0}]}
+				""")).andExpect(status().isConflict())
+				.andExpect(jsonPath("$.data.code").value("MISSION_CHOICE_IN_USE"));
+	}
+
+	private void submitChoice(UUID missionId, UUID choiceId) {
+		UUID memberId = UUID.randomUUID();
+		jdbcTemplate.update("INSERT INTO members (id, status) VALUES (?, 'ACTIVE')", memberId);
+		UUID tripId = UUID.randomUUID();
+		jdbcTemplate.update("INSERT INTO trips (id, member_id, status) VALUES (?, ?, 'IN_PROGRESS')", tripId, memberId);
+		UUID participationId = UUID.randomUUID();
+		jdbcTemplate.update(
+				"INSERT INTO mission_participations (id, trip_id, mission_id, status, attempt_count, completed_at) "
+						+ "VALUES (?, ?, ?, 'COMPLETED'::mission_status, 1, now())",
+				participationId, tripId, missionId);
+		jdbcTemplate.update(
+				"INSERT INTO mission_submissions (participation_id, type, choice_id, correct) "
+						+ "VALUES (?, 'MULTIPLE_CHOICE'::mission_type, ?, true)",
+				participationId, choiceId);
 	}
 
 	@Test

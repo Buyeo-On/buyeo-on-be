@@ -82,4 +82,7 @@ public interface MissionSubmissionRepository extends JpaRepository<MissionSubmis
 			+ "ORDER BY s.submittedAt ASC")
 	List<QuizSubmissionRow> findQuizSubmissionsOrderedBySubmittedAtAsc(@Param("memberId") UUID memberId,
 			@Param("types") Collection<MissionType> types);
+
+	/** 주어진 보기 중 하나라도 제출 기록이 있으면 참이다. */
+	boolean existsByChoiceIdIn(Collection<UUID> choiceIds);
 }
