@@ -27,6 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -133,6 +134,24 @@ class PushNotificationPublisherIntegrationTests {
 		assertThat(fakeFcmClient.awaitInvocations(5, TimeUnit.SECONDS)).isTrue();
 		assertThat(fakeFcmClient.invocations()).singleElement()
 				.satisfies(invocation -> assertThat(invocation.tokens()).containsExactly("standalone-token"));
+	}
+
+	@Test
+	@DisplayName("발송을 요청한 스레드의 MDC가 워커 스레드로 전파된다")
+	void propagatesMdcToWorkerThread() throws Exception {
+		UUID memberId = insertActiveMemberWithToken("mdc-token");
+		fakeFcmClient.expectInvocations(1);
+
+		MDC.put("request_id", "req-123");
+		try {
+			publisher.publish(memberId, NotificationType.BADGE, "제목", "본문", null, null, null);
+		} finally {
+			MDC.remove("request_id");
+		}
+
+		assertThat(fakeFcmClient.awaitInvocations(5, TimeUnit.SECONDS)).isTrue();
+		assertThat(fakeFcmClient.invocations()).singleElement()
+				.satisfies(invocation -> assertThat(invocation.mdcRequestId()).isEqualTo("req-123"));
 	}
 
 	@Test
@@ -426,7 +445,8 @@ class PushNotificationPublisherIntegrationTests {
 			callCount.incrementAndGet();
 			try {
 				FcmSendResult result = responder.respond(registrationTokens, message);
-				invocations.add(new Invocation(List.copyOf(registrationTokens), message, result));
+				String requestId = MDC.get("request_id");
+				invocations.add(new Invocation(List.copyOf(registrationTokens), message, result, requestId));
 				return result;
 			} finally {
 				latch.countDown();
@@ -465,7 +485,7 @@ class PushNotificationPublisherIntegrationTests {
 			FcmSendResult respond(List<String> tokens, PushMessage message);
 		}
 
-		record Invocation(List<String> tokens, PushMessage message, FcmSendResult result) {
+		record Invocation(List<String> tokens, PushMessage message, FcmSendResult result, String mdcRequestId) {
 		}
 	}
 }
