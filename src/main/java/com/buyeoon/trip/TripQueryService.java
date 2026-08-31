@@ -11,6 +11,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class TripQueryService {
 
 	private static final ZoneId ASIA_SEOUL = ZoneId.of("Asia/Seoul");
+	private static final Set<TripStatus> IN_PROGRESS_OR_UNSETTLED = Set.of(TripStatus.IN_PROGRESS, TripStatus.ENDED);
 
 	private final TripRepository tripRepository;
 	private final VisitRecordRepository visitRecordRepository;
@@ -40,14 +42,19 @@ public class TripQueryService {
 		return tripRepository.findByMemberIdAndStatus(memberId, TripStatus.IN_PROGRESS).isPresent();
 	}
 
+	/** 요청 회원이 진행 중이거나 종료 후 미정산인 여행을 가지고 있는지 확인한다. */
+	public boolean hasInProgressOrUnsettledTrip(UUID memberId) {
+		return tripRepository.existsByMemberIdAndStatusIn(memberId, IN_PROGRESS_OR_UNSETTLED);
+	}
+
 	/** 요청 회원이 소유한 여행의 현재 상태를 조회한다. 소유한 여행이 없으면 빈 값을 반환한다. */
 	public Optional<TripStatus> findOwnedTripStatus(UUID memberId, UUID tripId) {
 		return tripRepository.findByIdAndMemberId(tripId, memberId).map(TripEntity::getStatus);
 	}
 
 	/**
-	 * 요청 회원의 진행 중이거나 종료 후 미정산인 여행을 조회한다. 그런 여행이 없으면 404 예외를 던진다. 프론트엔드가
-	 * 미정산 여행의 정산 페이지로 라우팅할 수 있도록 종료된 여행도 함께 조회한다.
+	 * 요청 회원의 진행 중이거나 종료 후 미정산인 여행을 조회한다. 그런 여행이 없으면 404 예외를 던진다. 프론트엔드가 미정산 여행의 정산
+	 * 페이지로 라우팅할 수 있도록 종료된 여행도 함께 조회한다.
 	 */
 	public TripStartService.TripView getCurrentTrip(UUID memberId) {
 		TripEntity trip = tripRepository
@@ -72,8 +79,8 @@ public class TripQueryService {
 	}
 
 	/**
-	 * 요청 회원이 소유한 여행에서 촬영한 사진을 업로드 시각 오름차순으로 조회한다. footprint와 달리 여행 상태와 무관하게
-	 * 조회할 수 있다. 소유하지 않았거나 존재하지 않으면 404 예외를 던진다.
+	 * 요청 회원이 소유한 여행에서 촬영한 사진을 업로드 시각 오름차순으로 조회한다. footprint와 달리 여행 상태와 무관하게 조회할 수
+	 * 있다. 소유하지 않았거나 존재하지 않으면 404 예외를 던진다.
 	 */
 	public PhotoListView getPhotos(UUID memberId, UUID tripId) {
 		tripRepository.findByIdAndMemberId(tripId, memberId).orElseThrow(ResourceNotFoundException::new);
