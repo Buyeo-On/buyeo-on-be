@@ -44,10 +44,10 @@ class PlaceUpsertService {
 
 		PlaceEntity place = existing.orElseGet(() -> PlaceEntity.createFromSync(category, detail.title(), summary,
 				detail.overview(), detail.address(), location, SOURCE_NAME, detail.contentId(), null,
-				detail.firstImageUrl()));
+				detail.firstImageUrl(), detail.sourceImageLicenseType()));
 
 		place.overwriteFrom(category, detail.title(), summary, detail.overview(), detail.address(), location, null,
-				detail.firstImageUrl());
+				detail.firstImageUrl(), detail.sourceImageLicenseType());
 		place.applyOperatingInfo(detail.useTime(), parsedHours.alwaysOpen(), parsedHours.opensAt(),
 				parsedHours.closesAt(), admissionFee);
 		place.applyDetailInfo(detail.detailInfo());

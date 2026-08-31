@@ -1,5 +1,6 @@
 package com.buyeoon.place.sync;
 
+import com.buyeoon.place.entity.PlaceImageLicenseType;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
@@ -115,11 +116,27 @@ class TourApiRestClient implements TourApiClient {
 						.build())
 				.retrieve().body(TourApiIntroResponse.class);
 		TourApiIntroItem introItem = introItems(intro).stream().findFirst().orElse(null);
+		String firstImageUrl = blankToNull(commonItem.firstimage());
 
 		return new TourApiPlaceDetail(item.contentId(), commonItem.title(), commonItem.overview(), commonItem.addr1(),
-				commonItem.firstimage(), Double.parseDouble(commonItem.mapy()), Double.parseDouble(commonItem.mapx()),
+				firstImageUrl, firstImageUrl == null ? null : parseImageLicenseType(commonItem.cpyrhtDivCd()),
+				Double.parseDouble(commonItem.mapy()), Double.parseDouble(commonItem.mapx()),
 				introItem == null ? null : introItem.usetime(), introItem == null ? null : introItem.usefee(),
 				Map.of());
+	}
+
+	private static PlaceImageLicenseType parseImageLicenseType(String raw) {
+		if ("Type1".equalsIgnoreCase(raw)) {
+			return PlaceImageLicenseType.KOGL_TYPE_1;
+		}
+		if ("Type3".equalsIgnoreCase(raw)) {
+			return PlaceImageLicenseType.KOGL_TYPE_3;
+		}
+		return null;
+	}
+
+	private static String blankToNull(String raw) {
+		return raw == null || raw.isBlank() ? null : raw;
 	}
 
 	@Override
@@ -194,8 +211,8 @@ class TourApiRestClient implements TourApiClient {
 		}
 	}
 
-	private record TourApiCommonItem(String title, String overview, String addr1, String firstimage, String mapx,
-			String mapy) {
+	private record TourApiCommonItem(String title, String overview, String addr1, String firstimage, String cpyrhtDivCd,
+			String mapx, String mapy) {
 	}
 
 	private record TourApiIntroResponse(TourApiIntroResponseBody response) {

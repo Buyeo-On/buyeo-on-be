@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.buyeoon.place.sync.TourApiAreaItem;
 import com.buyeoon.place.sync.TourApiClient;
 import com.buyeoon.place.sync.TourApiPlaceDetail;
+import com.buyeoon.place.entity.PlaceImageLicenseType;
 import java.sql.Time;
 import java.time.LocalTime;
 import java.util.LinkedHashMap;
@@ -82,9 +83,9 @@ class PlaceSyncControllerIntegrationTests {
 	void syncsNewPlaceWithParsedOperatingHours() throws Exception {
 		TourApiAreaItem item = new TourApiAreaItem("1001", "12", null);
 		given(tourApiClient.fetchAreaItems()).willReturn(List.of(item));
-		given(tourApiClient.fetchPlaceDetail(item))
-				.willReturn(new TourApiPlaceDetail("1001", "부소산성", "백제의 마지막 왕성", "충남 부여군 부여읍",
-						"https://tourapi.example.com/image.jpg", 36.2754, 126.9098, "09:00~18:00", "무료", Map.of()));
+		given(tourApiClient.fetchPlaceDetail(item)).willReturn(new TourApiPlaceDetail("1001", "부소산성", "백제의 마지막 왕성",
+				"충남 부여군 부여읍", "https://tourapi.example.com/image.jpg", PlaceImageLicenseType.KOGL_TYPE_3, 36.2754,
+				126.9098, "09:00~18:00", "무료", Map.of()));
 
 		mockMvc.perform(syncRequest()).andExpect(status().isOk()).andExpect(jsonPath("$.success").value(true))
 				.andExpect(jsonPath("$.data.successCount").value(1))
@@ -92,7 +93,7 @@ class PlaceSyncControllerIntegrationTests {
 
 		Map<String, Object> row = jdbcTemplate
 				.queryForMap("SELECT name, summary, category::text, opens_at, closes_at, always_open, admission_fee, "
-						+ "operating_hours_raw, source_image_href "
+						+ "operating_hours_raw, source_image_href, source_image_license_type "
 						+ "FROM places WHERE source_name = 'TOUR_API' AND external_id = '1001'");
 		assertThat(row.get("name")).isEqualTo("부소산성");
 		assertThat(row.get("summary")).isEqualTo("백제의 마지막 왕성");
@@ -103,6 +104,7 @@ class PlaceSyncControllerIntegrationTests {
 		assertThat(row.get("admission_fee")).isEqualTo(0);
 		assertThat(row.get("operating_hours_raw")).isEqualTo("09:00~18:00");
 		assertThat(row.get("source_image_href")).isEqualTo("https://tourapi.example.com/image.jpg");
+		assertThat(row.get("source_image_license_type")).isEqualTo("KOGL_TYPE_3");
 	}
 
 	@Test
@@ -131,25 +133,30 @@ class PlaceSyncControllerIntegrationTests {
 	@DisplayName("기존 장소는 갱신되고 새로 삽입되지 않는다")
 	void updatesExistingPlaceInstial() throws Exception {
 		jdbcTemplate.update("""
-				INSERT INTO places (id, category, name, address, location, source_name, external_id)
+				INSERT INTO places (id, category, name, address, location, source_name, external_id,
+				                    source_image_href, source_image_license_type)
 				VALUES (gen_random_uuid(), 'HERITAGE', '옛 이름', '옛 주소',
-				        ST_SetSRID(ST_MakePoint(126.0, 36.0), 4326)::geography, 'TOUR_API', '2002')
+				        ST_SetSRID(ST_MakePoint(126.0, 36.0), 4326)::geography, 'TOUR_API', '2002',
+				        'https://tourapi.example.com/old.jpg', 'KOGL_TYPE_1')
 				""");
 
 		TourApiAreaItem item = new TourApiAreaItem("2002", "12", null);
 		given(tourApiClient.fetchAreaItems()).willReturn(List.of(item));
 		given(tourApiClient.fetchPlaceDetail(item)).willReturn(
-				new TourApiPlaceDetail("2002", "새 이름", "새 설명", "새 주소", null, 36.5, 126.5, null, null, Map.of()));
+				new TourApiPlaceDetail("2002", "새 이름", "새 설명", "새 주소", "https://tourapi.example.com/new.jpg",
+						PlaceImageLicenseType.KOGL_TYPE_3, 36.5, 126.5, null, null, Map.of()));
 
 		mockMvc.perform(syncRequest()).andExpect(status().isOk()).andExpect(jsonPath("$.data.successCount").value(1));
 
 		Integer count = jdbcTemplate.queryForObject(
 				"SELECT COUNT(*) FROM places WHERE source_name = 'TOUR_API' AND external_id = '2002'", Integer.class);
 		assertThat(count).isEqualTo(1);
-		Map<String, Object> row = jdbcTemplate.queryForMap(
-				"SELECT name, address FROM places WHERE source_name = 'TOUR_API' AND external_id = '2002'");
+		Map<String, Object> row = jdbcTemplate.queryForMap("SELECT name, address, source_image_href, "
+				+ "source_image_license_type FROM places WHERE source_name = 'TOUR_API' AND external_id = '2002'");
 		assertThat(row.get("name")).isEqualTo("새 이름");
 		assertThat(row.get("address")).isEqualTo("새 주소");
+		assertThat(row.get("source_image_href")).isEqualTo("https://tourapi.example.com/new.jpg");
+		assertThat(row.get("source_image_license_type")).isEqualTo("KOGL_TYPE_3");
 	}
 
 	/** 관람시간 파싱에 실패해도 원문은 저장되고 나머지 필드는 정상 upsert된다. */

@@ -3,6 +3,8 @@ package com.buyeoon.place.entity;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -64,6 +66,10 @@ public class PlaceEntity {
 	@Column(name = "source_image_href", columnDefinition = "text")
 	private String sourceImageHref;
 
+	@Enumerated(EnumType.STRING)
+	@Column(name = "source_image_license_type", columnDefinition = "text")
+	private PlaceImageLicenseType sourceImageLicenseType;
+
 	@Column(name = "operating_hours_raw", columnDefinition = "text")
 	private String operatingHoursRaw;
 
@@ -119,7 +125,7 @@ public class PlaceEntity {
 
 	@SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "JTS Point는 PostGIS geography 매핑을 위해 그대로 보관한다.")
 	public void overwriteFrom(PlaceCategory category, String name, String summary, String description, String address,
-			Point location, String sourceUrl, String sourceImageHref) {
+			Point location, String sourceUrl, String sourceImageHref, PlaceImageLicenseType sourceImageLicenseType) {
 		location.setSRID(4326);
 		this.category = category;
 		this.name = name;
@@ -129,11 +135,12 @@ public class PlaceEntity {
 		this.location = location;
 		this.sourceUrl = sourceUrl;
 		this.sourceImageHref = sourceImageHref;
+		this.sourceImageLicenseType = sourceImageHref == null ? null : sourceImageLicenseType;
 	}
 
 	public static PlaceEntity createFromSync(PlaceCategory category, String name, String summary, String description,
 			String address, Point location, String sourceName, String externalId, String sourceUrl,
-			String sourceImageHref) {
+			String sourceImageHref, PlaceImageLicenseType sourceImageLicenseType) {
 		location.setSRID(4326);
 		PlaceEntity place = new PlaceEntity();
 		place.category = category;
@@ -146,6 +153,7 @@ public class PlaceEntity {
 		place.externalId = externalId;
 		place.sourceUrl = sourceUrl;
 		place.sourceImageHref = sourceImageHref;
+		place.sourceImageLicenseType = sourceImageHref == null ? null : sourceImageLicenseType;
 		return place;
 	}
 
