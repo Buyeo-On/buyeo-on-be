@@ -1,5 +1,6 @@
 package com.buyeoon.notification;
 
+import com.buyeoon.notification.application.PushNotificationPublisher;
 import com.buyeoon.notification.entity.NotificationEntity;
 import com.buyeoon.notification.entity.NotificationType;
 import com.buyeoon.notification.repository.NotificationRepository;
@@ -11,9 +12,12 @@ import org.springframework.stereotype.Service;
 public class NotificationCreationService {
 
 	private final NotificationRepository notifications;
+	private final PushNotificationPublisher pushNotificationPublisher;
 
-	public NotificationCreationService(NotificationRepository notifications) {
+	public NotificationCreationService(NotificationRepository notifications,
+			PushNotificationPublisher pushNotificationPublisher) {
 		this.notifications = notifications;
+		this.pushNotificationPublisher = pushNotificationPublisher;
 	}
 
 	/** 새로 획득한 배지마다 {@code BADGE} 알림을 한 건 생성한다. */
@@ -26,5 +30,18 @@ public class NotificationCreationService {
 	public void createCitizenCardIssued(UUID memberId, UUID cardId) {
 		notifications.save(NotificationEntity.create(memberId, NotificationType.CITIZEN_CARD, "군민증이 발급됐어요!",
 				"디지털 군민증이 발급됐어요.", "CITIZEN_CARD", cardId));
+	}
+
+	/**
+	 * UC-27 검증을 모두 통과했을 때 {@code BUYEO_ENTRY} 알림을 생성하고, 배지 알림과 달리 즉시 FCM push도
+	 * 발송한다.
+	 */
+	public void createBuyeoEntry(UUID memberId) {
+		String title = "부여에 도착했어요!";
+		String body = "지금 바로 여행을 시작해보세요.";
+		NotificationEntity notification = notifications
+				.save(NotificationEntity.create(memberId, NotificationType.BUYEO_ENTRY, title, body, null, null));
+		pushNotificationPublisher.publish(memberId, NotificationType.BUYEO_ENTRY, title, body, notification.getId(),
+				null, null);
 	}
 }

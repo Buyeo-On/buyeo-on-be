@@ -55,6 +55,10 @@ class SchemaMappingTests {
 		String currentTermType = "CREATE TYPE term_type AS ENUM ('SERVICE', 'PRIVACY', 'LOCATION', 'MARKETING');";
 		String legacySettlementChoice = "CREATE TYPE settlement_choice AS ENUM ('LEAVE_TO_BUYEO', 'CARRY_OVER');";
 		String currentSettlementChoice = "CREATE TYPE settlement_choice AS ENUM ('LEAVE_TO_BUYEO', 'CARRY_OVER', 'NO_POINTS');";
+		String legacyNotificationType = "CREATE TYPE notification_type AS ENUM "
+				+ "('POINT', 'BADGE', 'NEARBY_QUIZ', 'DISCOUNT', 'CITIZEN_CARD', 'BUYEO_NEWS');";
+		String currentNotificationType = "CREATE TYPE notification_type AS ENUM "
+				+ "('POINT', 'BADGE', 'NEARBY_QUIZ', 'DISCOUNT', 'CITIZEN_CARD', 'BUYEO_NEWS', 'BUYEO_ENTRY');";
 		String legacyMissionStatus = "CREATE TYPE mission_status AS ENUM ('LOCKED', 'AVAILABLE', 'EXHAUSTED', 'COMPLETED');";
 		String currentMissionStatus = "CREATE TYPE mission_status AS ENUM ('AVAILABLE', 'EXHAUSTED', 'COMPLETED');";
 		String placeSourceColumns = String.join("\n", "    source_name text, -- 관광데이터 제공처",
@@ -198,8 +202,8 @@ class SchemaMappingTests {
 				.replace(placeExternalIdentityColumns, placeOperatingInfoColumns)
 				.replace(placeOperatingInfoColumns, placeImageLicenseColumns)
 				.replace(legacySettlementChoice, currentSettlementChoice)
-				.replace(legacyPointSettlement, currentPointSettlement).replace(pointTransactionIndex, pointIndexes))
-				.isEqualTo(canonicalSchema);
+				.replace(legacyPointSettlement, currentPointSettlement).replace(pointTransactionIndex, pointIndexes)
+				.replace(legacyNotificationType, currentNotificationType)).isEqualTo(canonicalSchema);
 		assertThat(Files.readString(LOCATION_TERM_MIGRATION, StandardCharsets.UTF_8))
 				.contains("ALTER TYPE term_type ADD VALUE 'LOCATION' AFTER 'PRIVACY'");
 		assertThat(Files.readString(PLACE_IMAGE_LICENSE_MIGRATION, StandardCharsets.UTF_8))
