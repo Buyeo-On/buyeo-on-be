@@ -3,6 +3,7 @@ package com.buyeoon.place.application;
 import com.buyeoon.common.storage.PublicImageUrlService;
 import com.buyeoon.place.entity.PlaceCategory;
 import com.buyeoon.place.entity.PlaceEntity;
+import com.buyeoon.place.entity.PlaceImageLicenseType;
 import com.buyeoon.place.repository.PlaceProjection;
 import com.buyeoon.place.repository.PlaceQueryRepository;
 import com.buyeoon.place.repository.SavedPlaceProjection;
@@ -23,6 +24,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class PlaceQueryService {
 
 	private static final double WALKING_METERS_PER_MINUTE = 67.0;
+	private static final String TOUR_API_SOURCE_NAME = "TOUR_API";
+	private static final String TOUR_API_PROVIDER = "한국관광공사";
+	private static final String TOUR_API_SERVICE = "TourAPI";
+	private static final String TOUR_API_DATASET_URL = "https://www.data.go.kr/data/15101578/openapi.do";
 
 	private final PlaceQueryRepository placeQueryRepository;
 	private final SavedPlaceRepository savedPlaceRepository;
@@ -157,11 +162,21 @@ public class PlaceQueryService {
 		String imageUrl = place.getImageKey() != null
 				? imageUrls.create(place.getImageKey())
 				: place.getSourceImageHref();
+		ImageAttributionView imageAttribution = imageAttribution(place);
 
 		return new PlaceItemView(place.getId(), place.getCategory(), place.getName(), place.getSummary(),
-				place.getDescription(), place.getAddress(), imageUrl, place.getLocation().getY(),
+				place.getDescription(), place.getAddress(), imageUrl, imageAttribution, place.getLocation().getY(),
 				place.getLocation().getX(), distanceMeters, walkingMinutes, saved, place.getOpensAt(),
 				place.getClosesAt(), place.isAlwaysOpen(), place.getAdmissionFee(), place.getDetailInfo());
+	}
+
+	private ImageAttributionView imageAttribution(PlaceEntity place) {
+		if (place.getImageKey() != null || place.getSourceImageHref() == null || place.getSourceImageHref().isBlank()
+				|| !TOUR_API_SOURCE_NAME.equals(place.getSourceName())) {
+			return null;
+		}
+		return new ImageAttributionView(TOUR_API_PROVIDER, TOUR_API_SERVICE, place.getSourceImageLicenseType(),
+				TOUR_API_DATASET_URL);
 	}
 
 	public record PlaceListView(List<PlaceItemView> items, PageInfoView page) {
@@ -171,9 +186,13 @@ public class PlaceQueryService {
 	}
 
 	public record PlaceItemView(UUID placeId, PlaceCategory category, String name, String summary, String description,
-			String address, String imageUrl, double latitude, double longitude, Integer distanceMeters,
-			Integer walkingMinutes, boolean saved, LocalTime opensAt, LocalTime closesAt, boolean alwaysOpen,
-			Integer admissionFee, Map<String, String> detailInfo) {
+			String address, String imageUrl, ImageAttributionView imageAttribution, double latitude, double longitude,
+			Integer distanceMeters, Integer walkingMinutes, boolean saved, LocalTime opensAt, LocalTime closesAt,
+			boolean alwaysOpen, Integer admissionFee, Map<String, String> detailInfo) {
+	}
+
+	public record ImageAttributionView(String provider, String service, PlaceImageLicenseType licenseType,
+			String sourceUrl) {
 	}
 
 	public record PageInfoView(String nextCursor, boolean hasNext) {

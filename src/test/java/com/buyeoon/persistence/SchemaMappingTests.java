@@ -41,6 +41,8 @@ class SchemaMappingTests {
 			.of("src/main/resources/db/migration/V13__add_no_points_settlement_choice.sql");
 	private static final Path POINT_SETTLEMENT_CONSTRAINTS_MIGRATION = Path
 			.of("src/main/resources/db/migration/V14__align_point_settlement_constraints.sql");
+	private static final Path PLACE_IMAGE_LICENSE_MIGRATION = Path
+			.of("src/main/resources/db/migration/V35__add_place_image_license_type.sql");
 	private static final Pattern CREATE_TABLE = Pattern.compile("CREATE TABLE ([a-z_]+) ");
 
 	/** 초기 스키마에 후속 마이그레이션을 적용한 정의가 기준 DB 스키마와 같음을 보장한다. */
@@ -64,11 +66,21 @@ class SchemaMappingTests {
 				"    external_id text, -- 제공처가 부여한 장소 식별자", "    source_url text, -- 관광데이터 원문 URL",
 				"    source_image_href text, -- 외부 출처의 대표이미지 URL(S3 객체 키가 아님)",
 				"    operating_hours_raw text, -- 관람시간 원문(TourAPI usetime 등, 파싱 실패 시 UI 표시용)",
-				"    always_open boolean NOT NULL DEFAULT false,",
-				"    opens_at time, -- 파싱에 성공한 경우의 관람 시작 시각", "    closes_at time, -- 파싱에 성공한 경우의 관람 종료 시각",
-				"    admission_fee integer, -- 입장료(원), 무료는 0",
+				"    always_open boolean NOT NULL DEFAULT false,", "    opens_at time, -- 파싱에 성공한 경우의 관람 시작 시각",
+				"    closes_at time, -- 파싱에 성공한 경우의 관람 종료 시각", "    admission_fee integer, -- 입장료(원), 무료는 0",
 				"    CHECK (external_id IS NULL OR source_name IS NOT NULL),",
 				"    CHECK (admission_fee IS NULL OR admission_fee >= 0)", "");
+		String placeImageLicenseColumns = String.join("\n", "    source_name text, -- 관광데이터 제공처",
+				"    external_id text, -- 제공처가 부여한 장소 식별자", "    source_url text, -- 관광데이터 원문 URL",
+				"    source_image_href text, -- 외부 출처의 대표이미지 URL(S3 객체 키가 아님)",
+				"    source_image_license_type text, -- 외부 대표이미지 이용허락 유형(KOGL_TYPE_1 또는 KOGL_TYPE_3)",
+				"    operating_hours_raw text, -- 관람시간 원문(TourAPI usetime 등, 파싱 실패 시 UI 표시용)",
+				"    always_open boolean NOT NULL DEFAULT false,", "    opens_at time, -- 파싱에 성공한 경우의 관람 시작 시각",
+				"    closes_at time, -- 파싱에 성공한 경우의 관람 종료 시각", "    admission_fee integer, -- 입장료(원), 무료는 0",
+				"    CHECK (external_id IS NULL OR source_name IS NOT NULL),",
+				"    CHECK (admission_fee IS NULL OR admission_fee >= 0),",
+				"    CHECK (source_image_license_type IS NULL OR source_image_license_type IN ('KOGL_TYPE_1', 'KOGL_TYPE_3'))",
+				"");
 		String placeLocationIndex = "CREATE INDEX places_location_gix ON places USING GIST (location);";
 		String placeIndexes = String.join("\n", "CREATE INDEX places_location_gix ON places USING GIST (location);",
 				"CREATE UNIQUE INDEX places_source_external_id_uq", "    ON places (source_name, external_id)",
@@ -184,11 +196,14 @@ class SchemaMappingTests {
 				.replace(placeLocationIndex, placeIndexes).replace(legacyMissionStatus, currentMissionStatus)
 				.replace(legacyMissionConstraints, currentMissionConstraints).replace(legacyTermType, currentTermType)
 				.replace(placeExternalIdentityColumns, placeOperatingInfoColumns)
+				.replace(placeOperatingInfoColumns, placeImageLicenseColumns)
 				.replace(legacySettlementChoice, currentSettlementChoice)
 				.replace(legacyPointSettlement, currentPointSettlement).replace(pointTransactionIndex, pointIndexes))
 				.isEqualTo(canonicalSchema);
 		assertThat(Files.readString(LOCATION_TERM_MIGRATION, StandardCharsets.UTF_8))
 				.contains("ALTER TYPE term_type ADD VALUE 'LOCATION' AFTER 'PRIVACY'");
+		assertThat(Files.readString(PLACE_IMAGE_LICENSE_MIGRATION, StandardCharsets.UTF_8))
+				.contains("ADD COLUMN source_image_license_type text").contains("'KOGL_TYPE_1', 'KOGL_TYPE_3'");
 	}
 
 	/** 탈퇴 회원 파기 대상 조회를 위한 기존 호환 컬럼과 인덱스가 스키마에 남아 있는지 검증한다. */

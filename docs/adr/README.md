@@ -16,3 +16,4 @@
 - [ADR-011: iOS 단일 출시를 Flutter 기능 중심 구조로 구현한다](./adr-011-flutter-ios-architecture.md)
 - [ADR-013: 장소 데이터는 관리자 API로 TourAPI를 동기화한다](./adr-013-tourapi-place-sync.md)
 - [ADR-014: detailImage2 도입을 보류하고 대표이미지 결측은 폴백·큐레이션으로 처리한다](./adr-014-tourapi-detail-image-deferred.md)
+- [ADR-015: TourAPI 대표이미지의 출처와 이용허락 유형을 보존한다](./adr-015-tourapi-image-attribution.md)

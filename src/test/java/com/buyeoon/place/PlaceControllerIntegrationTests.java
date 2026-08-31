@@ -552,6 +552,50 @@ class PlaceControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.walkingMinutes").exists()).andExpect(jsonPath("$.data.saved").value(false));
 	}
 
+	@Test
+	@DisplayName("TourAPI 대표이미지는 제공기관과 이용허락 유형을 함께 반환한다")
+	void returnsAttributionForTourApiImage() throws Exception {
+		startTrip(member.memberId());
+		UUID placeId = savePlace(PlaceCategory.HERITAGE, "출처 있는 장소", ORIGIN_LATITUDE + 0.001, ORIGIN_LONGITUDE + 0.001);
+		jdbcTemplate.update("""
+				UPDATE places
+				SET source_name = 'TOUR_API',
+				    source_image_href = 'https://tourapi.example.com/image.jpg',
+				    source_image_license_type = 'KOGL_TYPE_3'
+				WHERE id = ?
+				""", placeId);
+
+		mockMvc.perform(placeDetailRequest(placeId).param("latitude", String.valueOf(ORIGIN_LATITUDE))
+				.param("longitude", String.valueOf(ORIGIN_LONGITUDE))).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.imageUrl").value("https://tourapi.example.com/image.jpg"))
+				.andExpect(jsonPath("$.data.imageAttribution.provider").value("한국관광공사"))
+				.andExpect(jsonPath("$.data.imageAttribution.service").value("TourAPI"))
+				.andExpect(jsonPath("$.data.imageAttribution.licenseType").value("KOGL_TYPE_3"))
+				.andExpect(jsonPath("$.data.imageAttribution.sourceUrl")
+						.value("https://www.data.go.kr/data/15101578/openapi.do"));
+	}
+
+	@Test
+	@DisplayName("관리자 이미지가 표시되면 TourAPI 이미지 출처를 반환하지 않는다")
+	void omitsTourApiAttributionWhenAdminImageOverridesSourceImage() throws Exception {
+		startTrip(member.memberId());
+		UUID placeId = savePlace(PlaceCategory.HERITAGE, "관리자 이미지 장소", ORIGIN_LATITUDE + 0.001,
+				ORIGIN_LONGITUDE + 0.001);
+		jdbcTemplate.update("""
+				UPDATE places
+				SET image_key = 'public/places/admin-image.jpg',
+				    source_name = 'TOUR_API',
+				    source_image_href = 'https://tourapi.example.com/image.jpg',
+				    source_image_license_type = 'KOGL_TYPE_1'
+				WHERE id = ?
+				""", placeId);
+
+		mockMvc.perform(placeDetailRequest(placeId).param("latitude", String.valueOf(ORIGIN_LATITUDE))
+				.param("longitude", String.valueOf(ORIGIN_LONGITUDE))).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.imageUrl").isString())
+				.andExpect(jsonPath("$.data.imageAttribution").doesNotExist());
+	}
+
 	/** 요청 회원이 저장한 장소는 saved가 참으로 표시된다. */
 	@Test
 	@DisplayName("저장한 장소의 상세 조회는 saved가 true를 받는다")

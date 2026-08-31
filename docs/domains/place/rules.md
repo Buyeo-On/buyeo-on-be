@@ -25,7 +25,8 @@
 7. 저장한 장소를 삭제해도 장소 자체와 방문 기록은 삭제되지 않는다.
 8. 저장한 장소가 없으면 빈 목록 상태를 제공한다.
 9. 저장한 장소 목록은 항상 저장 시각 내림차순으로 정렬한다. 현재 위치가 있으면 각 장소의 `distanceMeters`와 `walkingMinutes`를 계산해 제공하고, 없으면 `null`을 제공한다. 위치는 거리·도보 시간 계산에만 사용하며 정렬 순서에는 영향을 주지 않는다.
-10. TourAPI 대표 이미지가 없으면 카카오 이미지 검색 결과의 첫 이미지를 보조 이미지로 사용하며, 검색 실패 또는 결과 부재 시 이미지 없이 제공한다.
+10. 관리자 등록 이미지가 있으면 이를 우선 제공하고, 없으면 TourAPI `firstimage`를 제공한다. 둘 다 없으면 이미지 없이 제공하며 출처가 불명확한 검색 결과로 대체하지 않는다.
+11. TourAPI 대표이미지를 제공할 때 `cpyrhtDivCd`를 정규화한 이용허락 유형과 한국관광공사·TourAPI 출처를 함께 제공한다. 알 수 없는 코드는 임의로 추정하지 않고 `null`로 둔다.
 
 ## 상태 전이
 
@@ -40,3 +41,4 @@
 - [동시 요청](../../policies/concurrency.md)
 - [트랜잭션과 롤백](../../policies/transactions.md)
 - [ADR-002 PostGIS geography](../../adr/adr-002-postgis-geography.md)
+- [ADR-015 TourAPI 대표이미지 출처](../../adr/adr-015-tourapi-image-attribution.md)

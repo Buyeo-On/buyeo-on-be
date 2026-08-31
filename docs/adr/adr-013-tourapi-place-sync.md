@@ -7,7 +7,7 @@
 ## 결정
 - 관리자 전용 API 엔드포인트가 동기화를 트리거한다. Spring Scheduler나 앱 시작 시 자동 실행은 쓰지 않는다.
 - 이 엔드포인트는 회원 인증과 별개로 Parameter Store `SecureString`에서 읽은 API Key 헤더로 보호한다.
-- `areaBasedList2`로 부여 지역 contentId 목록을 수집하고, 각 항목마다 `detailCommon2`(이름·요약·설명·주소·대표이미지)와 `detailIntro2`(관람시간·입장료)를 호출한다.
+- `areaBasedList2`로 부여 지역 contentId 목록을 수집하고, 각 항목마다 `detailCommon2`(이름·요약·설명·주소·대표이미지·이미지 이용허락 유형), `detailIntro2`(관람시간·입장료), `detailInfo2`(이용안내)를 호출한다.
 - `places`는 `(source_name, external_id)` 기준으로 upsert한다. 이미 있는 행은 매번 모든 필드를 최신값으로 덮어쓴다.
 - `detailIntro2`의 관람시간은 자유텍스트로 온다. 원문은 `operating_hours_raw`에 항상 저장하고, 파싱에 성공한 경우만 `opens_at`·`closes_at`·`admission_fee`를 채운다. 파싱 실패가 항목 처리 자체를 막지 않는다.
 - 항목 하나에서 호출 실패나 파싱 오류가 나도 전체 동기화를 중단하지 않고 다음 항목으로 넘어간다. 응답에 실패한 contentId 목록을 포함한다.
