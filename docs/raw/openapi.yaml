@@ -757,6 +757,27 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /notifications/buyeo-exit-events:
+    post:
+      tags: [Notifications]
+      summary: 부여 이탈 알림 이벤트
+      description: 클라이언트가 위치 감지로 부여 경계 이탈을 판단하면 호출한다. 서버가 위치를 재검증하고, 진행 중인 여행이 있고, 쿨다운 기간이 지났을 때만 BUYEO_EXIT 알림을 생성하고 FCM push를 발송한다.
+      operationId: notifyBuyeoExit
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuyeoExitEventRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/BuyeoExitEventSuccess'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /members/me/notifications:
     get:
       tags: [Notifications]
@@ -1527,6 +1548,16 @@ components:
             success: true
             data:
               notificationSent: true
+    BuyeoExitEventSuccess:
+      description: 부여 이탈 알림 이벤트 처리 결과
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BuyeoExitEventEnvelope'
+          example:
+            success: true
+            data:
+              notificationSent: true
     EmptySuccess:
       description: 처리 성공
       content:
@@ -2111,6 +2142,12 @@ components:
         location:
           $ref: '#/components/schemas/Location'
     BuyeoEntryEventRequest:
+      type: object
+      required: [location]
+      properties:
+        location:
+          $ref: '#/components/schemas/Location'
+    BuyeoExitEventRequest:
       type: object
       required: [location]
       properties:
@@ -2707,7 +2744,7 @@ components:
           format: date-time
     NotificationType:
       type: string
-      enum: [POINT, BADGE, NEARBY_QUIZ, DISCOUNT, CITIZEN_CARD, BUYEO_NEWS, BUYEO_ENTRY]
+      enum: [POINT, BADGE, NEARBY_QUIZ, DISCOUNT, CITIZEN_CARD, BUYEO_NEWS, BUYEO_ENTRY, BUYEO_EXIT]
     Notification:
       type: object
       required: [notificationId, type, title, body, read, occurredAt, iconUrl]
@@ -3143,6 +3180,19 @@ components:
             data:
               $ref: '#/components/schemas/BuyeoEntryEventResult'
     BuyeoEntryEventResult:
+      type: object
+      required: [notificationSent]
+      properties:
+        notificationSent:
+          type: boolean
+    BuyeoExitEventEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/BuyeoExitEventResult'
+    BuyeoExitEventResult:
       type: object
       required: [notificationSent]
       properties:

@@ -48,3 +48,5 @@
 ## 알림
 
 - [UC-10 알림 조회](./domains/notification/use-cases/uc-10-view-notifications.md)
+- [UC-27 부여 진입 알림](./domains/notification/use-cases/uc-27-notify-buyeo-entry.md)
+- [UC-28 부여 이탈 알림](./domains/notification/use-cases/uc-28-notify-buyeo-exit.md)
