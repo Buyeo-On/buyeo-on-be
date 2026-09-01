@@ -116,7 +116,7 @@ class MissionPhotoSubmissionIntegrationTests {
 	@DisplayName("사진 미션 발급 요청은 201과 업로드 대상을 받고 mission_photos row를 만들지 않는다")
 	void issuesUploadUrlWithoutCreatingMissionPhotoRow() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("사진 장소", 50);
+		UUID place = insertProjectedPlace("사진 장소", 20);
 		UUID missionId = insertPhotoMission(place, "사진 미션", 150);
 
 		mockMvc.perform(presignRequest(tripId, missionId, "issue-key")).andExpect(status().isCreated())
@@ -135,7 +135,7 @@ class MissionPhotoSubmissionIntegrationTests {
 	@DisplayName("PHOTO가 아닌 미션에 발급을 요청하면 400을 받는다")
 	void returns400WhenMissionIsNotPhotoType() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("OX 장소", 50);
+		UUID place = insertProjectedPlace("OX 장소", 20);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, null, true);
 
 		mockMvc.perform(presignRequest(tripId, missionId, "not-photo-key")).andExpect(status().isBadRequest())
@@ -146,7 +146,7 @@ class MissionPhotoSubmissionIntegrationTests {
 	@Test
 	@DisplayName("본인 소유가 아니거나 존재하지 않는 여행으로 발급을 요청하면 404를 받는다")
 	void returns404WhenTripIsNotOwnedOrMissing() throws Exception {
-		UUID place = insertProjectedPlace("사진 장소", 50);
+		UUID place = insertProjectedPlace("사진 장소", 20);
 		UUID missionId = insertPhotoMission(place, "사진 미션", 150);
 
 		mockMvc.perform(presignRequest(UUID.randomUUID(), missionId, "missing-trip-key"))
@@ -157,7 +157,7 @@ class MissionPhotoSubmissionIntegrationTests {
 	@Test
 	@DisplayName("진행 중이 아닌 본인 여행으로 발급을 요청하면 409를 받는다")
 	void returns409WhenOwnTripIsNotInProgress() throws Exception {
-		UUID place = insertProjectedPlace("사진 장소", 50);
+		UUID place = insertProjectedPlace("사진 장소", 20);
 		UUID missionId = insertPhotoMission(place, "사진 미션", 150);
 		UUID endedTripId = UUID.randomUUID();
 		jdbcTemplate.update("INSERT INTO trips (id, member_id, status, ended_at) VALUES (?, ?, 'ENDED', now())",
@@ -172,7 +172,7 @@ class MissionPhotoSubmissionIntegrationTests {
 	@DisplayName("설정된 최대 크기를 초과하면 413을 받는다")
 	void returns413WhenFileSizeExceedsConfiguredMax() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("사진 장소", 50);
+		UUID place = insertProjectedPlace("사진 장소", 20);
 		UUID missionId = insertPhotoMission(place, "사진 미션", 150);
 
 		mockMvc.perform(presignRequestBody(tripId, missionId, "too-large-key",
@@ -185,7 +185,7 @@ class MissionPhotoSubmissionIntegrationTests {
 	@DisplayName("발급 요청도 동일한 멱등성 키·본문 재요청은 최초 응답을 재사용한다")
 	void presignReplaysFirstResponseForSameIdempotentRequest() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("사진 장소", 50);
+		UUID place = insertProjectedPlace("사진 장소", 20);
 		UUID missionId = insertPhotoMission(place, "사진 미션", 150);
 
 		String first = mockMvc.perform(presignRequest(tripId, missionId, "replay-key")).andExpect(status().isCreated())
@@ -201,8 +201,8 @@ class MissionPhotoSubmissionIntegrationTests {
 	@DisplayName("발급 요청도 멱등성 키를 다른 본문에 재사용하면 409를 받는다")
 	void presignReusedKeyWithDifferentBodyConflicts() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("사진 장소", 50);
-		UUID otherPlace = insertProjectedPlace("다른 장소", 50);
+		UUID place = insertProjectedPlace("사진 장소", 20);
+		UUID otherPlace = insertProjectedPlace("다른 장소", 20);
 		UUID missionId = insertPhotoMission(place, "사진 미션", 150);
 		UUID otherMissionId = insertPhotoMission(otherPlace, "다른 사진 미션", 150);
 
@@ -226,7 +226,7 @@ class MissionPhotoSubmissionIntegrationTests {
 	@DisplayName("검증에 성공한 사진 제출은 완료 처리되고 보상·방문 기록을 받는다")
 	void verifiedPhotoSubmissionCompletesMissionAndGrantsRewardAndVisit() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("사진 장소", 50);
+		UUID place = insertProjectedPlace("사진 장소", 20);
 		UUID missionId = insertPhotoMission(place, "사진 미션", 150);
 		UUID photoId = UUID.randomUUID();
 		stubMatchingPhoto(tripId, missionId, photoId, member.memberId(), "image/jpeg", 1024);
@@ -252,7 +252,7 @@ class MissionPhotoSubmissionIntegrationTests {
 	@DisplayName("존재하지 않는 photoId로 제출하면 404를 받는다")
 	void returns404WhenPhotoObjectDoesNotExist() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("사진 장소", 50);
+		UUID place = insertProjectedPlace("사진 장소", 20);
 		UUID missionId = insertPhotoMission(place, "사진 미션", 150);
 		when(photoObjectStore.head(anyString())).thenReturn(Optional.empty());
 
@@ -268,7 +268,7 @@ class MissionPhotoSubmissionIntegrationTests {
 	@DisplayName("다른 회원의 photoId로 제출하면 404를 받는다")
 	void returns404WhenPhotoOwnedByAnotherMember() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("사진 장소", 50);
+		UUID place = insertProjectedPlace("사진 장소", 20);
 		UUID missionId = insertPhotoMission(place, "사진 미션", 150);
 		UUID photoId = UUID.randomUUID();
 		stubMatchingPhoto(tripId, missionId, photoId, UUID.randomUUID(), "image/jpeg", 1024);
@@ -282,7 +282,7 @@ class MissionPhotoSubmissionIntegrationTests {
 	@DisplayName("실제 크기가 발급 요청과 다르면 400을 받고 상태를 바꾸지 않는다")
 	void returns400WhenFileSizeMismatches() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("사진 장소", 50);
+		UUID place = insertProjectedPlace("사진 장소", 20);
 		UUID missionId = insertPhotoMission(place, "사진 미션", 150);
 		UUID photoId = UUID.randomUUID();
 		when(photoObjectStore.head(anyString())).thenReturn(
@@ -302,7 +302,7 @@ class MissionPhotoSubmissionIntegrationTests {
 	@DisplayName("Content-Type이 발급 요청과 다르면 400을 받는다")
 	void returns400WhenContentTypeMismatches() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("사진 장소", 50);
+		UUID place = insertProjectedPlace("사진 장소", 20);
 		UUID missionId = insertPhotoMission(place, "사진 미션", 150);
 		UUID photoId = UUID.randomUUID();
 		when(photoObjectStore.head(anyString())).thenReturn(
@@ -317,7 +317,7 @@ class MissionPhotoSubmissionIntegrationTests {
 	@DisplayName("완료된 사진 미션에 재제출하면 409를 받는다")
 	void resubmittingCompletedPhotoMissionReturns409() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("사진 장소", 50);
+		UUID place = insertProjectedPlace("사진 장소", 20);
 		UUID missionId = insertPhotoMission(place, "사진 미션", 150);
 		UUID photoId = UUID.randomUUID();
 		stubMatchingPhoto(tripId, missionId, photoId, member.memberId(), "image/jpeg", 1024);
@@ -327,12 +327,12 @@ class MissionPhotoSubmissionIntegrationTests {
 				.andExpect(status().isConflict()).andExpect(jsonPath("$.data.code").value("INVALID_STATE_TRANSITION"));
 	}
 
-	/** 반올림 전 실제 거리가 100m를 초과하면 403을 받고 상태를 바꾸지 않는다. */
+	/** 반올림 전 실제 거리가 30m를 초과하면 403을 받고 상태를 바꾸지 않는다. */
 	@Test
-	@DisplayName("100m를 초과한 사진 제출은 403을 받고 상태를 바꾸지 않는다")
+	@DisplayName("30m를 초과한 사진 제출은 403을 받고 상태를 바꾸지 않는다")
 	void returns403WhenBeyondParticipationRadius() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("먼 사진 장소", 100.1);
+		UUID place = insertProjectedPlace("먼 사진 장소", 30.1);
 		UUID missionId = insertPhotoMission(place, "사진 미션", 150);
 		UUID photoId = UUID.randomUUID();
 		stubMatchingPhoto(tripId, missionId, photoId, member.memberId(), "image/jpeg", 1024);
@@ -350,7 +350,7 @@ class MissionPhotoSubmissionIntegrationTests {
 	@DisplayName("사진 제출도 동일한 멱등성 요청은 최초 응답을 재사용한다")
 	void sameIdempotentPhotoSubmissionReplaysFirstResponse() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("사진 장소", 50);
+		UUID place = insertProjectedPlace("사진 장소", 20);
 		UUID missionId = insertPhotoMission(place, "사진 미션", 150);
 		UUID photoId = UUID.randomUUID();
 		stubMatchingPhoto(tripId, missionId, photoId, member.memberId(), "image/jpeg", 1024);
@@ -371,7 +371,7 @@ class MissionPhotoSubmissionIntegrationTests {
 	@DisplayName("같은 문화재의 다른 사진 미션을 완료해도 방문 기록은 한 번만 생성된다")
 	void completingAnotherPhotoMissionForSamePlaceDoesNotDuplicateVisit() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("공통 장소", 50);
+		UUID place = insertProjectedPlace("공통 장소", 20);
 		UUID firstMission = insertPhotoMission(place, "사진 미션1", 100);
 		UUID secondMission = insertPhotoMission(place, "사진 미션2", 100);
 		UUID firstPhotoId = UUID.randomUUID();

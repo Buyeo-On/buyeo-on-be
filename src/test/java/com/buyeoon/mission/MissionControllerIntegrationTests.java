@@ -181,7 +181,7 @@ class MissionControllerIntegrationTests {
 	@DisplayName("목록 항목에 필요한 모든 필드가 포함된다")
 	void includesAllRequiredFieldsInResponse() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("부소산성", 50);
+		UUID place = insertProjectedPlace("부소산성", 20);
 		UUID missionId = insertOxMission(place, "OX 퀴즈", 100, null, true);
 
 		mockMvc.perform(nearbyRequest(tripId)).andExpect(status().isOk())
@@ -196,23 +196,29 @@ class MissionControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.items[0].title").value("OX 퀴즈"))
 				.andExpect(jsonPath("$.data.items[0].rewardPoints").value(100))
 				.andExpect(jsonPath("$.data.items[0].availability").value("AVAILABLE"))
-				.andExpect(jsonPath("$.data.items[0].participationRadiusMeters").value(100))
+				.andExpect(jsonPath("$.data.items[0].participationRadiusMeters").value(30))
 				.andExpect(jsonPath("$.data.items[0].remainingAttempts").isEmpty());
 	}
 
-	/** 참여 기록이 없는 미션은 100m 이내면 AVAILABLE, 초과면 LOCKED이며 100m 경계는 AVAILABLE이다. */
+	/** 참여 기록이 없는 미션은 30m 이내면 AVAILABLE, 초과면 LOCKED이며 30m 경계는 AVAILABLE이다. */
 	@Test
-	@DisplayName("참여 기록이 없으면 100m 이내는 AVAILABLE, 초과는 LOCKED로 표시된다")
+	@DisplayName("참여 기록이 없으면 30m 이내는 AVAILABLE, 초과는 LOCKED로 표시된다")
 	void marksAvailableWithinParticipationRadiusAndLockedBeyond() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID availablePlace = insertProjectedPlace("참여 가능", 99.9);
-		UUID lockedPlace = insertProjectedPlace("잠김", 100.1);
+		UUID availablePlace = insertProjectedPlace("참여 가능", 29.9);
+		UUID boundaryPlace = insertProjectedPlace("경계", 30.0);
+		UUID justBeyondPlace = insertProjectedPlace("직후 잠김", 30.1);
+		UUID formerlyInsidePlace = insertProjectedPlace("이전 참여 가능", 50);
 		UUID availableMission = insertOxMission(availablePlace, "참여 가능 미션", 100, null, true);
-		UUID lockedMission = insertOxMission(lockedPlace, "잠긴 미션", 100, null, true);
+		UUID boundaryMission = insertOxMission(boundaryPlace, "경계 미션", 100, null, true);
+		UUID justBeyondMission = insertOxMission(justBeyondPlace, "직후 잠긴 미션", 100, null, true);
+		UUID formerlyInsideMission = insertOxMission(formerlyInsidePlace, "50m 잠긴 미션", 100, null, true);
 
 		MvcResult result = mockMvc.perform(nearbyRequest(tripId)).andExpect(status().isOk()).andReturn();
 		assertThat(itemFor(result, availableMission).get("availability").stringValue()).isEqualTo("AVAILABLE");
-		assertThat(itemFor(result, lockedMission).get("availability").stringValue()).isEqualTo("LOCKED");
+		assertThat(itemFor(result, boundaryMission).get("availability").stringValue()).isEqualTo("AVAILABLE");
+		assertThat(itemFor(result, justBeyondMission).get("availability").stringValue()).isEqualTo("LOCKED");
+		assertThat(itemFor(result, formerlyInsideMission).get("availability").stringValue()).isEqualTo("LOCKED");
 	}
 
 	/** 완료·기회 소진 기록은 현재 위치와 무관하게 유지된다. */
@@ -384,12 +390,12 @@ class MissionControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.code").value("TRIP_NOT_IN_PROGRESS"));
 	}
 
-	/** 반올림 전 거리가 100m 이내인 객관식 미션은 문제와 정답 표시 없는 선택지를 포함한 전체 상세를 받는다. */
+	/** 반올림 전 거리가 30m 이내인 객관식 미션은 문제와 정답 표시 없는 선택지를 포함한 전체 상세를 받는다. */
 	@Test
-	@DisplayName("100m 이내 객관식 미션은 문제와 선택지를 포함한 전체 상세를 받고 정답 값은 노출하지 않는다")
-	void returnsFullDetailWithChoicesForMultipleChoiceMissionWithin100m() throws Exception {
+	@DisplayName("30m 이내 객관식 미션은 문제와 선택지를 포함한 전체 상세를 받고 정답 값은 노출하지 않는다")
+	void returnsFullDetailWithChoicesForMultipleChoiceMissionWithin30m() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("객관식 장소", 50);
+		UUID place = insertProjectedPlace("객관식 장소", 20);
 		UUID missionId = insertMultipleChoiceMission(place, "객관식 미션", 100, null);
 		insertChoice(missionId, "예", true, 0);
 		insertChoice(missionId, "아니요", false, 1);
@@ -404,12 +410,12 @@ class MissionControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.choices[1].correct").doesNotExist());
 	}
 
-	/** 반올림 전 거리가 100m 이내인 OX 미션은 문제를 포함한 전체 상세를 받고 선택지 필드는 없다. */
+	/** 반올림 전 거리가 30m 이내인 OX 미션은 문제를 포함한 전체 상세를 받고 선택지 필드는 없다. */
 	@Test
-	@DisplayName("100m 이내 OX 미션은 문제를 포함한 전체 상세를 받고 정답 값은 노출하지 않는다")
-	void returnsFullDetailForOxMissionWithin100m() throws Exception {
+	@DisplayName("30m 이내 OX 미션은 문제를 포함한 전체 상세를 받고 정답 값은 노출하지 않는다")
+	void returnsFullDetailForOxMissionWithin30m() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("OX 장소", 50);
+		UUID place = insertProjectedPlace("OX 장소", 20);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, null, true);
 
 		mockMvc.perform(detailRequest(missionId, tripId)).andExpect(status().isOk())
@@ -418,24 +424,24 @@ class MissionControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.oxCorrectAnswer").doesNotExist());
 	}
 
-	/** 반올림 전 거리가 100m 이내인 사진 인증 미션은 촬영 안내를 포함한 전체 상세를 받는다. */
+	/** 반올림 전 거리가 30m 이내인 사진 인증 미션은 촬영 안내를 포함한 전체 상세를 받는다. */
 	@Test
-	@DisplayName("100m 이내 사진 미션은 촬영 안내를 포함한 전체 상세를 받는다")
-	void returnsFullDetailForPhotoMissionWithin100m() throws Exception {
+	@DisplayName("30m 이내 사진 미션은 촬영 안내를 포함한 전체 상세를 받는다")
+	void returnsFullDetailForPhotoMissionWithin30m() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("사진 장소", 50);
+		UUID place = insertProjectedPlace("사진 장소", 20);
 		UUID missionId = insertPhotoMission(place, "사진 미션", 150);
 
 		mockMvc.perform(detailRequest(missionId, tripId)).andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.description").value("설명"));
 	}
 
-	/** 실제 거리가 100m를 초과하면 문제와 선택지가 없는 제한 상세를 받는다. */
+	/** 실제 거리가 30m를 초과하면 문제와 선택지가 없는 제한 상세를 받는다. */
 	@Test
-	@DisplayName("100m를 초과하면 description과 choices가 없는 제한 상세를 받는다")
-	void returnsRestrictedDetailBeyond100m() throws Exception {
+	@DisplayName("30m를 초과하면 description과 choices가 없는 제한 상세를 받는다")
+	void returnsRestrictedDetailBeyond30m() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("잠긴 장소", 100.1);
+		UUID place = insertProjectedPlace("잠긴 장소", 30.1);
 		UUID missionId = insertMultipleChoiceMission(place, "객관식 미션", 100, null);
 		insertChoice(missionId, "예", true, 0);
 		insertChoice(missionId, "아니요", false, 1);
@@ -460,10 +466,10 @@ class MissionControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.description").doesNotExist());
 	}
 
-	/** 완료·기회 소진 미션도 100m 밖이면 상태와 남은 횟수는 유지하되 제한 상세만 받는다. */
+	/** 완료·기회 소진 미션도 30m 밖이면 상태와 남은 횟수는 유지하되 제한 상세만 받는다. */
 	@Test
-	@DisplayName("완료·소진 미션도 100m 밖이면 상태는 유지하되 제한 상세만 받는다")
-	void completedAndExhaustedMissionsBeyond100mReturnRestrictedDetailWithPreservedStatus() throws Exception {
+	@DisplayName("완료·소진 미션도 30m 밖이면 상태는 유지하되 제한 상세만 받는다")
+	void completedAndExhaustedMissionsBeyond30mReturnRestrictedDetailWithPreservedStatus() throws Exception {
 		UUID tripId = startTrip(member.memberId());
 		UUID place = insertProjectedPlace("먼 장소", 200);
 		UUID completedMission = insertOxMission(place, "완료 미션", 100, null, true);
@@ -485,7 +491,7 @@ class MissionControllerIntegrationTests {
 	@DisplayName("목록과 상세의 공통 필드는 동일한 값을 반환한다")
 	void listAndDetailShareTheSameComputedFields() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("공통 장소", 50);
+		UUID place = insertProjectedPlace("공통 장소", 20);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, null, true);
 
 		MvcResult listResult = mockMvc.perform(nearbyRequest(tripId)).andExpect(status().isOk()).andReturn();
@@ -507,7 +513,7 @@ class MissionControllerIntegrationTests {
 	@DisplayName("반복 상세 조회 전후 DB 상태가 동일하다")
 	void repeatedDetailRequestsDoNotChangeDbState() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("장소", 50);
+		UUID place = insertProjectedPlace("장소", 20);
 		UUID missionId = insertOxMission(place, "OX", 100, null, true);
 
 		mockMvc.perform(detailRequest(missionId, tripId)).andExpect(status().isOk());
@@ -523,7 +529,7 @@ class MissionControllerIntegrationTests {
 	@DisplayName("좌표, tripId, missionId 형식이 잘못되면 400을 받는다")
 	void returns400WhenDetailRequestParametersAreInvalid() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("장소", 50);
+		UUID place = insertProjectedPlace("장소", 20);
 		UUID missionId = insertOxMission(place, "OX", 100, null, true);
 
 		mockMvc.perform(
@@ -570,7 +576,7 @@ class MissionControllerIntegrationTests {
 	@Test
 	@DisplayName("본인 여행이 진행 중이 아니면 상세 조회도 409를 받는다")
 	void returns409WhenOwnTripIsNotInProgressForDetailRequest() throws Exception {
-		UUID place = insertProjectedPlace("장소", 50);
+		UUID place = insertProjectedPlace("장소", 20);
 		UUID missionId = insertOxMission(place, "OX", 100, null, true);
 		UUID endedTripId = UUID.randomUUID();
 		jdbcTemplate.update("INSERT INTO trips (id, member_id, status, ended_at) VALUES (?, ?, 'ENDED', now())",

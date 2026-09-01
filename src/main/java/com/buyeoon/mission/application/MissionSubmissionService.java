@@ -65,7 +65,8 @@ public class MissionSubmissionService {
 
 	private static final String OPERATION = "SUBMIT_MISSION";
 	private static final Duration RETENTION = Duration.ofHours(24);
-	private static final int PARTICIPATION_RADIUS_METERS = 100;
+	/** 미션 참여를 허용하는 고정 반경(m). 경계를 포함하며 위치 인증 정책과 같다. */
+	private static final int PARTICIPATION_RADIUS_METERS = 30;
 	private static final Set<String> ALLOWED_PHOTO_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "image/webp");
 
 	private final JdbcOperations jdbcOperations;

@@ -123,7 +123,7 @@ class MissionBadgeAwardIntegrationTests {
 		UUID badgeId = insertBadge("탐험가", "public/badges/explorer.png", "미션 1회 완료");
 		insertCondition(badgeId, "MISSION_COMPLETED_COUNT", 1);
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("장소", 50);
+		UUID place = insertProjectedPlace("장소", 20);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, null, true);
 
 		MvcResult result = mockMvc.perform(submit(missionId, "award-first", oxRequest(tripId, true)))
@@ -158,7 +158,7 @@ class MissionBadgeAwardIntegrationTests {
 		UUID badgeId = insertBadge("탐험가", null, "미션 1회 완료");
 		insertCondition(badgeId, "MISSION_COMPLETED_COUNT", 1);
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("장소", 50);
+		UUID place = insertProjectedPlace("장소", 20);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, null, true);
 
 		mockMvc.perform(submit(missionId, "award-notif", oxRequest(tripId, true))).andExpect(status().isOk());
@@ -178,7 +178,7 @@ class MissionBadgeAwardIntegrationTests {
 		UUID badgeId = insertBadge("무이미지 배지", null, "미션 1회 완료");
 		insertCondition(badgeId, "MISSION_COMPLETED_COUNT", 1);
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("장소", 50);
+		UUID place = insertProjectedPlace("장소", 20);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, null, true);
 
 		mockMvc.perform(submit(missionId, "award-no-image", oxRequest(tripId, true))).andExpect(status().isOk())
@@ -192,7 +192,7 @@ class MissionBadgeAwardIntegrationTests {
 		UUID badgeId = insertBadge("두 번 완료", null, "미션 2회 완료");
 		insertCondition(badgeId, "MISSION_COMPLETED_COUNT", 2);
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("장소", 50);
+		UUID place = insertProjectedPlace("장소", 20);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, null, true);
 
 		mockMvc.perform(submit(missionId, "below-threshold", oxRequest(tripId, true))).andExpect(status().isOk())
@@ -209,7 +209,7 @@ class MissionBadgeAwardIntegrationTests {
 	void completingSameMissionInAnotherTripIncreasesLifetimeCount() throws Exception {
 		UUID badgeId = insertBadge("두 번 완료", null, "미션 2회 완료");
 		insertCondition(badgeId, "MISSION_COMPLETED_COUNT", 2);
-		UUID place = insertProjectedPlace("장소", 50);
+		UUID place = insertProjectedPlace("장소", 20);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, null, true);
 
 		UUID firstTrip = startTrip(member.memberId());
@@ -240,7 +240,7 @@ class MissionBadgeAwardIntegrationTests {
 		UUID expectedSecond = ascending.get(1);
 
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("장소", 50);
+		UUID place = insertProjectedPlace("장소", 20);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, null, true);
 
 		mockMvc.perform(submit(missionId, "multi-badge", oxRequest(tripId, true))).andExpect(status().isOk())
@@ -255,7 +255,7 @@ class MissionBadgeAwardIntegrationTests {
 	void alreadyEarnedBadgeIsNotAwardedAgain() throws Exception {
 		UUID badgeId = insertBadge("탐험가", null, "미션 1회 완료");
 		insertCondition(badgeId, "MISSION_COMPLETED_COUNT", 1);
-		UUID place = insertProjectedPlace("장소", 50);
+		UUID place = insertProjectedPlace("장소", 20);
 
 		UUID firstTrip = startTrip(member.memberId());
 		UUID firstMission = insertOxMission(place, "미션1", 100, null, true);
@@ -285,7 +285,7 @@ class MissionBadgeAwardIntegrationTests {
 		insertCondition(badgeId, "MISSION_COMPLETED_COUNT", 1);
 		jdbcTemplate.update("UPDATE badges SET retired_at = now() WHERE id = ?", badgeId);
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("장소", 50);
+		UUID place = insertProjectedPlace("장소", 20);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, null, true);
 
 		mockMvc.perform(submit(missionId, "retired-badge", oxRequest(tripId, true))).andExpect(status().isOk())
@@ -302,7 +302,7 @@ class MissionBadgeAwardIntegrationTests {
 		UUID badgeId = insertBadge("탐험가", null, "미션 1회 완료");
 		insertCondition(badgeId, "MISSION_COMPLETED_COUNT", 1);
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("장소", 50);
+		UUID place = insertProjectedPlace("장소", 20);
 		UUID firstMission = insertOxMission(place, "미션1", 100, null, true);
 		UUID secondMission = insertOxMission(place, "미션2", 100, null, true);
 		CountDownLatch ready = new CountDownLatch(2);
@@ -338,7 +338,7 @@ class MissionBadgeAwardIntegrationTests {
 		UUID badgeId = insertBadge("탐험가", "public/badges/explorer.png", "미션 1회 완료");
 		insertCondition(badgeId, "MISSION_COMPLETED_COUNT", 1);
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("장소", 50);
+		UUID place = insertProjectedPlace("장소", 20);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, null, true);
 		String key = "replay-badge-key";
 		String body = oxRequest(tripId, true);

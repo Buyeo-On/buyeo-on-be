@@ -112,7 +112,7 @@ class MissionQuizStreakBadgeAwardIntegrationTests {
 		UUID badgeId = insertBadge("무결점", "퀴즈 5개 연속 정답");
 		insertCondition(badgeId, "QUIZ_CORRECT_STREAK", 5);
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("장소", 50);
+		UUID place = insertProjectedPlace("장소", 20);
 
 		for (int i = 1; i <= 4; i++) {
 			UUID missionId = insertOxMission(place, "정답 미션 " + i, 100, true);
@@ -130,7 +130,7 @@ class MissionQuizStreakBadgeAwardIntegrationTests {
 		UUID badgeId = insertBadge("무결점", "퀴즈 5개 연속 정답");
 		insertCondition(badgeId, "QUIZ_CORRECT_STREAK", 5);
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("장소", 50);
+		UUID place = insertProjectedPlace("장소", 20);
 
 		// 정답 3회로 연속 3을 만든다.
 		for (int i = 1; i <= 3; i++) {

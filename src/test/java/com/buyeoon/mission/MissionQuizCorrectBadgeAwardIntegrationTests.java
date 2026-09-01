@@ -113,7 +113,7 @@ class MissionQuizCorrectBadgeAwardIntegrationTests {
 		UUID badgeId = insertBadge("백제 박사", "public/badges/quiz-master.png", "퀴즈 15개 정답");
 		insertCondition(badgeId, "QUIZ_CORRECT_COUNT", 15);
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("장소", 50);
+		UUID place = insertProjectedPlace("장소", 20);
 
 		for (int index = 1; index <= 14; index++) {
 			UUID missionId = insertOxMission(place, "OX 미션 " + index, 10, null, true);
@@ -139,7 +139,7 @@ class MissionQuizCorrectBadgeAwardIntegrationTests {
 		UUID badgeId = insertBadge("백제 박사", null, "퀴즈 15개 정답");
 		insertCondition(badgeId, "QUIZ_CORRECT_COUNT", 15);
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("장소", 50);
+		UUID place = insertProjectedPlace("장소", 20);
 
 		for (int index = 1; index <= 14; index++) {
 			UUID missionId = insertOxMission(place, "OX 미션 " + index, 10, null, true);
