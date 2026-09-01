@@ -113,7 +113,7 @@ class MissionHeritageBadgeAwardIntegrationTests {
 		UUID badgeId = insertBadge("문화탐방가", "미문화재 1곳 방문");
 		insertCondition(badgeId, "HERITAGE_VISITED_COUNT", 1);
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("장소A", 50);
+		UUID place = insertProjectedPlace("장소A", 20);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, true);
 
 		mockMvc.perform(submit(missionId, "heritage-first", oxRequest(tripId, true))).andExpect(status().isOk())
@@ -137,7 +137,7 @@ class MissionHeritageBadgeAwardIntegrationTests {
 		insertCondition(badgeId, "MISSION_COMPLETED_COUNT", 1);
 		insertCondition(badgeId, "HERITAGE_VISITED_COUNT", 1);
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("장소A", 50);
+		UUID place = insertProjectedPlace("장소A", 20);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, true);
 
 		mockMvc.perform(submit(missionId, "both-metrics", oxRequest(tripId, true))).andExpect(status().isOk())
@@ -152,7 +152,7 @@ class MissionHeritageBadgeAwardIntegrationTests {
 		UUID badgeId = insertBadge("문화탐방가", "문화재 2곳 방문");
 		insertCondition(badgeId, "HERITAGE_VISITED_COUNT", 2);
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("장소A", 50);
+		UUID place = insertProjectedPlace("장소A", 20);
 		UUID firstMission = insertOxMission(place, "미션1", 100, true);
 		UUID secondMission = insertOxMission(place, "미션2", 100, true);
 
@@ -174,8 +174,8 @@ class MissionHeritageBadgeAwardIntegrationTests {
 	void revisitingSamePlaceInAnotherTripDoesNotIncreaseLifetimeCountButDifferentPlaceDoes() throws Exception {
 		UUID badgeId = insertBadge("문화탐방가", "문화재 2곳 방문");
 		insertCondition(badgeId, "HERITAGE_VISITED_COUNT", 2);
-		UUID placeA = insertProjectedPlace("장소A", 50);
-		UUID placeB = insertProjectedPlace("장소B", 60);
+		UUID placeA = insertProjectedPlace("장소A", 20);
+		UUID placeB = insertProjectedPlace("장소B", 15);
 
 		UUID firstTrip = startTrip(member.memberId());
 		UUID missionAtPlaceAFirst = insertOxMission(placeA, "미션A1", 100, true);
@@ -206,8 +206,8 @@ class MissionHeritageBadgeAwardIntegrationTests {
 		UUID badgeId = insertBadge("탐험 마스터", "미션 2회 완료 및 문화재 2곳 방문");
 		insertCondition(badgeId, "MISSION_COMPLETED_COUNT", 2);
 		insertCondition(badgeId, "HERITAGE_VISITED_COUNT", 2);
-		UUID placeA = insertProjectedPlace("장소A", 50);
-		UUID placeB = insertProjectedPlace("장소B", 60);
+		UUID placeA = insertProjectedPlace("장소A", 20);
+		UUID placeB = insertProjectedPlace("장소B", 15);
 		UUID tripId = startTrip(member.memberId());
 		UUID missionA1 = insertOxMission(placeA, "미션A1", 100, true);
 		UUID missionA2 = insertOxMission(placeA, "미션A2", 100, true);
@@ -240,7 +240,7 @@ class MissionHeritageBadgeAwardIntegrationTests {
 		List<UUID> ascending = jdbcTemplate.queryForList("SELECT id FROM badges WHERE id IN (?, ?) ORDER BY id ASC",
 				UUID.class, missionBadgeId, heritageBadgeId);
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("장소A", 50);
+		UUID place = insertProjectedPlace("장소A", 20);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, true);
 
 		mockMvc.perform(submit(missionId, "both-badges", oxRequest(tripId, true))).andExpect(status().isOk())

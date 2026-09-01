@@ -126,7 +126,7 @@ class MissionCompletionistBadgeAwardIntegrationTests {
 		// 15곳의 고유 문화재에서 각각 OX 퀴즈를 정답으로 완료한다.
 		// 이 과정에서 HERITAGE_VISITED_COUNT=15, QUIZ_CORRECT_COUNT=15를 함께 채운다.
 		for (int i = 1; i <= 15; i++) {
-			UUID place = insertProjectedPlace("문화재 " + i, 50 + i * 3.0);
+			UUID place = insertProjectedPlace("문화재 " + i, 5 + i * 1.0);
 			submitOx(tripId, place, i).andExpect(status().isOk());
 		}
 
@@ -134,7 +134,7 @@ class MissionCompletionistBadgeAwardIntegrationTests {
 		assertThat(memberBadgeCount(COMPLETIONIST_BADGE_ID)).isZero();
 
 		// 인증 사진 14회까지는 세 조건을 모두 충족하지 못한다.
-		UUID photoPlace = insertProjectedPlace("사진 장소", 50);
+		UUID photoPlace = insertProjectedPlace("사진 장소", 20);
 		for (int i = 1; i <= 14; i++) {
 			submitPhoto(tripId, photoPlace, i).andExpect(status().isOk());
 		}
@@ -246,9 +246,9 @@ class MissionCompletionistBadgeAwardIntegrationTests {
 	}
 
 	private int memberBadgeCount(UUID badgeId) {
-		return Objects.requireNonNull(jdbcTemplate.queryForObject(
-				"SELECT count(*) FROM member_badges WHERE member_id = ? AND badge_id = ?", Integer.class,
-				member.memberId(), badgeId));
+		return Objects.requireNonNull(
+				jdbcTemplate.queryForObject("SELECT count(*) FROM member_badges WHERE member_id = ? AND badge_id = ?",
+						Integer.class, member.memberId(), badgeId));
 	}
 
 	private String badgeName(UUID badgeId) {

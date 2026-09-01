@@ -113,7 +113,7 @@ class QuizFocusBadgeAwardIntegrationTests {
 		UUID badgeId = insertBadge("집중력", "60분 내에 퀴즈 10개 정답");
 		insertCondition(badgeId, 10);
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("장소", 50);
+		UUID place = insertProjectedPlace("장소", 20);
 
 		Instant base = Instant.now().minus(50, ChronoUnit.MINUTES);
 		for (int i = 0; i < 9; i++) {
@@ -136,7 +136,7 @@ class QuizFocusBadgeAwardIntegrationTests {
 		UUID badgeId = insertBadge("집중력", "60분 내에 퀴즈 10개 정답");
 		insertCondition(badgeId, 10);
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("장소", 50);
+		UUID place = insertProjectedPlace("장소", 20);
 
 		// 정답 9개를 서로 2시간씩 떨어뜨려 배치하면, 어떤 60분 구간에도 최대 1개의 과거 정답만 들어간다.
 		Instant base = Instant.now().minus(20, ChronoUnit.HOURS);
@@ -221,11 +221,9 @@ class QuizFocusBadgeAwardIntegrationTests {
 
 	private UUID insertOxMission(UUID placeId, String title, boolean correctAnswer) {
 		UUID id = UUID.randomUUID();
-		jdbcTemplate.update(
-				"INSERT INTO missions (id, place_id, location, type, title, description, reward_points, "
-						+ "ox_correct_answer) VALUES (?, ?, (SELECT location FROM places WHERE id = ?), "
-						+ "'OX'::mission_type, ?, '설명', 10, ?)",
-				id, placeId, placeId, title, correctAnswer);
+		jdbcTemplate.update("INSERT INTO missions (id, place_id, location, type, title, description, reward_points, "
+				+ "ox_correct_answer) VALUES (?, ?, (SELECT location FROM places WHERE id = ?), "
+				+ "'OX'::mission_type, ?, '설명', 10, ?)", id, placeId, placeId, title, correctAnswer);
 		return id;
 	}
 

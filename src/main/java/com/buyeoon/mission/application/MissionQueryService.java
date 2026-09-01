@@ -16,11 +16,13 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/** UC-06 주변 미션 목록과 상세 조회 서비스다. */
 @Service
 @Transactional(readOnly = true)
 public class MissionQueryService {
 
-	private static final int PARTICIPATION_RADIUS_METERS = 100;
+	/** 미션 참여를 허용하는 고정 반경(m). 경계를 포함하며 위치 인증 정책과 같다. */
+	private static final int PARTICIPATION_RADIUS_METERS = 30;
 
 	private final MissionQueryRepository missionQueryRepository;
 	private final MissionChoiceRepository missionChoiceRepository;
@@ -114,8 +116,8 @@ public class MissionQueryService {
 	}
 
 	/**
-	 * 스페셜 퀴즈(최대 도전 횟수가 있는 객관식·OX 미션)는 여행·KST 날짜·미션 ID로 정해지는 시드로 하루 20%만
-	 * 노출한다. 완료·기회 소진 상태는 이미 참여한 기록이라 노출 대상에서 빼지 않고 항상 보여준다.
+	 * 스페셜 퀴즈(최대 도전 횟수가 있는 객관식·OX 미션)는 여행·KST 날짜·미션 ID로 정해지는 시드로 하루 20%만 노출한다. 완료·기회
+	 * 소진 상태는 이미 참여한 기록이라 노출 대상에서 빼지 않고 항상 보여준다.
 	 */
 	private boolean isExposedToday(UUID tripId, NearbyMissionProjection row) {
 		MissionEntity mission = row.mission();

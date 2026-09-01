@@ -118,7 +118,7 @@ class MissionPhotoBadgeAwardIntegrationTests {
 	@DisplayName("인증 사진 15회 제출을 달성하면 '추억 수집가' 배지를 획득한다")
 	void fifteenthPhotoSubmissionAwardsMemoryCollectorBadge() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("사진 장소", 50);
+		UUID place = insertProjectedPlace("사진 장소", 20);
 
 		for (int i = 1; i < 15; i++) {
 			submitPhotoMission(tripId, place, i).andExpect(status().isOk())
@@ -141,7 +141,7 @@ class MissionPhotoBadgeAwardIntegrationTests {
 	@DisplayName("PHOTO가 아닌 제출은 인증 사진 집계에 포함되지 않는다")
 	void nonPhotoSubmissionsDoNotCountTowardPhotoMetric() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("퀴즈 장소", 50);
+		UUID place = insertProjectedPlace("퀴즈 장소", 20);
 
 		for (int i = 1; i <= 15; i++) {
 			UUID missionId = insertOxMission(place, "OX 미션 " + i, 10);

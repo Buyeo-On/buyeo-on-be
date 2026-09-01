@@ -107,7 +107,7 @@ class MissionSubmissionIntegrationTests {
 	@DisplayName("OX 미션에 정답을 제출하면 완료되고 보상·방문 기록을 받는다")
 	void correctOxSubmissionCompletesMissionAndGrantsRewardAndVisit() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("OX 장소", 50);
+		UUID place = insertProjectedPlace("OX 장소", 20);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, null, true);
 
 		mockMvc.perform(submit(missionId, "submit-ox-correct", oxRequest(tripId, true))).andExpect(status().isOk())
@@ -141,7 +141,7 @@ class MissionSubmissionIntegrationTests {
 		UUID settledTripId = insertSettledTrip(member.memberId());
 		insertCarryOverSettlement(settledTripId, 200, Instant.now().minus(1, ChronoUnit.MINUTES));
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("만료 후 보상 장소", 50);
+		UUID place = insertProjectedPlace("만료 후 보상 장소", 20);
 		UUID missionId = insertOxMission(place, "만료 후 보상 미션", 100, null, true);
 
 		mockMvc.perform(submit(missionId, "expire-before-reward", oxRequest(tripId, true))).andExpect(status().isOk())
@@ -164,7 +164,7 @@ class MissionSubmissionIntegrationTests {
 		UUID settledTripId = insertSettledTrip(member.memberId());
 		insertCarryOverSettlement(settledTripId, 200, Instant.now().minus(1, ChronoUnit.MINUTES));
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("동시 만료 보상 장소", 50);
+		UUID place = insertProjectedPlace("동시 만료 보상 장소", 20);
 		UUID missionId = insertOxMission(place, "동시 만료 보상 미션", 100, null, true);
 		CountDownLatch ready = new CountDownLatch(2);
 		CountDownLatch start = new CountDownLatch(1);
@@ -215,7 +215,7 @@ class MissionSubmissionIntegrationTests {
 		UUID settledTripId = insertSettledTrip(member.memberId());
 		insertCarryOverSettlement(settledTripId, 200, Instant.now().minus(1, ChronoUnit.MINUTES));
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("먼 만료 보상 장소", 100.1);
+		UUID place = insertProjectedPlace("먼 만료 보상 장소", 30.1);
 		UUID missionId = insertOxMission(place, "실패하는 만료 보상 미션", 100, null, true);
 
 		mockMvc.perform(submit(missionId, "rollback-expiration", oxRequest(tripId, true)))
@@ -256,7 +256,7 @@ class MissionSubmissionIntegrationTests {
 	@DisplayName("객관식 미션에 정답을 제출하면 완료된다")
 	void correctMultipleChoiceSubmissionCompletesMission() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("객관식 장소", 50);
+		UUID place = insertProjectedPlace("객관식 장소", 20);
 		UUID missionId = insertMultipleChoiceMission(place, "객관식 미션", 100, null);
 		UUID correctChoice = insertChoice(missionId, "정답", true, 0);
 		insertChoice(missionId, "오답", false, 1);
@@ -271,7 +271,7 @@ class MissionSubmissionIntegrationTests {
 	@DisplayName("일반 퀴즈 오답은 AVAILABLE을 유지하고 재도전할 수 있다")
 	void incorrectAnswerToNormalQuizKeepsAvailableAndAllowsRetry() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("OX 장소", 50);
+		UUID place = insertProjectedPlace("OX 장소", 20);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, null, true);
 
 		mockMvc.perform(submit(missionId, "submit-ox-wrong", oxRequest(tripId, false))).andExpect(status().isOk())
@@ -292,7 +292,7 @@ class MissionSubmissionIntegrationTests {
 	@DisplayName("스페셜 퀴즈는 기회를 모두 소진하면 EXHAUSTED로 전이하고 재제출은 409를 받는다")
 	void specialQuizExhaustsAttemptsAndRejectsFurtherSubmissions() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("스페셜 장소", 50);
+		UUID place = insertProjectedPlace("스페셜 장소", 20);
 		UUID missionId = insertOxMission(place, "스페셜 퀴즈", 100, 2, true);
 
 		mockMvc.perform(submit(missionId, "special-attempt-1", oxRequest(tripId, false))).andExpect(status().isOk())
@@ -316,7 +316,7 @@ class MissionSubmissionIntegrationTests {
 	@DisplayName("완료된 미션에 재제출하면 409를 받는다")
 	void resubmittingCompletedMissionReturns409() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("OX 장소", 50);
+		UUID place = insertProjectedPlace("OX 장소", 20);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, null, true);
 		mockMvc.perform(submit(missionId, "first-complete", oxRequest(tripId, true))).andExpect(status().isOk());
 
@@ -329,7 +329,7 @@ class MissionSubmissionIntegrationTests {
 	@DisplayName("같은 문화재의 다른 미션을 완료해도 방문 기록은 한 번만 생성된다")
 	void completingAnotherMissionForSamePlaceDoesNotDuplicateVisit() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("공통 장소", 50);
+		UUID place = insertProjectedPlace("공통 장소", 20);
 		UUID firstMission = insertOxMission(place, "미션1", 100, null, true);
 		UUID secondMission = insertOxMission(place, "미션2", 100, null, true);
 
@@ -344,12 +344,12 @@ class MissionSubmissionIntegrationTests {
 				Integer.class, tripId, place)).isEqualTo(1);
 	}
 
-	/** 반올림 전 실제 거리가 100m를 초과하면 403을 받고 어떤 상태도 바뀌지 않는다. */
+	/** 반올림 전 실제 거리가 30m를 초과하면 403을 받고 어떤 상태도 바뀌지 않는다. */
 	@Test
-	@DisplayName("100m를 초과하면 403을 받고 상태를 바꾸지 않는다")
+	@DisplayName("30m를 초과하면 403을 받고 상태를 바꾸지 않는다")
 	void returns403WhenBeyondParticipationRadiusAndChangesNothing() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("먼 장소", 100.1);
+		UUID place = insertProjectedPlace("먼 장소", 30.1);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, null, true);
 
 		mockMvc.perform(submit(missionId, "too-far-key", oxRequest(tripId, true))).andExpect(status().isForbidden())
@@ -361,12 +361,12 @@ class MissionSubmissionIntegrationTests {
 				Integer.class, member.memberId())).isZero();
 	}
 
-	/** 100m 경계는 참여를 허용한다. */
+	/** 30m 경계는 참여를 허용한다. */
 	@Test
-	@DisplayName("100m 경계는 참여를 허용한다")
+	@DisplayName("30m 경계는 참여를 허용한다")
 	void allowsSubmissionExactlyAtParticipationBoundary() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("경계 장소", 100.0);
+		UUID place = insertProjectedPlace("경계 장소", 30.0);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, null, true);
 
 		mockMvc.perform(submit(missionId, "boundary", oxRequest(tripId, true))).andExpect(status().isOk())
@@ -377,7 +377,7 @@ class MissionSubmissionIntegrationTests {
 	@Test
 	@DisplayName("본인 소유가 아니거나 존재하지 않는 여행은 404를 받는다")
 	void returns404WhenTripIsNotOwnedOrMissing() throws Exception {
-		UUID place = insertProjectedPlace("장소", 50);
+		UUID place = insertProjectedPlace("장소", 20);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, null, true);
 
 		mockMvc.perform(submit(missionId, "missing-trip", oxRequest(UUID.randomUUID(), true)))
@@ -388,7 +388,7 @@ class MissionSubmissionIntegrationTests {
 	@Test
 	@DisplayName("진행 중이 아닌 본인 여행은 409를 받는다")
 	void returns409WhenOwnTripIsNotInProgress() throws Exception {
-		UUID place = insertProjectedPlace("장소", 50);
+		UUID place = insertProjectedPlace("장소", 20);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, null, true);
 		UUID endedTripId = UUID.randomUUID();
 		jdbcTemplate.update("INSERT INTO trips (id, member_id, status, ended_at) VALUES (?, ?, 'ENDED', now())",
@@ -413,7 +413,7 @@ class MissionSubmissionIntegrationTests {
 	@DisplayName("동일한 멱등성 요청은 최초 응답을 재사용하고 부작용을 반복하지 않는다")
 	void sameIdempotentRequestReplaysFirstResponseWithoutSideEffects() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("OX 장소", 50);
+		UUID place = insertProjectedPlace("OX 장소", 20);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, null, true);
 		String key = "retry-submit-key";
 		String body = oxRequest(tripId, true);
@@ -436,7 +436,7 @@ class MissionSubmissionIntegrationTests {
 	@DisplayName("멱등성 키를 다른 본문에 재사용하면 409를 받는다")
 	void reusedKeyWithDifferentBodyConflicts() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("OX 장소", 50);
+		UUID place = insertProjectedPlace("OX 장소", 20);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, null, true);
 		String key = "conflict-submit-key";
 
@@ -450,7 +450,7 @@ class MissionSubmissionIntegrationTests {
 	@DisplayName("동시 완료 요청은 완료·보상·방문 기록을 한 번만 확정한다")
 	void concurrentSubmissionsCompleteMissionExactlyOnce() throws Exception {
 		UUID tripId = startTrip(member.memberId());
-		UUID place = insertProjectedPlace("동시성 장소", 50);
+		UUID place = insertProjectedPlace("동시성 장소", 20);
 		UUID missionId = insertOxMission(place, "OX 미션", 100, null, true);
 		CountDownLatch ready = new CountDownLatch(2);
 		CountDownLatch start = new CountDownLatch(1);
