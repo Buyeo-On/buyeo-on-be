@@ -1,5 +1,6 @@
 package com.buyeoon.mission.application;
 
+import com.buyeoon.common.location.ParticipationRadiusPolicy;
 import com.buyeoon.mission.entity.MissionChoiceEntity;
 import com.buyeoon.mission.entity.MissionEntity;
 import com.buyeoon.mission.entity.MissionParticipationEntity;
@@ -20,9 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional(readOnly = true)
 public class MissionQueryService {
-
-	/** 미션 참여를 허용하는 고정 반경(m). 경계를 포함하며 위치 인증 정책과 같다. */
-	private static final int PARTICIPATION_RADIUS_METERS = 30;
 
 	private final MissionQueryRepository missionQueryRepository;
 	private final MissionChoiceRepository missionChoiceRepository;
@@ -73,14 +71,42 @@ public class MissionQueryService {
 		return toDetailView(tripId, common);
 	}
 
+	/**
+	 * notification 도메인이 스페셜 퀴즈 근접 알림을 검증할 때 사용하는 공개 seam이다. 여행 소유·진행 중 여부를 먼저 확인한
+	 * 뒤, 오늘 이 회원에게 노출된 스페셜 퀴즈인지·이미 참여했는지·참여 반경 이내인지를 함께 판정한다.
+	 */
+	public SpecialQuizNearbyCheck checkSpecialQuizNearby(UUID memberId, UUID tripId, UUID missionId, double latitude,
+			double longitude) {
+		TripStatus status = tripQueryService.findOwnedTripStatus(memberId, tripId)
+				.orElseThrow(TripNotFoundException::new);
+		if (status != TripStatus.IN_PROGRESS) {
+			throw new TripNotInProgressException();
+		}
+
+		NearbyMissionProjection row = missionQueryRepository.findDetail(missionId, tripId, latitude, longitude)
+				.orElseThrow(MissionNotFoundException::new);
+		MissionEntity mission = row.mission();
+		boolean specialQuiz = mission.getMaxAttempts() != null;
+		boolean exposedToday = specialQuiz && specialQuizExposureDecider.isExposedToday(tripId, missionId);
+
+		MissionParticipationEntity participation = row.participation();
+		MissionStatus persistedStatus = participation == null ? MissionStatus.AVAILABLE : participation.getStatus();
+		boolean alreadyParticipated = persistedStatus != MissionStatus.AVAILABLE;
+
+		boolean withinParticipationRadius = row
+				.distanceMeters() <= ParticipationRadiusPolicy.PARTICIPATION_RADIUS_METERS;
+
+		return new SpecialQuizNearbyCheck(specialQuiz, exposedToday, alreadyParticipated, withinParticipationRadius);
+	}
+
 	private MissionItemView toView(UUID tripId, NearbyMissionProjection row) {
 		MissionCommon common = computeCommon(row);
 		MissionEntity mission = common.mission();
 		PlaceEntity place = common.place();
 		return new MissionItemView(mission.getId(), tripId, place.getId(), place.getName(),
 				mission.getLocation().getY(), mission.getLocation().getX(), common.distanceMeters(), mission.getType(),
-				mission.getTitle(), mission.getRewardPoints(), common.availability(), PARTICIPATION_RADIUS_METERS,
-				common.remainingAttempts());
+				mission.getTitle(), mission.getRewardPoints(), common.availability(),
+				ParticipationRadiusPolicy.PARTICIPATION_RADIUS_METERS, common.remainingAttempts());
 	}
 
 	private MissionRestrictedView toRestrictedView(UUID tripId, MissionCommon common) {
@@ -88,8 +114,8 @@ public class MissionQueryService {
 		PlaceEntity place = common.place();
 		return new MissionRestrictedView(mission.getId(), tripId, place.getId(), place.getName(),
 				mission.getLocation().getY(), mission.getLocation().getX(), common.distanceMeters(), mission.getType(),
-				mission.getTitle(), mission.getRewardPoints(), common.availability(), PARTICIPATION_RADIUS_METERS,
-				common.remainingAttempts());
+				mission.getTitle(), mission.getRewardPoints(), common.availability(),
+				ParticipationRadiusPolicy.PARTICIPATION_RADIUS_METERS, common.remainingAttempts());
 	}
 
 	private MissionDetailView toDetailView(UUID tripId, MissionCommon common) {
@@ -97,8 +123,9 @@ public class MissionQueryService {
 		PlaceEntity place = common.place();
 		return new MissionDetailView(mission.getId(), tripId, place.getId(), place.getName(),
 				mission.getLocation().getY(), mission.getLocation().getX(), common.distanceMeters(), mission.getType(),
-				mission.getTitle(), mission.getRewardPoints(), common.availability(), PARTICIPATION_RADIUS_METERS,
-				common.remainingAttempts(), mission.getDescription());
+				mission.getTitle(), mission.getRewardPoints(), common.availability(),
+				ParticipationRadiusPolicy.PARTICIPATION_RADIUS_METERS, common.remainingAttempts(),
+				mission.getDescription());
 	}
 
 	private MissionMultipleChoiceDetailView toMultipleChoiceDetailView(UUID tripId, MissionCommon common,
@@ -107,8 +134,9 @@ public class MissionQueryService {
 		PlaceEntity place = common.place();
 		return new MissionMultipleChoiceDetailView(mission.getId(), tripId, place.getId(), place.getName(),
 				mission.getLocation().getY(), mission.getLocation().getX(), common.distanceMeters(), mission.getType(),
-				mission.getTitle(), mission.getRewardPoints(), common.availability(), PARTICIPATION_RADIUS_METERS,
-				common.remainingAttempts(), mission.getDescription(), choices);
+				mission.getTitle(), mission.getRewardPoints(), common.availability(),
+				ParticipationRadiusPolicy.PARTICIPATION_RADIUS_METERS, common.remainingAttempts(),
+				mission.getDescription(), choices);
 	}
 
 	private MissionChoiceView toChoiceView(MissionChoiceEntity choice) {
@@ -139,7 +167,7 @@ public class MissionQueryService {
 
 		MissionStatus persistedStatus = participation == null ? MissionStatus.AVAILABLE : participation.getStatus();
 		int attemptCount = participation == null ? 0 : participation.getAttemptCount();
-		boolean withinParticipationRadius = row.distanceMeters() <= PARTICIPATION_RADIUS_METERS;
+		boolean withinParticipationRadius = row.distanceMeters() <= ParticipationRadiusPolicy.PARTICIPATION_RADIUS_METERS;
 
 		MissionAvailability availability = switch (persistedStatus) {
 			case COMPLETED -> MissionAvailability.COMPLETED;
@@ -160,6 +188,11 @@ public class MissionQueryService {
 
 	private record MissionCommon(MissionEntity mission, PlaceEntity place, int distanceMeters,
 			MissionAvailability availability, Integer remainingAttempts, boolean withinParticipationRadius) {
+	}
+
+	/** {@link #checkSpecialQuizNearby}의 검증 결과다. */
+	public record SpecialQuizNearbyCheck(boolean specialQuiz, boolean exposedToday, boolean alreadyParticipated,
+			boolean withinParticipationRadius) {
 	}
 
 	public record MissionListView(List<MissionItemView> items) {
