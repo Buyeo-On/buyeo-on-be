@@ -587,8 +587,8 @@ paths:
       summary: 미션 상세 조회
       description: |
         지정한 여행에서의 표시 상태, 남은 도전 횟수와 현재 위치에서의 거리를 반환한다.
-        미션은 500m 탐색 반경 밖에서도 조회할 수 있다. 현재 거리가 100m 이내면 문제 또는 촬영 안내와
-        객관식 선택지를 포함한 전체 상세를 반환하고, 100m를 초과하면 상태와 관계없이 목록과 같은 제한 상세를 반환한다.
+        미션은 500m 탐색 반경 밖에서도 조회할 수 있다. 현재 거리가 30m 이내면 문제 또는 촬영 안내와
+        객관식 선택지를 포함한 전체 상세를 반환하고, 30m를 초과하면 상태와 관계없이 목록과 같은 제한 상세를 반환한다.
       operationId: getMission
       parameters:
         - $ref: '#/components/parameters/MissionId'
@@ -1370,12 +1370,12 @@ components:
                   placeName: 부소산성
                   latitude: 36.2851
                   longitude: 126.9103
-                  distanceMeters: 42
+                  distanceMeters: 18
                   type: MULTIPLE_CHOICE
                   title: 백제 역사 퀴즈
                   rewardPoints: 100
                   availability: AVAILABLE
-                  participationRadiusMeters: 100
+                  participationRadiusMeters: 30
                   remainingAttempts: null
                   description: 부소산성은 백제의 마지막 도성을 지킨 산성일까요?
                   choices:
@@ -1394,12 +1394,12 @@ components:
                   placeName: 정림사지 오층석탑
                   latitude: 36.2797
                   longitude: 126.9135
-                  distanceMeters: 85
+                  distanceMeters: 22
                   type: OX
                   title: 정림사지 오층석탑 OX 퀴즈
                   rewardPoints: 100
                   availability: AVAILABLE
-                  participationRadiusMeters: 100
+                  participationRadiusMeters: 30
                   remainingAttempts: 2
                   description: 정림사지 오층석탑은 백제 시대에 세워졌을까요?
             photo:
@@ -1418,7 +1418,7 @@ components:
                   title: 궁남지 사진 인증
                   rewardPoints: 150
                   availability: AVAILABLE
-                  participationRadiusMeters: 100
+                  participationRadiusMeters: 30
                   remainingAttempts: null
                   description: 궁남지를 배경으로 사진을 촬영해 주세요.
             completedOutsideParticipationRadius:
@@ -1437,7 +1437,7 @@ components:
                   title: 능산리 고분군 OX 퀴즈
                   rewardPoints: 100
                   availability: COMPLETED
-                  participationRadiusMeters: 100
+                  participationRadiusMeters: 30
                   remainingAttempts: 0
     MissionPhotoUploadUrlSuccess:
       description: 사진 업로드용 Presigned URL 발급 결과
@@ -2310,7 +2310,7 @@ components:
     MissionAvailability:
       type: string
       enum: [LOCKED, AVAILABLE, EXHAUSTED, COMPLETED]
-      description: 완료와 기회 소진 기록을 우선하고, 그 외에는 반올림 전 현재 거리가 100m 이하면 AVAILABLE, 초과하면 LOCKED다.
+      description: 완료와 기회 소진 기록을 우선하고, 그 외에는 반올림 전 현재 거리가 30m 이하면 AVAILABLE, 초과하면 LOCKED다.
     MissionChoice:
       type: object
       required: [choiceId, label]
@@ -2377,7 +2377,7 @@ components:
           $ref: '#/components/schemas/MissionAvailability'
         participationRadiusMeters:
           type: integer
-          const: 100
+          const: 30
           description: 미션에 참여할 수 있는 고정 반경
         remainingAttempts:
           type: [integer, 'null']
@@ -2441,7 +2441,7 @@ components:
           OX: '#/components/schemas/OxMissionDetail'
           PHOTO: '#/components/schemas/PhotoMissionDetail'
     MissionRestrictedDetail:
-      description: 반올림 전 현재 거리가 100m를 초과할 때 반환하며 문제, 촬영 안내와 객관식 선택지를 포함하지 않는다.
+      description: 반올림 전 현재 거리가 30m를 초과할 때 반환하며 문제, 촬영 안내와 객관식 선택지를 포함하지 않는다.
       allOf:
         - $ref: '#/components/schemas/Mission'
         - not:
@@ -2449,7 +2449,7 @@ components:
               - required: [description]
               - required: [choices]
     MissionLookupResult:
-      description: 반올림 전 현재 거리가 100m 이하면 MissionDetail, 초과하면 상태와 관계없이 MissionRestrictedDetail을 반환한다.
+      description: 반올림 전 현재 거리가 30m 이하면 MissionDetail, 초과하면 상태와 관계없이 MissionRestrictedDetail을 반환한다.
       oneOf:
         - $ref: '#/components/schemas/MissionRestrictedDetail'
         - $ref: '#/components/schemas/MissionDetail'
