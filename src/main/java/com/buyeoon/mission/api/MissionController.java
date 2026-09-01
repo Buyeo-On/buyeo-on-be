@@ -6,6 +6,7 @@ import com.buyeoon.mission.application.MissionPhotoUploadUrlService.MissionPhoto
 import com.buyeoon.mission.application.MissionPhotoUploadUrlService.MissionPhotoUploadUrlView;
 import com.buyeoon.mission.application.MissionQueryService;
 import com.buyeoon.mission.application.MissionQueryService.MissionListView;
+import com.buyeoon.mission.application.MissionQueryService.SpecialQuizGeofenceListView;
 import com.buyeoon.mission.application.MissionSubmissionService;
 import com.buyeoon.mission.application.MissionSubmissionService.LocationCommand;
 import com.buyeoon.mission.application.MissionSubmissionService.MissionSubmissionCommand;
@@ -53,6 +54,14 @@ public class MissionController {
 		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
 		return SuccessResponse
 				.of(missionQueryService.listNearby(memberId, tripId, latitude(latitude), longitude(longitude)));
+	}
+
+	/** 클라이언트가 지오펜스를 등록할 오늘의 스페셜 퀴즈 좌표 목록을 500m 반경 제한 없이 조회한다. */
+	@GetMapping("/missions/special-quizzes")
+	public SuccessResponse<SpecialQuizGeofenceListView> getTodaySpecialQuizzes(@AuthenticationPrincipal Jwt jwt,
+			@RequestParam UUID tripId) {
+		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
+		return SuccessResponse.of(missionQueryService.listTodaySpecialQuizzes(memberId, tripId));
 	}
 
 	@GetMapping("/missions/{missionId}")

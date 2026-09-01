@@ -9,6 +9,7 @@ import com.buyeoon.mission.entity.MissionType;
 import com.buyeoon.mission.repository.MissionChoiceRepository;
 import com.buyeoon.mission.repository.MissionQueryRepository;
 import com.buyeoon.mission.repository.NearbyMissionProjection;
+import com.buyeoon.mission.repository.SpecialQuizGeofenceProjection;
 import com.buyeoon.place.entity.PlaceEntity;
 import com.buyeoon.trip.TripQueryService;
 import com.buyeoon.trip.entity.TripStatus;
@@ -69,6 +70,37 @@ public class MissionQueryService {
 			return toMultipleChoiceDetailView(tripId, common, choices);
 		}
 		return toDetailView(tripId, common);
+	}
+
+	/**
+	 * 클라이언트가 지오펜스를 등록할 스페셜 퀴즈 좌표 목록을 조회한다. 500m 반경 제한 없이 오늘 노출된 스페셜 퀴즈 전체를
+	 * 대상으로 하며, 이미 완료·소진해 더 알릴 필요가 없는 퀴즈는 제외한다.
+	 */
+	public SpecialQuizGeofenceListView listTodaySpecialQuizzes(UUID memberId, UUID tripId) {
+		TripStatus status = tripQueryService.findOwnedTripStatus(memberId, tripId)
+				.orElseThrow(TripNotFoundException::new);
+		if (status != TripStatus.IN_PROGRESS) {
+			throw new TripNotInProgressException();
+		}
+
+		List<SpecialQuizGeofenceView> items = missionQueryRepository.findSpecialQuizzes(tripId).stream()
+				.filter(row -> isChallengeableToday(tripId, row)).map(this::toGeofenceView).toList();
+		return new SpecialQuizGeofenceListView(items);
+	}
+
+	/** 아직 도전 가능한 상태이면서 오늘 노출 대상인 스페셜 퀴즈만 지오펜스 등록 대상으로 남긴다. */
+	private boolean isChallengeableToday(UUID tripId, SpecialQuizGeofenceProjection row) {
+		MissionParticipationEntity participation = row.participation();
+		MissionStatus persistedStatus = participation == null ? MissionStatus.AVAILABLE : participation.getStatus();
+		if (persistedStatus != MissionStatus.AVAILABLE) {
+			return false;
+		}
+		return specialQuizExposureDecider.isExposedToday(tripId, row.mission().getId());
+	}
+
+	private SpecialQuizGeofenceView toGeofenceView(SpecialQuizGeofenceProjection row) {
+		MissionEntity mission = row.mission();
+		return new SpecialQuizGeofenceView(mission.getId(), mission.getLocation().getY(), mission.getLocation().getX());
 	}
 
 	/**
@@ -193,6 +225,16 @@ public class MissionQueryService {
 	/** {@link #checkSpecialQuizNearby}의 검증 결과다. */
 	public record SpecialQuizNearbyCheck(boolean specialQuiz, boolean exposedToday, boolean alreadyParticipated,
 			boolean withinParticipationRadius) {
+	}
+
+	/** {@link #listTodaySpecialQuizzes}의 지오펜스 등록용 최소 응답이다. */
+	public record SpecialQuizGeofenceListView(List<SpecialQuizGeofenceView> items) {
+		public SpecialQuizGeofenceListView {
+			items = List.copyOf(items);
+		}
+	}
+
+	public record SpecialQuizGeofenceView(UUID missionId, double latitude, double longitude) {
 	}
 
 	public record MissionListView(List<MissionItemView> items) {

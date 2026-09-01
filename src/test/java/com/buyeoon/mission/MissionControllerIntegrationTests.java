@@ -308,6 +308,68 @@ class MissionControllerIntegrationTests {
 		assertThat(itemFor(result, photoMission).get("remainingAttempts").isNull()).isTrue();
 	}
 
+	/**
+	 * 지오펜스 등록용 목록은 500m를 넘는 스페셜 퀴즈도 좌표·missionId만 담아 반환한다. 시드 마이그레이션이 부여 지역에
+	 * 예시 스페셜 퀴즈를 채워둘 수 있으므로, 전체 개수 대신 이 테스트가 만든 미션이 포함되는지만 확인한다.
+	 */
+	@Test
+	@DisplayName("오늘 노출된 스페셜 퀴즈는 500m를 넘어도 지오펜스 목록에 좌표와 함께 나온다")
+	void specialQuizzesIncludesMissionsBeyond500m() throws Exception {
+		UUID tripId = startTrip(member.memberId());
+		double farLatitude = ORIGIN_LATITUDE + 0.01;
+		UUID place = insertPlace("먼 스페셜 퀴즈 장소", farLatitude, ORIGIN_LONGITUDE);
+		UUID missionId = insertOxMission(place, "먼 스페셜 퀴즈", 100, 3, true);
+
+		MvcResult result = mockMvc.perform(specialQuizzesRequest(tripId)).andExpect(status().isOk()).andReturn();
+		JsonNode item = specialQuizItemFor(result, missionId);
+		assertThat(item.get("latitude").doubleValue()).isEqualTo(farLatitude);
+		assertThat(item.get("longitude").doubleValue()).isEqualTo(ORIGIN_LONGITUDE);
+	}
+
+	/** 최대 도전 횟수가 없는 일반 미션은 지오펜스 목록에서 빠진다. */
+	@Test
+	@DisplayName("일반 미션은 지오펜스 목록에서 빠진다")
+	void specialQuizzesExcludesRegularMissions() throws Exception {
+		UUID tripId = startTrip(member.memberId());
+		UUID place = insertPlace("일반 미션 장소", ORIGIN_LATITUDE + 0.001, ORIGIN_LONGITUDE);
+		UUID missionId = insertOxMission(place, "일반 미션", 100, null, true);
+
+		MvcResult result = mockMvc.perform(specialQuizzesRequest(tripId)).andExpect(status().isOk()).andReturn();
+		assertThat(containsSpecialQuizItem(result, missionId)).isFalse();
+	}
+
+	/** 오늘 노출 대상이 아닌 스페셜 퀴즈는 지오펜스 목록에서 빠진다. */
+	@Test
+	@DisplayName("오늘 노출 대상이 아닌 스페셜 퀴즈는 지오펜스 목록에서 빠진다")
+	void specialQuizzesExcludesUnexposedQuizzes() throws Exception {
+		when(specialQuizExposureDecider.isExposedToday(any(), any())).thenReturn(false);
+		UUID tripId = startTrip(member.memberId());
+		UUID place = insertPlace("비노출 스페셜 퀴즈 장소", ORIGIN_LATITUDE + 0.001, ORIGIN_LONGITUDE);
+		UUID missionId = insertOxMission(place, "비노출 스페셜 퀴즈", 100, 3, true);
+
+		MvcResult result = mockMvc.perform(specialQuizzesRequest(tripId)).andExpect(status().isOk()).andReturn();
+		assertThat(containsSpecialQuizItem(result, missionId)).isFalse();
+	}
+
+	/**
+	 * 이미 완료·소진한 스페셜 퀴즈는 더 알릴 필요가 없으므로, 오늘 노출 대상이어도 지오펜스 목록에서 빠진다.
+	 */
+	@Test
+	@DisplayName("이미 완료·소진한 스페셜 퀴즈는 지오펜스 목록에서 빠진다")
+	void specialQuizzesExcludesAlreadyParticipatedQuizzes() throws Exception {
+		UUID tripId = startTrip(member.memberId());
+		UUID completedPlace = insertPlace("완료 스페셜 퀴즈 장소", ORIGIN_LATITUDE + 0.001, ORIGIN_LONGITUDE);
+		UUID completedMission = insertOxMission(completedPlace, "완료 스페셜 퀴즈", 100, 3, true);
+		insertParticipation(tripId, completedMission, "COMPLETED", 1);
+		UUID exhaustedPlace = insertPlace("소진 스페셜 퀴즈 장소", ORIGIN_LATITUDE + 0.002, ORIGIN_LONGITUDE);
+		UUID exhaustedMission = insertOxMission(exhaustedPlace, "소진 스페셜 퀴즈", 100, 3, true);
+		insertParticipation(tripId, exhaustedMission, "EXHAUSTED", 3);
+
+		MvcResult result = mockMvc.perform(specialQuizzesRequest(tripId)).andExpect(status().isOk()).andReturn();
+		assertThat(containsSpecialQuizItem(result, completedMission)).isFalse();
+		assertThat(containsSpecialQuizItem(result, exhaustedMission)).isFalse();
+	}
+
 	/** 조회는 참여 행을 생성하거나 기존 DB 상태를 바꾸지 않는다. */
 	@Test
 	@DisplayName("반복 조회 전후 mission_participations를 포함한 DB 상태가 동일하다")
@@ -596,6 +658,26 @@ class MissionControllerIntegrationTests {
 		throw new AssertionError("응답에서 미션을 찾을 수 없습니다: " + missionId);
 	}
 
+	private JsonNode specialQuizItemFor(MvcResult result, UUID missionId) throws Exception {
+		JsonNode items = objectMapper.readTree(result.getResponse().getContentAsString()).get("data").get("items");
+		for (JsonNode item : items) {
+			if (item.get("missionId").stringValue().equals(missionId.toString())) {
+				return item;
+			}
+		}
+		throw new AssertionError("지오펜스 목록에서 미션을 찾을 수 없습니다: " + missionId);
+	}
+
+	private boolean containsSpecialQuizItem(MvcResult result, UUID missionId) throws Exception {
+		JsonNode items = objectMapper.readTree(result.getResponse().getContentAsString()).get("data").get("items");
+		for (JsonNode item : items) {
+			if (item.get("missionId").stringValue().equals(missionId.toString())) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	private MockHttpServletRequestBuilder nearbyRequest(UUID tripId) {
 		return get("/missions/nearby").header("Authorization", "Bearer " + member.accessToken())
 				.param("latitude", String.valueOf(ORIGIN_LATITUDE)).param("longitude", String.valueOf(ORIGIN_LONGITUDE))
@@ -605,6 +687,11 @@ class MissionControllerIntegrationTests {
 	private MockHttpServletRequestBuilder detailRequest(UUID missionId, UUID tripId) {
 		return get("/missions/{missionId}", missionId).header("Authorization", "Bearer " + member.accessToken())
 				.param("latitude", String.valueOf(ORIGIN_LATITUDE)).param("longitude", String.valueOf(ORIGIN_LONGITUDE))
+				.param("tripId", tripId.toString());
+	}
+
+	private MockHttpServletRequestBuilder specialQuizzesRequest(UUID tripId) {
+		return get("/missions/special-quizzes").header("Authorization", "Bearer " + member.accessToken())
 				.param("tripId", tripId.toString());
 	}
 
