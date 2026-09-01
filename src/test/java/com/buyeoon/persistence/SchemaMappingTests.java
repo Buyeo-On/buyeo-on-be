@@ -58,7 +58,8 @@ class SchemaMappingTests {
 		String legacyNotificationType = "CREATE TYPE notification_type AS ENUM "
 				+ "('POINT', 'BADGE', 'NEARBY_QUIZ', 'DISCOUNT', 'CITIZEN_CARD', 'BUYEO_NEWS');";
 		String currentNotificationType = "CREATE TYPE notification_type AS ENUM "
-				+ "('POINT', 'BADGE', 'NEARBY_QUIZ', 'DISCOUNT', 'CITIZEN_CARD', 'BUYEO_NEWS', 'BUYEO_ENTRY');";
+				+ "('POINT', 'BADGE', 'NEARBY_QUIZ', 'DISCOUNT', 'CITIZEN_CARD', "
+				+ "'BUYEO_NEWS', 'BUYEO_ENTRY', 'BUYEO_EXIT');";
 		String legacyMissionStatus = "CREATE TYPE mission_status AS ENUM ('LOCKED', 'AVAILABLE', 'EXHAUSTED', 'COMPLETED');";
 		String currentMissionStatus = "CREATE TYPE mission_status AS ENUM ('AVAILABLE', 'EXHAUSTED', 'COMPLETED');";
 		String placeSourceColumns = String.join("\n", "    source_name text, -- 관광데이터 제공처",

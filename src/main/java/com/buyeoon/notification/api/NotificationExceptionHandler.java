@@ -9,7 +9,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(assignableTypes = {NotificationController.class, BuyeoEntryEventController.class})
+@RestControllerAdvice(assignableTypes = {NotificationController.class, BuyeoEntryEventController.class,
+		BuyeoExitEventController.class})
 public class NotificationExceptionHandler {
 
 	@ExceptionHandler({InvalidNotificationRequestException.class, HttpMessageNotReadableException.class})

@@ -44,4 +44,17 @@ public class NotificationCreationService {
 		pushNotificationPublisher.publish(memberId, NotificationType.BUYEO_ENTRY, title, body, notification.getId(),
 				null, null);
 	}
+
+	/**
+	 * UC-28 검증을 모두 통과했을 때 {@code BUYEO_EXIT} 알림을 생성하고 즉시 FCM push도 발송한다. 제목·본문은 임시
+	 * 문구이며 별도 Design 이슈에서 확정한다.
+	 */
+	public void createBuyeoExit(UUID memberId) {
+		String title = "부여를 떠났어요!";
+		String body = "오늘의 여행을 마무리해보세요.";
+		NotificationEntity notification = notifications
+				.save(NotificationEntity.create(memberId, NotificationType.BUYEO_EXIT, title, body, null, null));
+		pushNotificationPublisher.publish(memberId, NotificationType.BUYEO_EXIT, title, body, notification.getId(),
+				null, null);
+	}
 }
