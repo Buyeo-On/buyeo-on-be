@@ -5,6 +5,7 @@ API 계약의 원본은 [`docs/raw/openapi.yaml`](../../raw/openapi.yaml)이다.
 | Operation ID | Method | Path |
 | --- | --- | --- |
 | `getNearbyMissions` | GET | `/missions/nearby` |
+| `getTodaySpecialQuizzes` | GET | `/missions/special-quizzes` |
 | `getMission` | GET | `/missions/{missionId}` |
 | `createMissionPhotoUploadUrl` | POST | `/mission-photos/presigned-url` |
 | `submitMission` | POST | `/missions/{missionId}/submissions` |

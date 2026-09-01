@@ -63,6 +63,20 @@ public interface MissionQueryRepository extends JpaRepository<MissionEntity, UUI
 	Optional<MissionPlaceDistanceProjection> findWithDistance(@Param("missionId") UUID missionId,
 			@Param("latitude") double latitude, @Param("longitude") double longitude);
 
+	/** 500m 반경 제한 없이 스페셜 퀴즈 지오펜스 등록에 필요한 미션·참여 상태만 조회한다. 거리 계산은 필요 없다. */
+	@Query("""
+			SELECT new com.buyeoon.mission.repository.SpecialQuizGeofenceProjection(m, participation)
+			FROM MissionEntity m
+			JOIN PlaceEntity p ON p.id = m.placeId
+			LEFT JOIN MissionParticipationEntity participation
+			    ON participation.missionId = m.id AND participation.tripId = :tripId
+			WHERE m.deletedAt IS NULL
+			  AND p.deletedAt IS NULL
+			  AND m.maxAttempts IS NOT NULL
+			ORDER BY m.id ASC
+			""")
+	List<SpecialQuizGeofenceProjection> findSpecialQuizzes(@Param("tripId") UUID tripId);
+
 	Page<MissionEntity> findByPlaceId(UUID placeId, Pageable pageable);
 
 	List<MissionEntity> findByPlaceIdAndDeletedAtIsNull(UUID placeId);

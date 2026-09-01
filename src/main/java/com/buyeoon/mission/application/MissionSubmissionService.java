@@ -6,6 +6,7 @@ import com.buyeoon.badge.BadgeMetric;
 import com.buyeoon.common.api.SuccessResponse;
 import com.buyeoon.common.entity.IdempotencyRequestEntity;
 import com.buyeoon.common.entity.IdempotencyRequestId;
+import com.buyeoon.common.location.ParticipationRadiusPolicy;
 import com.buyeoon.common.storage.MissionPhotoObjectStore;
 import com.buyeoon.common.storage.MissionPhotoObjectStore.MissionPhotoObject;
 import com.buyeoon.common.storage.PublicImageUrlService;
@@ -65,8 +66,6 @@ public class MissionSubmissionService {
 
 	private static final String OPERATION = "SUBMIT_MISSION";
 	private static final Duration RETENTION = Duration.ofHours(24);
-	/** 미션 참여를 허용하는 고정 반경(m). 경계를 포함하며 위치 인증 정책과 같다. */
-	private static final int PARTICIPATION_RADIUS_METERS = 30;
 	private static final Set<String> ALLOWED_PHOTO_CONTENT_TYPES = Set.of("image/jpeg", "image/png", "image/webp");
 
 	private final JdbcOperations jdbcOperations;
@@ -163,7 +162,7 @@ public class MissionSubmissionService {
 		if (participation.getStatus() != MissionStatus.AVAILABLE) {
 			throw new InvalidStateTransitionException();
 		}
-		if (detail.distanceMeters() > PARTICIPATION_RADIUS_METERS) {
+		if (detail.distanceMeters() > ParticipationRadiusPolicy.PARTICIPATION_RADIUS_METERS) {
 			throw new OutsideParticipationRadiusException();
 		}
 

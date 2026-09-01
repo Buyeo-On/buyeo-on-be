@@ -57,4 +57,17 @@ public class NotificationCreationService {
 		pushNotificationPublisher.publish(memberId, NotificationType.BUYEO_EXIT, title, body, notification.getId(),
 				null, null);
 	}
+
+	/**
+	 * 스페셜 퀴즈 근접 알림 검증을 모두 통과했을 때 {@code NEARBY_QUIZ} 알림을 생성하고 즉시 FCM push도 발송한다.
+	 * 제목·본문은 임시 문구이며 별도 Design 이슈에서 확정한다.
+	 */
+	public void createNearbyQuiz(UUID memberId, UUID missionId) {
+		String title = "근처에 스페셜 퀴즈가 있어요!";
+		String body = "지금 도전하면 특별한 보상을 받을 수 있어요.";
+		NotificationEntity notification = notifications.save(
+				NotificationEntity.create(memberId, NotificationType.NEARBY_QUIZ, title, body, "MISSION", missionId));
+		pushNotificationPublisher.publish(memberId, NotificationType.NEARBY_QUIZ, title, body, notification.getId(),
+				"MISSION", missionId);
+	}
 }
