@@ -72,15 +72,21 @@ public class CitizenCardController {
 	}
 
 	private CitizenCardCommand parseRequest(JsonNode request) {
-		if (request == null || !request.isObject()
-				|| !hasOnlyProperties(request, Set.of("displayName", "characterId", "themeId", "location"))) {
+		Set<String> fields = Set.of("displayName", "characterId", "themeId", "location");
+		if (request == null || !request.isObject() || request.size() < 3 || request.size() > 4
+				|| request.properties().stream().anyMatch(property -> !fields.contains(property.getKey()))
+				|| !request.has("displayName") || !request.has("characterId") || !request.has("themeId")) {
 			throw new InvalidCitizenCardRequestException();
 		}
 		String displayName = normalizedDisplayName(request.get("displayName"));
 		UUID characterId = uuid(request.get("characterId"));
 		UUID themeId = uuid(request.get("themeId"));
-		LocationCommand location = location(request.get("location"));
-		return new CitizenCardCommand(displayName, characterId, themeId, location);
+		// 이전 앱 빌드와의 순차 배포 호환을 위해 location 필드는 잠시 허용하되,
+		// 군민증 발급 조건이나 저장 데이터로는 사용하지 않는다.
+		if (request.has("location")) {
+			location(request.get("location"));
+		}
+		return new CitizenCardCommand(displayName, characterId, themeId);
 	}
 
 	public record LocationVerificationView(boolean withinBuyeo) {

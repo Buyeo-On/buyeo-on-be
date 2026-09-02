@@ -2,7 +2,7 @@
 id: UC-07
 title: 가볼 곳 탐색
 owner: place
-participants: [trip]
+participants: []
 policies: [authorization]
 api: ["GET /places", "GET /places/{placeId}"]
 adrs: [ADR-002, ADR-015]
@@ -18,7 +18,7 @@ adrs: [ADR-002, ADR-015]
 
 - 사용자가 로그인 상태다.
 - 사용자가 필수 약관에 동의한 상태다.
-- 진행 중인 여행 세션이 존재한다.
+- 진행 중인 여행 여부와 관계없이 이용할 수 있다.
 
 ## 기본 흐름
 

@@ -44,7 +44,7 @@ iOS Flutter
 - 고아 사진 삭제와 포인트 만료 같은 내부 정기 작업은 멱등한 Spring Scheduler 작업으로 실행한다.
 - 관광공사(TourAPI) 데이터는 사용자 요청 전에 내부 DB로 동기화한다. 관리자 전용 API가 부여 지역 목록(`areaBasedList2`)과 항목별 상세(`detailCommon2`, `detailIntro2`, `detailInfo2`)를 호출해 `places`를 `external_id` 기준으로 upsert하며, 항목 단위 실패는 건너뛰고 계속 진행한다. 대표이미지는 `cpyrhtDivCd` 이용허락 유형도 함께 저장한다. 자세한 내용은 [ADR-013](./adr/adr-013-tourapi-place-sync.md), [ADR-015](./adr/adr-015-tourapi-image-attribution.md)를 참고한다.
 - 지도 렌더링·마커·현재 위치는 Flutter의 Kakao Map SDK가 담당한다. 서버용 지오코딩이 필요할 때만 Spring이 Kakao REST API를 호출한다.
-- 부여 행정구역은 국토교통부 법정구역정보의 시군구(`SIG`) 전체 데이터에서 부여군 코드 `44760`을 추출한 버전 관리 GeoJSON과 출처·추출일·SHA-256 메타데이터로 고정하고, 군민증 생성과 여행 시작 위치를 서버에서 point-in-polygon 방식으로 검증한다.
+- 부여 행정구역은 국토교통부 법정구역정보의 시군구(`SIG`) 전체 데이터에서 부여군 코드 `44760`을 추출한 버전 관리 GeoJSON과 출처·추출일·SHA-256 메타데이터로 고정하고, 여행 시작 위치를 서버에서 point-in-polygon 방식으로 검증한다.
 - Redis, 별도 비동기 워커와 API Gateway·Lambda 기반 배지 판정은 보류한다.
 ## 인증
 - 소셜 인증은 회원 도메인의 제공자 검증 인터페이스 뒤에서 카카오와 Apple 외부 어댑터로 구현한다. 자동 테스트는 제어 가능한 가짜 어댑터를 사용한다.

@@ -84,16 +84,16 @@ class CitizenCardCreationIntegrationTests {
 		jdbcTemplate.update("DELETE FROM card_themes");
 	}
 
-	/** 현재 필수 약관에 동의한 회원은 부여 내부에서 프로필과 군민증을 같은 시각에 한 번 생성한다. */
+	/** 현재 필수 약관에 동의한 회원은 위치 정보 없이 프로필과 군민증을 같은 시각에 한 번 생성한다. */
 	@Test
-	@DisplayName("부여 내부의 유효한 요청은 군민증을 원자적으로 생성한다")
+	@DisplayName("위치 없는 유효한 요청은 군민증을 원자적으로 생성한다")
 	void validRequestCreatesCitizenCardAtomically() throws Exception {
 		AuthenticatedMember member = insertAuthenticatedMember();
 		agreeToCurrentRequiredTerms(member.memberId());
 		Catalog catalog = insertCatalog();
 
 		MvcResult result = performCreate(member, "create-card-key-01",
-				request(" 부여인 ", catalog.characterId(), catalog.themeId(), 36.27, 126.91))
+				requestWithoutLocation(" 부여인 ", catalog.characterId(), catalog.themeId()))
 				.andExpect(status().isCreated()).andExpect(jsonPath("$.success").value(true))
 				.andExpect(jsonPath("$.data.displayName").value("부여인"))
 				.andExpect(jsonPath("$.data.character.id").value(catalog.characterId().toString()))
@@ -123,23 +123,16 @@ class CitizenCardCreationIntegrationTests {
 				""", Boolean.class)).isTrue();
 	}
 
-	/** 위치 경계는 내부로 포함하고 경계 밖 위치는 상태를 만들지 않은 채 거부한다. */
+	/** 구버전 앱이 위치를 보내더라도 발급 지역을 제한하지 않는다. */
 	@Test
-	@DisplayName("부여 경계는 허용하고 외부 위치는 거부한다")
-	void boundaryIsIncludedAndOutsideIsRejected() throws Exception {
+	@DisplayName("부여 밖에서도 군민증을 발급한다")
+	void outsideLocationDoesNotBlockCreation() throws Exception {
 		AuthenticatedMember outsideMember = insertAuthenticatedMember();
 		agreeToCurrentRequiredTerms(outsideMember.memberId());
 		Catalog catalog = insertCatalog();
 
 		performCreate(outsideMember, "outside-card-key",
-				request("외부인", catalog.characterId(), catalog.themeId(), 36.5, 127.2)).andExpect(status().isForbidden())
-				.andExpect(jsonPath("$.data.code").value("OUTSIDE_BUYEO"));
-		assertCreationStateIsEmpty(outsideMember.memberId());
-
-		AuthenticatedMember boundaryMember = insertAuthenticatedMember();
-		agreeExistingRequiredTerms(boundaryMember.memberId());
-		performCreate(boundaryMember, "boundary-card-key",
-				request("경계인", catalog.characterId(), catalog.themeId(), 36.2, 126.8)).andExpect(status().isCreated());
+				request("외부인", catalog.characterId(), catalog.themeId(), 36.5, 127.2)).andExpect(status().isCreated());
 	}
 
 	@Test
@@ -424,6 +417,11 @@ class CitizenCardCreationIntegrationTests {
 		return "{\"displayName\":\"" + displayName + "\",\"characterId\":\"" + characterId + "\",\"themeId\":\""
 				+ themeId + "\",\"location\":{\"latitude\":" + latitude + ",\"longitude\":" + longitude
 				+ ",\"accuracyMeters\":5.5,\"capturedAt\":\"2026-08-12T15:30:00+09:00\"}}";
+	}
+
+	private String requestWithoutLocation(String displayName, UUID characterId, UUID themeId) {
+		return "{\"displayName\":\"" + displayName + "\",\"characterId\":\"" + characterId + "\",\"themeId\":\""
+				+ themeId + "\"}";
 	}
 
 	private String locationRequest(double latitude, double longitude) {
