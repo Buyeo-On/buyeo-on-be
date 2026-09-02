@@ -176,14 +176,13 @@ class PlaceControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.items[*].placeId").value(hasItem(third.toString())));
 	}
 
-	/** 장소 탐색은 진행 중인 여행이 있는 회원만 이용할 수 있다. */
+	/** 여행을 시작하지 않아도 가볼 곳을 둘러볼 수 있다. */
 	@Test
-	@DisplayName("진행 중인 여행이 없으면 403을 받는다")
-	void returns403WhenMemberHasNoActiveTrip() throws Exception {
+	@DisplayName("진행 중인 여행이 없어도 장소 목록을 받는다")
+	void returnsPlacesWhenMemberHasNoActiveTrip() throws Exception {
 		mockMvc.perform(placeRequest().param("latitude", String.valueOf(ORIGIN_LATITUDE)).param("longitude",
-				String.valueOf(ORIGIN_LONGITUDE))).andExpect(status().isForbidden())
-				.andExpect(jsonPath("$.success").value(false))
-				.andExpect(jsonPath("$.data.code").value("ACTIVE_TRIP_REQUIRED"));
+				String.valueOf(ORIGIN_LONGITUDE))).andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true));
 	}
 
 	/** 인증되지 않은 요청은 장소 목록을 볼 수 없다. */
@@ -366,14 +365,15 @@ class PlaceControllerIntegrationTests {
 		assertSavedPlaceCount(member.memberId(), placeId, 1);
 	}
 
-	/** 진행 중인 여행이 없는 회원이 저장을 요청하면 403을 반환한다. */
+	/** 여행을 시작하지 않아도 장소를 저장할 수 있다. */
 	@Test
-	@DisplayName("진행 중인 여행이 없으면 저장 요청은 403을 받는다")
-	void returns403WhenSavingWithoutActiveTrip() throws Exception {
+	@DisplayName("진행 중인 여행이 없어도 장소를 저장한다")
+	void savesPlaceWithoutActiveTrip() throws Exception {
 		UUID placeId = savePlace(PlaceCategory.HERITAGE, "장소", ORIGIN_LATITUDE, ORIGIN_LONGITUDE);
 
-		mockMvc.perform(savePlaceRequest(placeId)).andExpect(status().isForbidden())
-				.andExpect(jsonPath("$.data.code").value("ACTIVE_TRIP_REQUIRED"));
+		mockMvc.perform(savePlaceRequest(placeId)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true));
+		assertSavedPlaceCount(member.memberId(), placeId, 1);
 	}
 
 	/** 존재하지 않는 placeId로 저장을 요청하면 404를 반환한다. */
@@ -609,15 +609,15 @@ class PlaceControllerIntegrationTests {
 				.andExpect(jsonPath("$.data.saved").value(true));
 	}
 
-	/** 장소 탐색은 진행 중인 여행이 있는 회원만 이용할 수 있다. */
+	/** 여행을 시작하지 않아도 장소 상세를 볼 수 있다. */
 	@Test
-	@DisplayName("장소 상세 조회는 진행 중인 여행이 없으면 403을 받는다")
-	void returns403ForPlaceDetailWhenMemberHasNoActiveTrip() throws Exception {
+	@DisplayName("장소 상세 조회는 진행 중인 여행이 없어도 성공한다")
+	void returnsPlaceDetailWhenMemberHasNoActiveTrip() throws Exception {
 		UUID placeId = savePlace(PlaceCategory.HERITAGE, "장소", ORIGIN_LATITUDE + 0.001, ORIGIN_LONGITUDE + 0.001);
 
 		mockMvc.perform(placeDetailRequest(placeId).param("latitude", String.valueOf(ORIGIN_LATITUDE))
-				.param("longitude", String.valueOf(ORIGIN_LONGITUDE))).andExpect(status().isForbidden())
-				.andExpect(jsonPath("$.data.code").value("ACTIVE_TRIP_REQUIRED"));
+				.param("longitude", String.valueOf(ORIGIN_LONGITUDE))).andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true));
 	}
 
 	/** 인증되지 않은 요청은 장소 상세를 볼 수 없다. */

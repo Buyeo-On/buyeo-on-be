@@ -39,18 +39,16 @@ public final class CitizenCardCreationService implements CitizenCardCreator {
 
 	private final JdbcOperations jdbcOperations;
 	private final TransactionTemplate transactions;
-	private final CitizenCardLocationVerifier locationVerifier;
 	private final PublicImageUrlService imageUrls;
 	private final NotificationCreationService notificationCreationService;
 	private final ObjectReader objectReader;
 	private final ObjectWriter objectWriter;
 
 	public CitizenCardCreationService(JdbcOperations jdbcOperations, PlatformTransactionManager transactionManager,
-			CitizenCardLocationVerifier locationVerifier, PublicImageUrlService imageUrls,
-			NotificationCreationService notificationCreationService, ObjectMapper objectMapper) {
+			PublicImageUrlService imageUrls, NotificationCreationService notificationCreationService,
+			ObjectMapper objectMapper) {
 		this.jdbcOperations = jdbcOperations;
 		this.transactions = new TransactionTemplate(transactionManager);
-		this.locationVerifier = locationVerifier;
 		this.imageUrls = imageUrls;
 		this.notificationCreationService = notificationCreationService;
 		this.objectReader = objectMapper.reader();
@@ -60,7 +58,6 @@ public final class CitizenCardCreationService implements CitizenCardCreator {
 	@Override
 	public CitizenCardView create(UUID memberId, String idempotencyKey, CitizenCardCommand command) {
 		validateIdempotencyKey(idempotencyKey);
-		locationVerifier.verify(command.location());
 		String requestHash = hash(command);
 		return Objects.requireNonNull(
 				transactions.execute(status -> createInTransaction(memberId, idempotencyKey, requestHash, command)),
@@ -216,13 +213,6 @@ public final class CitizenCardCreationService implements CitizenCardCreator {
 			update(digest, command.displayName());
 			update(digest, command.characterId().toString());
 			update(digest, command.themeId().toString());
-			update(digest, Double.toHexString(command.location().latitude()));
-			update(digest, Double.toHexString(command.location().longitude()));
-			update(digest,
-					command.location().accuracyMeters() == null
-							? "null"
-							: Double.toHexString(command.location().accuracyMeters()));
-			update(digest, command.location().capturedAt().toInstant().toString());
 			return HexFormat.of().formatHex(digest.digest());
 		} catch (NoSuchAlgorithmException exception) {
 			throw new IllegalStateException("SHA-256을 사용할 수 없습니다.", exception);
@@ -275,7 +265,7 @@ public final class CitizenCardCreationService implements CitizenCardCreator {
 		return value.stringValue();
 	}
 
-	public record CitizenCardCommand(String displayName, UUID characterId, UUID themeId, LocationCommand location) {
+	public record CitizenCardCommand(String displayName, UUID characterId, UUID themeId) {
 	}
 
 	public record LocationCommand(double latitude, double longitude, Double accuracyMeters, OffsetDateTime capturedAt) {

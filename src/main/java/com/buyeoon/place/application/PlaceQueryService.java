@@ -8,7 +8,6 @@ import com.buyeoon.place.repository.PlaceProjection;
 import com.buyeoon.place.repository.PlaceQueryRepository;
 import com.buyeoon.place.repository.SavedPlaceProjection;
 import com.buyeoon.place.repository.SavedPlaceRepository;
-import com.buyeoon.trip.TripQueryService;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.time.LocalTime;
 import java.util.Map;
@@ -31,24 +30,18 @@ public class PlaceQueryService {
 
 	private final PlaceQueryRepository placeQueryRepository;
 	private final SavedPlaceRepository savedPlaceRepository;
-	private final TripQueryService tripQueryService;
 	private final PublicImageUrlService imageUrls;
 
 	@SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring 싱글턴 빈을 그대로 주입받아 저장한다.")
 	public PlaceQueryService(PlaceQueryRepository placeQueryRepository, SavedPlaceRepository savedPlaceRepository,
-			TripQueryService tripQueryService, PublicImageUrlService imageUrls) {
+			PublicImageUrlService imageUrls) {
 		this.placeQueryRepository = placeQueryRepository;
 		this.savedPlaceRepository = savedPlaceRepository;
-		this.tripQueryService = tripQueryService;
 		this.imageUrls = imageUrls;
 	}
 
 	public PlaceListView list(UUID memberId, PlaceCategory category, double latitude, double longitude,
 			PlaceCursor cursor, int size) {
-		if (!tripQueryService.hasActiveTrip(memberId)) {
-			throw new ActiveTripRequiredException();
-		}
-
 		List<PlaceProjection> rows = findRows(category, latitude, longitude, cursor, size);
 		boolean hasNext = rows.size() > size;
 		List<PlaceProjection> page = hasNext ? rows.subList(0, size) : rows;
@@ -73,10 +66,6 @@ public class PlaceQueryService {
 	}
 
 	public PlaceItemView get(UUID memberId, UUID placeId, double latitude, double longitude) {
-		if (!tripQueryService.hasActiveTrip(memberId)) {
-			throw new ActiveTripRequiredException();
-		}
-
 		PlaceProjection row = placeQueryRepository.findByIdWithDistance(placeId, latitude, longitude)
 				.orElseThrow(PlaceNotFoundException::new);
 		boolean saved = savedPlaceRepository.existsByMemberIdAndPlaceId(memberId, placeId);

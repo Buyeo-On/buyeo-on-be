@@ -2184,7 +2184,7 @@ components:
     CitizenCardCreateRequest:
       type: object
       additionalProperties: false
-      required: [displayName, characterId, themeId, location]
+      required: [displayName, characterId, themeId]
       properties:
         displayName:
           type: string
@@ -2197,8 +2197,6 @@ components:
         themeId:
           type: string
           format: uuid
-        location:
-          $ref: '#/components/schemas/Location'
     CitizenCard:
       type: object
       required: [cardId, displayName, character, theme, issuedAt]
