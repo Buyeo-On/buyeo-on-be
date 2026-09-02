@@ -39,6 +39,7 @@
 
 - [UC-16 포인트 적립 내역 조회](./domains/point/use-cases/uc-16-view-point-transactions.md)
 - [UC-24 여행 포인트 정산](./domains/point/use-cases/uc-24-settle-trip-points.md)
+- [UC-29 누적 포인트 랭킹 조회](./domains/point/use-cases/uc-29-view-point-ranking.md)
 
 ## 배지
 
