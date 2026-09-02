@@ -6,5 +6,6 @@ API 계약의 원본은 [`docs/raw/openapi.yaml`](../../raw/openapi.yaml)이다.
 | --- | --- | --- |
 | `getMyPointBalance` | GET | `/members/me/points` |
 | `getMyPointTransactions` | GET | `/members/me/point-transactions` |
+| `getPointRanking` | GET | `/point-rankings` |
 | `getTripPointSettlementPreview` | GET | `/trips/{tripId}/settlement-preview` |
 | `settleTripPoints` | PUT | `/trips/{tripId}/settlement` |

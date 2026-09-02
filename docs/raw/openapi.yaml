@@ -726,6 +726,21 @@ paths:
           $ref: '#/components/responses/PointTransactionListSuccess'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /point-rankings:
+    get:
+      tags: [Points]
+      summary: 누적 포인트 랭킹 조회
+      operationId: getPointRanking
+      description: 누적 적립 내림차순으로 20명씩 반환한다. 공동 순위는 페이지 경계에서 나뉠 수 있다.
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          $ref: '#/components/responses/PointRankingSuccess'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /members/me/badges:
     get:
       tags: [Badges]
@@ -1537,6 +1552,31 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/PointTransactionListEnvelope'
+    PointRankingSuccess:
+      description: 누적 포인트 랭킹
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PointRankingEnvelope'
+          example:
+            success: true
+            data:
+              items:
+                - rank: 1
+                  displayName: 사비
+                  characterImageUrl: https://buyeoon-images.s3.ap-northeast-2.amazonaws.com/public/characters/example.png?X-Amz-Expires=600
+                  cumulativeEarned: 1200
+                  isMe: false
+              myRanking:
+                eligible: true
+                rank: 37
+                displayName: 금동이
+                characterImageUrl: https://buyeoon-images.s3.ap-northeast-2.amazonaws.com/public/characters/example.png?X-Amz-Expires=600
+                cumulativeEarned: 420
+              totalParticipants: 137
+              page:
+                nextCursor: MzAwXzU1MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDAwMA
+                hasNext: true
     BadgeListSuccess:
       description: 배지 목록
       content:
@@ -2756,6 +2796,52 @@ components:
         occurredAt:
           type: string
           format: date-time
+    PointRankingItem:
+      type: object
+      required: [rank, displayName, characterImageUrl, cumulativeEarned, isMe]
+      properties:
+        rank:
+          type: integer
+          format: int64
+          minimum: 1
+          description: 공동 순위를 허용하며 다음 순위는 앞선 참여자 수만큼 건너뛴다.
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 8
+        characterImageUrl:
+          type: string
+          format: uri
+          description: 현재 캐릭터 이미지의 10분 유효 S3 Presigned GET URL이다.
+        cumulativeEarned:
+          type: integer
+          format: int64
+          minimum: 1
+          description: EARN 유형 포인트 내역의 누적 합계다.
+        isMe:
+          type: boolean
+    MyPointRanking:
+      type: object
+      required: [eligible, rank, displayName, characterImageUrl, cumulativeEarned]
+      properties:
+        eligible:
+          type: boolean
+        rank:
+          type: [integer, 'null']
+          format: int64
+          minimum: 1
+        displayName:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 8
+        characterImageUrl:
+          type: [string, 'null']
+          format: uri
+          description: 참여 중이면 현재 캐릭터 이미지의 10분 유효 S3 Presigned GET URL이고 참여 자격이 없으면 null이다.
+        cumulativeEarned:
+          type: integer
+          format: int64
+          minimum: 0
     BadgeCategory:
       type: string
       enum: [EXPLORATION, QUIZ, RECORD, ASSET, SPECIAL]
@@ -3205,6 +3291,30 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/PointTransactionListData'
+    PointRankingData:
+      type: object
+      required: [items, myRanking, totalParticipants, page]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/PointRankingItem'
+        myRanking:
+          $ref: '#/components/schemas/MyPointRanking'
+        totalParticipants:
+          type: integer
+          format: int64
+          minimum: 0
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    PointRankingEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/PointRankingData'
     BadgeListData:
       type: object
       required: [earnedCount, totalCount, items]
