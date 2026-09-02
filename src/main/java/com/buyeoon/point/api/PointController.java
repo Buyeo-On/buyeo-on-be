@@ -5,6 +5,9 @@ import com.buyeoon.point.application.PointSettlementPreviewService;
 import com.buyeoon.point.application.PointSettlementPreviewService.PointSettlementPreviewView;
 import com.buyeoon.point.application.PointSettlementService;
 import com.buyeoon.point.application.PointSettlementService.TripSettlementView;
+import com.buyeoon.point.application.PointRankingCursor;
+import com.buyeoon.point.application.PointRankingQueryService;
+import com.buyeoon.point.application.PointRankingQueryService.PointRankingListView;
 import com.buyeoon.point.application.PointSummaryService;
 import com.buyeoon.point.application.PointSummaryService.PointSummaryView;
 import com.buyeoon.point.application.PointTransactionCursor;
@@ -25,7 +28,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.JsonNode;
 
-/** 로그인 회원의 포인트 잔액 요약, 내역, 여행 정산 미리보기 조회와 여행 포인트 정산 확정을 담당하는 컨트롤러다. */
+/** 로그인 회원의 포인트 잔액·내역·랭킹·정산 미리보기 조회와 여행 포인트 정산 확정을 담당하는 컨트롤러다. */
 @RestController
 public class PointController {
 
@@ -35,16 +38,19 @@ public class PointController {
 
 	private final PointSummaryService pointSummaryService;
 	private final PointTransactionQueryService pointTransactionQueryService;
+	private final PointRankingQueryService pointRankingQueryService;
 	private final PointSettlementPreviewService pointSettlementPreviewService;
 	private final PointSettlementService pointSettlementService;
 
 	@SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring 싱글턴 빈을 그대로 주입받아 저장한다.")
 	public PointController(PointSummaryService pointSummaryService,
 			PointTransactionQueryService pointTransactionQueryService,
+			PointRankingQueryService pointRankingQueryService,
 			PointSettlementPreviewService pointSettlementPreviewService,
 			PointSettlementService pointSettlementService) {
 		this.pointSummaryService = pointSummaryService;
 		this.pointTransactionQueryService = pointTransactionQueryService;
+		this.pointRankingQueryService = pointRankingQueryService;
 		this.pointSettlementPreviewService = pointSettlementPreviewService;
 		this.pointSettlementService = pointSettlementService;
 	}
@@ -60,6 +66,14 @@ public class PointController {
 			@RequestParam(required = false) String cursor, @RequestParam(required = false) String size) {
 		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
 		return SuccessResponse.of(pointTransactionQueryService.list(memberId, parseCursor(cursor), parseSize(size)));
+	}
+
+	/** 로그인 회원에게 누적 적립 랭킹 한 페이지와 자신의 전체 순위를 반환한다. */
+	@GetMapping("/point-rankings")
+	public SuccessResponse<PointRankingListView> getPointRanking(@AuthenticationPrincipal Jwt jwt,
+			@RequestParam(required = false) String cursor) {
+		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
+		return SuccessResponse.of(pointRankingQueryService.list(memberId, parseRankingCursor(cursor)));
 	}
 
 	@GetMapping("/trips/{tripId}/settlement-preview")
@@ -109,6 +123,18 @@ public class PointController {
 		}
 		try {
 			return PointTransactionCursor.decode(cursor);
+		} catch (IllegalArgumentException exception) {
+			throw new InvalidPointRequestException();
+		}
+	}
+
+	/** 랭킹 커서가 없으면 첫 페이지를, 형식이 잘못되면 공통 400 오류를 선택한다. */
+	private PointRankingCursor parseRankingCursor(String cursor) {
+		if (cursor == null) {
+			return null;
+		}
+		try {
+			return PointRankingCursor.decode(cursor);
 		} catch (IllegalArgumentException exception) {
 			throw new InvalidPointRequestException();
 		}
