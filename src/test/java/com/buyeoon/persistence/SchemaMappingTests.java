@@ -105,7 +105,8 @@ class SchemaMappingTests {
 		String legacyMemberLifecycle = String.join("\n", "    purge_after timestamptz, -- 개인정보 파기 기한", "    CHECK (",
 				"        (status = 'ACTIVE' AND withdrawn_at IS NULL AND purge_after IS NULL)",
 				"        OR (status = 'WITHDRAWN' AND withdrawn_at IS NOT NULL AND purge_after IS NOT NULL)", "    )");
-		String currentMemberLifecycle = String.join("\n", "    purge_after timestamptz, -- 개인정보 파기 기한",
+		String currentMemberLifecycle = String.join("\n",
+				"    purge_after timestamptz, -- 개인정보 파기 대상 시각(탈퇴 확정 시각과 동일, 보관 유예 없음)",
 				"    purged_at timestamptz, -- 이전 파기 완료 이력 호환용(현재 정책은 파기 완료 시 회원 행 삭제)", "    CHECK (",
 				"        (status = 'ACTIVE' AND withdrawn_at IS NULL AND purge_after IS NULL AND purged_at IS NULL)",
 				"        OR (", "            status = 'WITHDRAWN'", "            AND withdrawn_at IS NOT NULL",

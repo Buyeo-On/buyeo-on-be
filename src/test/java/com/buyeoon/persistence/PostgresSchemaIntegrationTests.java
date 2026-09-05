@@ -59,6 +59,58 @@ class PostgresSchemaIntegrationTests {
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
+	@Test
+	@DisplayName("V39는 기존 탈퇴 유예만 제거하고 사진 파기 전에 회원 행을 삭제하지 않는다")
+	void withdrawalRetentionMigrationMakesExistingWithdrawalsDue() throws Exception {
+		String schema = "withdrawal_upgrade_" + UUID.randomUUID().toString().replace("-", "");
+		String url = POSTGIS.getJdbcUrl();
+		String username = POSTGIS.getUsername();
+		String password = POSTGIS.getPassword();
+		Flyway flyway = Flyway.configure().dataSource(url, username, password).schemas(schema).defaultSchema(schema)
+				.target(MigrationVersion.fromVersion("38")).cleanDisabled(false).load();
+		try {
+			flyway.migrate();
+			try (Connection connection = DriverManager.getConnection(url, username, password);
+					Statement statement = connection.createStatement()) {
+				connection.setSchema(schema);
+				statement.executeUpdate("""
+						INSERT INTO members (status) VALUES ('ACTIVE');
+						INSERT INTO members (status, withdrawn_at, purge_after) VALUES
+						('WITHDRAWN', CURRENT_TIMESTAMP - INTERVAL '1 hour',
+						 CURRENT_TIMESTAMP + INTERVAL '30 days'),
+						('WITHDRAWN', CURRENT_TIMESTAMP - INTERVAL '40 days',
+						 CURRENT_TIMESTAMP - INTERVAL '10 days');
+						INSERT INTO member_settings (member_id) SELECT id FROM members;
+						""");
+			}
+
+			Flyway.configure().dataSource(url, username, password).schemas(schema).defaultSchema(schema)
+					.target(MigrationVersion.fromVersion("39")).load().migrate();
+
+			try (Connection connection = DriverManager.getConnection(url, username, password);
+					Statement statement = connection.createStatement()) {
+				connection.setSchema(schema);
+				try (ResultSet result = statement.executeQuery("""
+						SELECT count(*) AS total,
+						       count(*) FILTER (WHERE status = 'WITHDRAWN' AND purge_after = withdrawn_at
+						                        AND purge_after <= CURRENT_TIMESTAMP) AS due,
+						       count(*) FILTER (WHERE status = 'ACTIVE' AND purge_after IS NULL
+						                        AND withdrawn_at IS NULL) AS active,
+						       (SELECT count(*) FROM member_settings) AS settings
+						FROM members
+						""")) {
+					assertThat(result.next()).isTrue();
+					assertThat(result.getInt("total")).isEqualTo(3);
+					assertThat(result.getInt("due")).isEqualTo(2);
+					assertThat(result.getInt("active")).isEqualTo(1);
+					assertThat(result.getInt("settings")).isEqualTo(3);
+				}
+			}
+		} finally {
+			flyway.clean();
+		}
+	}
+
 	/** V16 초안 4종과 참여 거리 30m LOCATION 후속 버전이 시딩되는지 검증한다. */
 	@Test
 	@DisplayName("개발 검증용 약관은 초안 버전과 LOCATION 30m 후속 버전으로 시딩된다")
