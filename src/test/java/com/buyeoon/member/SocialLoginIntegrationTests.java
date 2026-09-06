@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.buyeoon.member.application.WithdrawnMemberDataPurgeService;
 import com.buyeoon.member.auth.social.AppleSocialCredential;
+import com.buyeoon.member.auth.social.KakaoAuthorizationUnlinker;
 import com.buyeoon.member.auth.social.KakaoSocialCredential;
 import com.buyeoon.member.auth.social.SocialAuthenticationFailedException;
 import com.buyeoon.member.auth.social.SocialCredentialVerifier;
@@ -89,6 +90,9 @@ class SocialLoginIntegrationTests {
 
 	@MockitoBean(name = "appleSocialCredentialVerifier")
 	private SocialCredentialVerifier appleVerifier;
+
+	@MockitoBean
+	private KakaoAuthorizationUnlinker kakaoAuthorizationUnlinker;
 
 	@BeforeEach
 	void setUpVerifiers() {
@@ -278,8 +282,9 @@ class SocialLoginIntegrationTests {
 		UUID withdrawnMemberId = UUID.fromString(JsonPath.read(firstResponse, "$.data.member.memberId"));
 		String accessToken = JsonPath.read(firstResponse, "$.data.accessToken");
 
-		mockMvc.perform(delete("/members/me").header("Authorization", "Bearer " + accessToken))
-				.andExpect(status().isOk());
+		mockMvc.perform(delete("/members/me").header("Authorization", "Bearer " + accessToken)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"provider\":\"KAKAO\",\"accessToken\":\"kakao-rejoin\"}")).andExpect(status().isOk());
 		assertThat(jdbcTemplate.queryForObject("SELECT status::text FROM members WHERE id = ?", String.class,
 				withdrawnMemberId)).isEqualTo("WITHDRAWN");
 		assertThat(count("social_accounts")).isZero();
