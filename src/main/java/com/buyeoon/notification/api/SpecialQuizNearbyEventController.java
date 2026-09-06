@@ -1,6 +1,8 @@
 package com.buyeoon.notification.api;
 
 import com.buyeoon.common.api.SuccessResponse;
+import com.buyeoon.location.LocationUsagePurpose;
+import com.buyeoon.location.LocationUsageRecorder;
 import com.buyeoon.notification.application.SpecialQuizNearbyEventService;
 import com.buyeoon.notification.application.SpecialQuizNearbyEventService.LocationCommand;
 import com.buyeoon.notification.application.SpecialQuizNearbyEventService.SpecialQuizNearbyEventCommand;
@@ -23,9 +25,12 @@ import tools.jackson.databind.JsonNode;
 public class SpecialQuizNearbyEventController {
 
 	private final SpecialQuizNearbyEventService specialQuizNearbyEventService;
+	private final LocationUsageRecorder locationUsageRecorder;
 
-	public SpecialQuizNearbyEventController(SpecialQuizNearbyEventService specialQuizNearbyEventService) {
+	public SpecialQuizNearbyEventController(SpecialQuizNearbyEventService specialQuizNearbyEventService,
+			LocationUsageRecorder locationUsageRecorder) {
 		this.specialQuizNearbyEventService = specialQuizNearbyEventService;
+		this.locationUsageRecorder = locationUsageRecorder;
 	}
 
 	@PostMapping("/notifications/missions/{missionId}/nearby-events")
@@ -34,8 +39,9 @@ public class SpecialQuizNearbyEventController {
 			@RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
 			@RequestBody JsonNode request) {
 		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
-		return SuccessResponse.of(
-				specialQuizNearbyEventService.notify(memberId, missionId, idempotencyKey, parseRequest(request)));
+		SpecialQuizNearbyEventCommand command = parseRequest(request);
+		locationUsageRecorder.record(memberId, LocationUsagePurpose.SPECIAL_QUIZ_NEARBY_NOTIFICATION);
+		return SuccessResponse.of(specialQuizNearbyEventService.notify(memberId, missionId, idempotencyKey, command));
 	}
 
 	private SpecialQuizNearbyEventCommand parseRequest(JsonNode request) {

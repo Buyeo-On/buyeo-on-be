@@ -1,6 +1,8 @@
 package com.buyeoon.place.api;
 
 import com.buyeoon.common.api.SuccessResponse;
+import com.buyeoon.location.LocationUsagePurpose;
+import com.buyeoon.location.LocationUsageRecorder;
 import com.buyeoon.place.application.PlaceCommandService;
 import com.buyeoon.place.application.PlaceCursor;
 import com.buyeoon.place.application.PlaceQueryService;
@@ -29,11 +31,14 @@ public class PlaceController {
 
 	private final PlaceQueryService placeQueryService;
 	private final PlaceCommandService placeCommandService;
+	private final LocationUsageRecorder locationUsageRecorder;
 
 	@SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring 싱글턴 빈을 그대로 주입받아 저장한다.")
-	public PlaceController(PlaceQueryService placeQueryService, PlaceCommandService placeCommandService) {
+	public PlaceController(PlaceQueryService placeQueryService, PlaceCommandService placeCommandService,
+			LocationUsageRecorder locationUsageRecorder) {
 		this.placeQueryService = placeQueryService;
 		this.placeCommandService = placeCommandService;
+		this.locationUsageRecorder = locationUsageRecorder;
 	}
 
 	@PutMapping("/members/me/saved-places/{placeId}")
@@ -61,8 +66,11 @@ public class PlaceController {
 		if (size < MIN_SIZE || size > MAX_SIZE) {
 			throw new InvalidPlaceRequestException();
 		}
-		return SuccessResponse.of(placeQueryService.list(memberId, parseCategory(category), latitude(latitude),
-				longitude(longitude), parseCursor(cursor), size));
+		double parsedLatitude = latitude(latitude);
+		double parsedLongitude = longitude(longitude);
+		locationUsageRecorder.record(memberId, LocationUsagePurpose.PLACE_DISTANCE);
+		return SuccessResponse.of(placeQueryService.list(memberId, parseCategory(category), parsedLatitude,
+				parsedLongitude, parseCursor(cursor), size));
 	}
 
 	@GetMapping("/members/me/saved-places")
@@ -79,6 +87,9 @@ public class PlaceController {
 		}
 		Double parsedLatitude = latitude == null ? null : latitude(latitude);
 		Double parsedLongitude = longitude == null ? null : longitude(longitude);
+		if (parsedLatitude != null) {
+			locationUsageRecorder.record(memberId, LocationUsagePurpose.SAVED_PLACE_DISTANCE);
+		}
 		return SuccessResponse.of(placeQueryService.listSaved(memberId, parseCategory(category), parsedLatitude,
 				parsedLongitude, parseSavedPlaceCursor(cursor), size));
 	}
@@ -87,7 +98,10 @@ public class PlaceController {
 	public SuccessResponse<PlaceItemView> getPlace(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID placeId,
 			@RequestParam String latitude, @RequestParam String longitude) {
 		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
-		return SuccessResponse.of(placeQueryService.get(memberId, placeId, latitude(latitude), longitude(longitude)));
+		double parsedLatitude = latitude(latitude);
+		double parsedLongitude = longitude(longitude);
+		locationUsageRecorder.record(memberId, LocationUsagePurpose.PLACE_DISTANCE);
+		return SuccessResponse.of(placeQueryService.get(memberId, placeId, parsedLatitude, parsedLongitude));
 	}
 
 	private PlaceCategory parseCategory(String category) {

@@ -1,6 +1,8 @@
 package com.buyeoon.notification.api;
 
 import com.buyeoon.common.api.SuccessResponse;
+import com.buyeoon.location.LocationUsagePurpose;
+import com.buyeoon.location.LocationUsageRecorder;
 import com.buyeoon.notification.application.BuyeoExitEventService;
 import com.buyeoon.notification.application.BuyeoExitEventService.BuyeoExitEventCommand;
 import com.buyeoon.notification.application.BuyeoExitEventService.BuyeoExitEventView;
@@ -23,10 +25,13 @@ import tools.jackson.databind.JsonNode;
 public class BuyeoExitEventController {
 
 	private final BuyeoExitEventService buyeoExitEventService;
+	private final LocationUsageRecorder locationUsageRecorder;
 
 	/** 이탈 알림 커맨드 서비스를 주입한다. */
-	public BuyeoExitEventController(BuyeoExitEventService buyeoExitEventService) {
+	public BuyeoExitEventController(BuyeoExitEventService buyeoExitEventService,
+			LocationUsageRecorder locationUsageRecorder) {
 		this.buyeoExitEventService = buyeoExitEventService;
+		this.locationUsageRecorder = locationUsageRecorder;
 	}
 
 	/** 제출 위치를 검증한 뒤 이탈 알림 발송 여부를 반환한다. */
@@ -35,7 +40,9 @@ public class BuyeoExitEventController {
 			@RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
 			@RequestBody JsonNode request) {
 		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
-		return SuccessResponse.of(buyeoExitEventService.notify(memberId, idempotencyKey, parseRequest(request)));
+		BuyeoExitEventCommand command = parseRequest(request);
+		locationUsageRecorder.record(memberId, LocationUsagePurpose.BUYEO_EXIT_NOTIFICATION);
+		return SuccessResponse.of(buyeoExitEventService.notify(memberId, idempotencyKey, command));
 	}
 
 	/** OpenAPI Location 스키마만 허용하는 요청 본문을 파싱한다. */

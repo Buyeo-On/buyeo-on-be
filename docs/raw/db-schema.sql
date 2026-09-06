@@ -390,3 +390,18 @@ CREATE INDEX point_settlements_due_expiration_idx
 CREATE INDEX badge_conditions_metric_idx ON badge_conditions (metric_key);
 CREATE INDEX member_badges_trip_idx ON member_badges (trip_id, earned_at);
 CREATE INDEX notifications_member_idx ON notifications (member_id, occurred_at DESC);
+
+-- 위치정보법상 이용 사실 확인자료다. 원시 좌표와 정확도는 저장하지 않는다.
+CREATE TABLE location_usage_records (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    member_id uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+    purpose varchar(64) NOT NULL,
+    used_at timestamptz NOT NULL,
+    expires_at timestamptz NOT NULL,
+    CHECK (expires_at > used_at)
+);
+
+CREATE INDEX location_usage_records_expiry_idx
+    ON location_usage_records (expires_at, id);
+CREATE INDEX location_usage_records_member_idx
+    ON location_usage_records (member_id, used_at DESC);

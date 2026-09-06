@@ -1,6 +1,8 @@
 package com.buyeoon.trip;
 
 import com.buyeoon.common.api.SuccessResponse;
+import com.buyeoon.location.LocationUsagePurpose;
+import com.buyeoon.location.LocationUsageRecorder;
 import com.buyeoon.place.entity.PlaceCategory;
 import com.buyeoon.point.application.PointSummaryService.PointSummaryView;
 import com.buyeoon.trip.FootprintQueryService.BadgeView;
@@ -38,13 +40,15 @@ public class TripController {
 	private final TripEnder tripEnd;
 	private final TripQueryService tripQuery;
 	private final FootprintQueryService footprintQuery;
+	private final LocationUsageRecorder locationUsageRecorder;
 
 	public TripController(TripStarter tripStart, TripEnder tripEnd, TripQueryService tripQuery,
-			FootprintQueryService footprintQuery) {
+			FootprintQueryService footprintQuery, LocationUsageRecorder locationUsageRecorder) {
 		this.tripStart = tripStart;
 		this.tripEnd = tripEnd;
 		this.tripQuery = tripQuery;
 		this.footprintQuery = footprintQuery;
+		this.locationUsageRecorder = locationUsageRecorder;
 	}
 
 	@PostMapping("/trips")
@@ -52,7 +56,9 @@ public class TripController {
 			@RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
 			@RequestBody JsonNode request) {
 		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
-		TripView trip = tripStart.start(memberId, idempotencyKey, parseRequest(request));
+		TripStartCommand command = parseRequest(request);
+		locationUsageRecorder.record(memberId, LocationUsagePurpose.TRIP_START);
+		TripView trip = tripStart.start(memberId, idempotencyKey, command);
 		return ResponseEntity.status(HttpStatus.CREATED).body(SuccessResponse.of(trip));
 	}
 

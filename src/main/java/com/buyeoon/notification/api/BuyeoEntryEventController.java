@@ -1,6 +1,8 @@
 package com.buyeoon.notification.api;
 
 import com.buyeoon.common.api.SuccessResponse;
+import com.buyeoon.location.LocationUsagePurpose;
+import com.buyeoon.location.LocationUsageRecorder;
 import com.buyeoon.notification.application.BuyeoEntryEventService;
 import com.buyeoon.notification.application.BuyeoEntryEventService.BuyeoEntryEventCommand;
 import com.buyeoon.notification.application.BuyeoEntryEventService.BuyeoEntryEventView;
@@ -22,9 +24,12 @@ import tools.jackson.databind.JsonNode;
 public class BuyeoEntryEventController {
 
 	private final BuyeoEntryEventService buyeoEntryEventService;
+	private final LocationUsageRecorder locationUsageRecorder;
 
-	public BuyeoEntryEventController(BuyeoEntryEventService buyeoEntryEventService) {
+	public BuyeoEntryEventController(BuyeoEntryEventService buyeoEntryEventService,
+			LocationUsageRecorder locationUsageRecorder) {
 		this.buyeoEntryEventService = buyeoEntryEventService;
+		this.locationUsageRecorder = locationUsageRecorder;
 	}
 
 	@PostMapping("/notifications/buyeo-entry-events")
@@ -32,7 +37,9 @@ public class BuyeoEntryEventController {
 			@RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
 			@RequestBody JsonNode request) {
 		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
-		return SuccessResponse.of(buyeoEntryEventService.notify(memberId, idempotencyKey, parseRequest(request)));
+		BuyeoEntryEventCommand command = parseRequest(request);
+		locationUsageRecorder.record(memberId, LocationUsagePurpose.BUYEO_ENTRY_NOTIFICATION);
+		return SuccessResponse.of(buyeoEntryEventService.notify(memberId, idempotencyKey, command));
 	}
 
 	private BuyeoEntryEventCommand parseRequest(JsonNode request) {

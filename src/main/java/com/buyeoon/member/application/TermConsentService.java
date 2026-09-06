@@ -83,12 +83,14 @@ public class TermConsentService {
 					SET agreed = EXCLUDED.agreed, agreed_at = EXCLUDED.agreed_at
 					""", memberId, decision.termId(), decision.agreed(), Timestamp.from(agreedAt));
 		}
+		if (withdrawsLocationConsent(decisions, currentTerms)) {
+			jdbcOperations.update("DELETE FROM location_usage_records WHERE member_id = ?", memberId);
+		}
 
 		boolean requiredTermsAgreed = hasAgreedToCurrentRequiredTerms(memberId);
 		ZonedDateTime responseTime = agreedAt.atZone(ASIA_SEOUL);
 		String responseBody = "{\"success\":true,\"data\":{\"requiredTermsAgreed\":" + requiredTermsAgreed
-				+ ",\"agreedAt\":\""
-				+ responseTime.toOffsetDateTime() + "\"}}";
+				+ ",\"agreedAt\":\"" + responseTime.toOffsetDateTime() + "\"}}";
 		jdbcOperations.update("""
 				INSERT INTO idempotency_requests
 				    (member_id, idempotency_key, operation, request_hash, response_status, response_body,
@@ -105,26 +107,28 @@ public class TermConsentService {
 	}
 
 	private IdempotencyState findIdempotencyRequest(UUID memberId, String idempotencyKey) {
-		return jdbcOperations.query("""
-				SELECT operation, request_hash, response_status,
-				       COALESCE((response_body->'data'->>'requiredTermsAgreed')::boolean, false) AS required_terms_agreed,
-				       created_at, expires_at
-				FROM idempotency_requests
-				WHERE member_id = ? AND idempotency_key = ?
-				FOR UPDATE
-				""", this::mapIdempotencyState, memberId, idempotencyKey).stream().findFirst().orElse(null);
+		return jdbcOperations
+				.query("""
+						SELECT operation, request_hash, response_status,
+						       COALESCE((response_body->'data'->>'requiredTermsAgreed')::boolean, false) AS required_terms_agreed,
+						       created_at, expires_at
+						FROM idempotency_requests
+						WHERE member_id = ? AND idempotency_key = ?
+						FOR UPDATE
+						""",
+						this::mapIdempotencyState, memberId, idempotencyKey)
+				.stream().findFirst().orElse(null);
 	}
 
 	private IdempotencyState mapIdempotencyState(ResultSet resultSet, int rowNumber) throws SQLException {
 		return new IdempotencyState(resultSet.getString("operation"), resultSet.getString("request_hash"),
 				resultSet.getObject("response_status", Integer.class), resultSet.getBoolean("required_terms_agreed"),
-				resultSet.getTimestamp("created_at").toInstant(),
-				resultSet.getTimestamp("expires_at").toInstant());
+				resultSet.getTimestamp("created_at").toInstant(), resultSet.getTimestamp("expires_at").toInstant());
 	}
 
 	private List<CurrentTerm> getCurrentTerms() {
 		return jdbcOperations.query("""
-				SELECT DISTINCT ON (term.type) term.id, term.version, term.required
+				SELECT DISTINCT ON (term.type) term.id, term.type::text, term.version, term.required
 				FROM terms term
 				WHERE term.published = true
 				  AND term.effective_at <= clock_timestamp()
@@ -133,8 +137,15 @@ public class TermConsentService {
 	}
 
 	private CurrentTerm mapCurrentTerm(ResultSet resultSet, int rowNumber) throws SQLException {
-		return new CurrentTerm(resultSet.getObject("id", UUID.class), resultSet.getString("version"),
-				resultSet.getBoolean("required"));
+		return new CurrentTerm(resultSet.getObject("id", UUID.class), resultSet.getString("type"),
+				resultSet.getString("version"), resultSet.getBoolean("required"));
+	}
+
+	private boolean withdrawsLocationConsent(List<ConsentDecision> decisions, List<CurrentTerm> currentTerms) {
+		Set<UUID> currentLocationTerms = currentTerms.stream().filter(term -> "LOCATION".equals(term.type()))
+				.map(CurrentTerm::termId).collect(java.util.stream.Collectors.toSet());
+		return decisions.stream()
+				.anyMatch(decision -> !decision.agreed() && currentLocationTerms.contains(decision.termId()));
 	}
 
 	private void validate(List<ConsentDecision> decisions, List<CurrentTerm> currentTerms) {
@@ -143,8 +154,8 @@ public class TermConsentService {
 			throw new InvalidTermConsentRequestException();
 		}
 		for (ConsentDecision decision : decisions) {
-			CurrentTerm term = currentTerms.stream().filter(item -> item.termId().equals(decision.termId()))
-					.findFirst().orElseThrow(TermVersionOutdatedException::new);
+			CurrentTerm term = currentTerms.stream().filter(item -> item.termId().equals(decision.termId())).findFirst()
+					.orElseThrow(TermVersionOutdatedException::new);
 			if (!term.version().equals(decision.version())) {
 				throw new TermVersionOutdatedException();
 			}
@@ -199,7 +210,7 @@ public class TermConsentService {
 	public record TermConsentResult(boolean requiredTermsAgreed, ZonedDateTime agreedAt) {
 	}
 
-	private record CurrentTerm(UUID termId, String version, boolean required) {
+	private record CurrentTerm(UUID termId, String type, String version, boolean required) {
 	}
 
 	private record IdempotencyState(String operation, String requestHash, Integer responseStatus,
