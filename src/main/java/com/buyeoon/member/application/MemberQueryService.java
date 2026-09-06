@@ -25,39 +25,40 @@ public class MemberQueryService {
 		return jdbcOperations.query("""
 				SELECT member.id,
 				       member.status::text,
+				       member.app_review_mode,
 				       profile.display_name,
 				       profile.character_id,
 				       COALESCE((
 				           SELECT bool_and(COALESCE(consent.agreed, false))
 				           FROM (
 				               SELECT DISTINCT ON (term.type) term.id
-			               FROM terms term
-			               WHERE term.published = true
-			                 AND term.required = true
+				              FROM terms term
+				              WHERE term.published = true
+				                AND term.required = true
 				                 AND term.effective_at <= CURRENT_TIMESTAMP
 				               ORDER BY term.type, term.effective_at DESC
 				           ) latest_required_term
 				           LEFT JOIN term_consents consent
 				             ON consent.term_id = latest_required_term.id
 				            AND consent.member_id = member.id
-			       ), false) AS required_terms_agreed,
-			       EXISTS (
-			           SELECT 1
-			           FROM (
-			               SELECT term.id
-			               FROM terms term
-			               WHERE term.published = true
-			                 AND term.type = 'LOCATION'
-			                 AND term.effective_at <= CURRENT_TIMESTAMP
-			               ORDER BY term.effective_at DESC
-			               LIMIT 1
-			           ) current_location_term
-			           JOIN term_consents consent
-			             ON consent.term_id = current_location_term.id
-			            AND consent.member_id = member.id
-			            AND consent.agreed = true
-			       ) AS location_terms_agreed,
-			       EXISTS (
+				      ), false) AS required_terms_agreed,
+				      EXISTS (
+				          SELECT 1
+				          FROM (
+				              SELECT term.id
+				              FROM terms term
+				              WHERE term.published = true
+				                AND term.type = 'LOCATION'
+				                AND term.effective_at <= CURRENT_TIMESTAMP
+				              ORDER BY term.effective_at DESC
+				              LIMIT 1
+				          ) current_location_term
+				          JOIN term_consents consent
+				            ON consent.term_id = current_location_term.id
+				           AND consent.member_id = member.id
+				           AND consent.agreed = true
+				      ) AS location_terms_agreed,
+				      EXISTS (
 				           SELECT 1
 				           FROM citizen_cards card
 				           WHERE card.member_id = member.id
@@ -93,11 +94,13 @@ public class MemberQueryService {
 				MemberStatus.valueOf(resultSet.getString("status")), resultSet.getString("display_name"),
 				resultSet.getObject("character_id", UUID.class), resultSet.getBoolean("required_terms_agreed"),
 				resultSet.getBoolean("location_terms_agreed"), resultSet.getBoolean("citizen_card_issued"),
+				resultSet.getBoolean("app_review_mode"),
 				resultSet.getTimestamp("created_at").toInstant().atZone(ASIA_SEOUL));
 	}
 
 	public record MemberView(UUID memberId, MemberStatus status, String displayName, UUID characterId,
-			boolean requiredTermsAgreed, boolean locationTermsAgreed, boolean citizenCardIssued, ZonedDateTime createdAt) {
+			boolean requiredTermsAgreed, boolean locationTermsAgreed, boolean citizenCardIssued, boolean appReviewMode,
+			ZonedDateTime createdAt) {
 	}
 
 	public record SettingsView(boolean nearbyQuizNotificationEnabled, boolean darkModeEnabled, long version) {
