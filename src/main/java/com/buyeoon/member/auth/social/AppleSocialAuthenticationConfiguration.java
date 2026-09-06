@@ -20,7 +20,8 @@ import org.springframework.web.client.RestClient;
 public class AppleSocialAuthenticationConfiguration {
 
 	@Bean
-	SocialCredentialVerifier appleSocialCredentialVerifier(@Value("${social.apple.api-base-url}") String apiBaseUrl,
+	AppleSocialCredentialVerifier appleSocialCredentialVerifier(
+			@Value("${social.apple.api-base-url}") String apiBaseUrl,
 			@Value("${social.apple.client-id}") String clientId, @Value("${social.apple.team-id}") String teamId,
 			@Value("${social.apple.key-id}") String keyId,
 			@Value("${social.apple.private-key-base64}") String privateKeyBase64,

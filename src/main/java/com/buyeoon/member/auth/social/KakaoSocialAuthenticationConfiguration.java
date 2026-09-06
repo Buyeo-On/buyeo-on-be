@@ -12,8 +12,8 @@ import org.springframework.web.client.RestClient;
 public class KakaoSocialAuthenticationConfiguration {
 
 	@Bean
-	SocialCredentialVerifier kakaoSocialCredentialVerifier(@Value("${social.kakao.api-base-url}") String apiBaseUrl,
-			@Value("${social.kakao.app-id}") long appId,
+	KakaoSocialCredentialVerifier kakaoSocialCredentialVerifier(
+			@Value("${social.kakao.api-base-url}") String apiBaseUrl, @Value("${social.kakao.app-id}") long appId,
 			@Value("${social.kakao.connect-timeout}") Duration connectTimeout,
 			@Value("${social.kakao.read-timeout}") Duration readTimeout) {
 		if (appId <= 0) {

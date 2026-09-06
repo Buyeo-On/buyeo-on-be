@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.http.HttpMethod.GET;
+import static org.springframework.http.HttpMethod.POST;
 import static org.springframework.test.web.client.ExpectedCount.once;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -27,9 +28,10 @@ class KakaoSocialCredentialVerifierTests {
 	private static final long EXPECTED_APP_ID = 1234L;
 	private static final String TOKEN = "kakao-access-token";
 	private static final String TOKEN_INFO_URL = "https://kapi.kakao.test/v1/user/access_token_info";
+	private static final String UNLINK_URL = "https://kapi.kakao.test/v1/user/unlink";
 
 	private MockRestServiceServer server;
-	private SocialCredentialVerifier verifier;
+	private KakaoSocialCredentialVerifier verifier;
 
 	@BeforeEach
 	void setUp() {
@@ -38,9 +40,44 @@ class KakaoSocialCredentialVerifierTests {
 		verifier = new KakaoSocialCredentialVerifier(builder, EXPECTED_APP_ID);
 	}
 
+	@Test
+	@DisplayName("카카오 subject를 확인한 뒤 연동을 해제한다")
+	void matchingSubjectIsUnlinked() {
+		respondSuccess(123456789L, 7199L, EXPECTED_APP_ID);
+		server.expect(once(), requestTo(UNLINK_URL)).andExpect(method(POST))
+				.andExpect(header("Authorization", "Bearer " + TOKEN))
+				.andRespond(withSuccess("{\"id\":123456789}", MediaType.APPLICATION_JSON));
+
+		verifier.verifyAndUnlink(new KakaoSocialCredential(TOKEN), "123456789");
+
+		server.verify();
+	}
+
+	@Test
+	@DisplayName("탈퇴 계정과 다른 카카오 subject는 연동 해제하지 않는다")
+	void differentSubjectIsRejectedBeforeUnlink() {
+		respondSuccess(123456789L, 7199L, EXPECTED_APP_ID);
+
+		assertThrows(SocialAuthenticationFailedException.class,
+				() -> verifier.verifyAndUnlink(new KakaoSocialCredential(TOKEN), "987654321"));
+		server.verify();
+	}
+
+	@Test
+	@DisplayName("카카오 연동 해제 실패는 인증 실패로 분류된다")
+	void unlinkRejectionIsClassifiedAsAuthenticationFailure() {
+		respondSuccess(123456789L, 7199L, EXPECTED_APP_ID);
+		server.expect(once(), requestTo(UNLINK_URL)).andExpect(method(POST))
+				.andRespond(withStatus(HttpStatus.UNAUTHORIZED));
+
+		assertThrows(SocialAuthenticationFailedException.class,
+				() -> verifier.verifyAndUnlink(new KakaoSocialCredential(TOKEN), "123456789"));
+		server.verify();
+	}
+
 	/**
-	 * 유효한 카카오 액세스 토큰을 검증하면 app_id 일치를 확인하고
-	 * VerifiedSocialIdentity에 provider와 subject가 올바르게 담긴다.
+	 * 유효한 카카오 액세스 토큰을 검증하면 app_id 일치를 확인하고 VerifiedSocialIdentity에 provider와
+	 * subject가 올바르게 담긴다.
 	 */
 	@Test
 	@DisplayName("유효한 액세스 토큰은 검증된 카카오 subject를 반환한다")
@@ -73,8 +110,7 @@ class KakaoSocialCredentialVerifierTests {
 	}
 
 	/**
-	 * 카카오 API 응답의 expires_in이 0이면
-	 * SocialAuthenticationFailedException이 발생한다.
+	 * 카카오 API 응답의 expires_in이 0이면 SocialAuthenticationFailedException이 발생한다.
 	 */
 	@Test
 	@DisplayName("만료된 토큰은 거부된다")
@@ -126,8 +162,7 @@ class KakaoSocialCredentialVerifierTests {
 	}
 
 	/**
-	 * 네트워크 장애 시 SocialProviderUnavailableException이 발생하며,
-	 * 예외 메시지에 액세스 토큰이 포함되지 않는다.
+	 * 네트워크 장애 시 SocialProviderUnavailableException이 발생하며, 예외 메시지에 액세스 토큰이 포함되지 않는다.
 	 */
 	@Test
 	@DisplayName("네트워크 장애는 토큰을 노출하지 않고 제공자 불가로 분류된다")

@@ -2,6 +2,9 @@ package com.buyeoon.member;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -12,6 +15,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.buyeoon.member.auth.AccessTokenService;
 import com.buyeoon.member.auth.RefreshTokenService;
 import com.buyeoon.member.auth.RefreshTokenService.IssuedRefreshToken;
+import com.buyeoon.member.auth.social.AppleAuthorizationRevoker;
+import com.buyeoon.member.auth.social.KakaoAuthorizationUnlinker;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -34,6 +39,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.junit.jupiter.Container;
@@ -67,6 +73,12 @@ class MemberWithdrawalIntegrationTests {
 	@Autowired
 	private RefreshTokenService refreshTokenService;
 
+	@MockitoBean
+	private AppleAuthorizationRevoker appleAuthorizationRevoker;
+
+	@MockitoBean
+	private KakaoAuthorizationUnlinker kakaoAuthorizationUnlinker;
+
 	@AfterEach
 	void cleanUp() {
 		jdbcTemplate.execute("DROP TRIGGER IF EXISTS fail_withdraw_session_update ON auth_sessions");
@@ -87,8 +99,10 @@ class MemberWithdrawalIntegrationTests {
 		insertPushToken(current.sessionId(), "current-device-token");
 		insertPushToken(other.sessionId(), "other-device-token");
 
-		performWithdrawal(current.accessToken()).andExpect(status().isOk()).andExpect(jsonPath("$.success").value(true))
-				.andExpect(jsonPath("$.data").isMap());
+		performKakaoWithdrawal(current.accessToken()).andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true)).andExpect(jsonPath("$.data").isMap());
+
+		verify(kakaoAuthorizationUnlinker).verifyAndUnlink(any(), eq("withdrawal-member"));
 
 		Map<String, Object> member = member(memberId);
 		Instant withdrawnAt = ((Timestamp) member.get("withdrawn_at")).toInstant();
@@ -105,6 +119,56 @@ class MemberWithdrawalIntegrationTests {
 					.andExpect(status().isUnauthorized());
 			performRefresh(session.refreshToken()).andExpect(status().isUnauthorized());
 		}
+	}
+
+	@Test
+	@DisplayName("카카오 회원 탈퇴는 재인증이 필요하다")
+	void kakaoWithdrawalRequiresReauthentication() throws Exception {
+		UUID memberId = insertMember();
+		insertSocialAccount(memberId, "kakao-withdrawal-member");
+		AuthenticatedSession session = insertSession(memberId);
+
+		performWithdrawal(session.accessToken()).andExpect(status().isConflict())
+				.andExpect(jsonPath("$.data.code").value("KAKAO_REAUTHENTICATION_REQUIRED"));
+
+		assertThat(member(memberId).get("status").toString()).isEqualTo("ACTIVE");
+		assertThat(activeSessionCount(memberId)).isEqualTo(1);
+		assertThat(socialAccountCount(memberId)).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("Apple 회원 탈퇴는 재인증이 필요하다")
+	void appleWithdrawalRequiresReauthentication() throws Exception {
+		UUID memberId = insertMember();
+		insertSocialAccount(memberId, "APPLE", "apple-withdrawal-member");
+		AuthenticatedSession session = insertSession(memberId);
+
+		performWithdrawal(session.accessToken()).andExpect(status().isConflict())
+				.andExpect(jsonPath("$.data.code").value("APPLE_REAUTHENTICATION_REQUIRED"));
+
+		assertThat(member(memberId).get("status").toString()).isEqualTo("ACTIVE");
+		assertThat(activeSessionCount(memberId)).isEqualTo(1);
+		assertThat(socialAccountCount(memberId)).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("Apple 재인증 후 연동을 해제하고 탈퇴한다")
+	void appleWithdrawalRevokesAuthorization() throws Exception {
+		UUID memberId = insertMember();
+		String subject = "apple-withdrawal-member";
+		insertSocialAccount(memberId, "APPLE", subject);
+		AuthenticatedSession session = insertSession(memberId);
+		String body = """
+				{"provider":"APPLE","authorizationCode":"code","identityToken":"token","nonce":"nonce"}
+				""";
+
+		mockMvc.perform(delete("/members/me").header("Authorization", bearer(session.accessToken()))
+				.contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isOk());
+
+		verify(appleAuthorizationRevoker).verifyAndRevoke(any(), eq(subject));
+		assertThat(member(memberId).get("status").toString()).isEqualTo("WITHDRAWN");
+		assertThat(activeSessionCount(memberId)).isZero();
+		assertThat(socialAccountCount(memberId)).isZero();
 	}
 
 	@Test
@@ -126,7 +190,6 @@ class MemberWithdrawalIntegrationTests {
 	@DisplayName("동시 탈퇴 요청은 하나의 탈퇴 상태로 끝난다")
 	void concurrentWithdrawalsEndInOneWithdrawnState() throws Exception {
 		UUID memberId = insertMember();
-		insertSocialAccount(memberId, "concurrent-withdrawal-member");
 		AuthenticatedSession first = insertSession(memberId);
 		AuthenticatedSession second = insertSession(memberId);
 		CountDownLatch ready = new CountDownLatch(2);
@@ -183,7 +246,6 @@ class MemberWithdrawalIntegrationTests {
 	@DisplayName("세션 폐기 실패는 회원 상태와 푸시 토큰 삭제를 모두 롤백한다")
 	void sessionRevocationFailureRollsBackWithdrawal() {
 		UUID memberId = insertMember();
-		insertSocialAccount(memberId, "rollback-member");
 		AuthenticatedSession session = insertSession(memberId);
 		insertPushToken(session.sessionId(), "rollback-device-token");
 		jdbcTemplate.execute("""
@@ -207,7 +269,7 @@ class MemberWithdrawalIntegrationTests {
 		assertThat(member.get("purge_after")).isNull();
 		assertThat(activeSessionCount(memberId)).isEqualTo(1);
 		assertThat(pushTokenCount(memberId)).isEqualTo(1);
-		assertThat(socialAccountCount(memberId)).isEqualTo(1);
+		assertThat(socialAccountCount(memberId)).isZero();
 	}
 
 	private MvcResult concurrentRequest(CountDownLatch ready, CountDownLatch start, Request request) throws Exception {
@@ -220,6 +282,13 @@ class MemberWithdrawalIntegrationTests {
 
 	private org.springframework.test.web.servlet.ResultActions performWithdrawal(String accessToken) throws Exception {
 		return mockMvc.perform(delete("/members/me").header("Authorization", bearer(accessToken)));
+	}
+
+	private org.springframework.test.web.servlet.ResultActions performKakaoWithdrawal(String accessToken)
+			throws Exception {
+		return mockMvc.perform(delete("/members/me").header("Authorization", bearer(accessToken))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"provider\":\"KAKAO\",\"accessToken\":\"kakao-access-token\"}"));
 	}
 
 	private org.springframework.test.web.servlet.ResultActions performSettingsUpdate(String accessToken)
@@ -259,10 +328,14 @@ class MemberWithdrawalIntegrationTests {
 	}
 
 	private void insertSocialAccount(UUID memberId, String subject) {
+		insertSocialAccount(memberId, "KAKAO", subject);
+	}
+
+	private void insertSocialAccount(UUID memberId, String provider, String subject) {
 		jdbcTemplate.update("""
 				INSERT INTO social_accounts (member_id, provider, provider_subject)
-				VALUES (?, 'KAKAO', ?)
-				""", memberId, subject);
+				VALUES (?, ?::social_provider, ?)
+				""", memberId, provider, subject);
 	}
 
 	private void insertPushToken(UUID sessionId, String token) {

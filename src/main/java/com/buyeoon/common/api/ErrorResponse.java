@@ -18,6 +18,15 @@ public record ErrorResponse(boolean success, ErrorData data) {
 		return new ErrorResponse(false, new ErrorData("SOCIAL_PROVIDER_UNAVAILABLE", "소셜 로그인을 일시적으로 사용할 수 없습니다."));
 	}
 
+	public static ErrorResponse appleReauthenticationRequired() {
+		return new ErrorResponse(false,
+				new ErrorData("APPLE_REAUTHENTICATION_REQUIRED", "회원 탈퇴를 위해 Apple 재인증이 필요합니다."));
+	}
+
+	public static ErrorResponse kakaoReauthenticationRequired() {
+		return new ErrorResponse(false, new ErrorData("KAKAO_REAUTHENTICATION_REQUIRED", "회원 탈퇴를 위해 카카오 재인증이 필요합니다."));
+	}
+
 	public static ErrorResponse memberWithdrawn() {
 		return new ErrorResponse(false, new ErrorData("MEMBER_WITHDRAWN", "탈퇴한 회원은 로그인할 수 없습니다."));
 	}

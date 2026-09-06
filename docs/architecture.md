@@ -50,6 +50,8 @@ iOS Flutter
 - 소셜 인증은 회원 도메인의 제공자 검증 인터페이스 뒤에서 카카오와 Apple 외부 어댑터로 구현한다. 자동 테스트는 제어 가능한 가짜 어댑터를 사용한다.
 - 카카오 네이티브 Flutter SDK가 발급한 access token을 앱이 전달하면 서버가 카카오 API에서 유효성과 제공자 회원 식별자를 확인한다.
 - Apple은 앱이 전달한 인가 코드, identity token과 nonce를 서버가 검증하고 subject를 회원 식별자로 사용한다.
+- Apple 연결 회원이 탈퇴할 때는 앱이 새 인가 코드, identity token과 nonce를 전달하고 서버가 연결된 subject를 확인한 뒤 교환한 refresh token을 Apple 폐기 API에 즉시 제출한다.
+- Kakao 연결 회원이 탈퇴할 때는 앱이 새 access token을 전달하고 서버가 연결된 subject를 확인한 뒤 Kakao 연결 해제 API를 즉시 호출한다.
 - OAuth 인가 코드, 외부 access token, identity token과 client secret은 DB나 로그에 저장하지 않는다.
 - 소셜 계정 연결은 로그인된 회원이 별도 API로 명시적으로 수행한다.
 - 액세스 토큰은 수명 1시간의 JWT다.

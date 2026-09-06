@@ -9,9 +9,10 @@ import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
-public class KakaoSocialCredentialVerifier implements SocialCredentialVerifier {
+public class KakaoSocialCredentialVerifier implements SocialCredentialVerifier, KakaoAuthorizationUnlinker {
 
 	private static final String TOKEN_INFO_PATH = "/v1/user/access_token_info";
+	private static final String UNLINK_PATH = "/v1/user/unlink";
 	private static final Pattern ERROR_CODE = Pattern.compile("\\\"code\\\"\\s*:\\s*(-?\\d+)");
 
 	private final RestClient restClient;
@@ -59,6 +60,33 @@ public class KakaoSocialCredentialVerifier implements SocialCredentialVerifier {
 		return new VerifiedSocialIdentity(SocialProvider.KAKAO, tokenInfo.id().toString());
 	}
 
+	@Override
+	public void verifyAndUnlink(KakaoSocialCredential credential, String expectedSubject) {
+		VerifiedSocialIdentity identity = verify(credential);
+		if (expectedSubject == null || !expectedSubject.equals(identity.subject())) {
+			throw new SocialAuthenticationFailedException();
+		}
+
+		KakaoUnlinkResponse response;
+		try {
+			response = restClient.post().uri(UNLINK_PATH)
+					.headers(headers -> headers.setBearerAuth(credential.accessToken())).retrieve()
+					.body(KakaoUnlinkResponse.class);
+		} catch (HttpClientErrorException exception) {
+			throw new SocialAuthenticationFailedException();
+		} catch (HttpServerErrorException exception) {
+			throw new SocialProviderUnavailableException(exception);
+		} catch (RestClientException exception) {
+			throw new SocialProviderUnavailableException(exception);
+		}
+		if (response == null || response.id() == null) {
+			throw new SocialProviderUnavailableException();
+		}
+		if (!expectedSubject.equals(response.id().toString())) {
+			throw new SocialAuthenticationFailedException();
+		}
+	}
+
 	private int kakaoErrorCode(HttpClientErrorException exception) {
 		Matcher matcher = ERROR_CODE.matcher(exception.getResponseBodyAsString());
 		return matcher.find() ? Integer.parseInt(matcher.group(1)) : 0;
@@ -73,5 +101,8 @@ public class KakaoSocialCredentialVerifier implements SocialCredentialVerifier {
 		private Long appId() {
 			return app_id;
 		}
+	}
+
+	private record KakaoUnlinkResponse(Long id) {
 	}
 }
