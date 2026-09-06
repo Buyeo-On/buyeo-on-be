@@ -47,6 +47,8 @@ class SchemaMappingTests {
 			.of("src/main/resources/db/migration/V39__publish_release_legal_documents.sql");
 	private static final Path LOCATION_USAGE_RECORDS_MIGRATION = Path
 			.of("src/main/resources/db/migration/V41__record_location_usage_facts.sql");
+	private static final Path PHOTO_UPLOAD_RESERVATION_MIGRATION = Path
+			.of("src/main/resources/db/migration/V42__track_mission_photo_upload_reservations.sql");
 	private static final Pattern CREATE_TABLE = Pattern.compile("CREATE TABLE ([a-z_]+) ");
 
 	/** 초기 스키마에 후속 마이그레이션을 적용한 정의가 기준 DB 스키마와 같음을 보장한다. */
@@ -171,6 +173,33 @@ class SchemaMappingTests {
 				"    WHERE choice = 'CARRY_OVER' AND expired_at IS NULL;");
 		String privatePhotoObjectKey = "object_key text NOT NULL UNIQUE CHECK (object_key LIKE 'private/%'),"
 				+ " -- 비공개 스토리지 객체 키";
+		String missionPhotoTableEnd = String.join("\n",
+				"    uploaded_at timestamptz NOT NULL DEFAULT now() -- 업로드 완료 시각", ");");
+		String photoUploadReservationSchema = """
+				-- Presigned URL 발급 후 제출되지 않은 비공개 사진을 24시간 안에 파기하기 위한 예약이다.
+				CREATE TABLE mission_photo_upload_reservations (
+				    photo_id uuid PRIMARY KEY, -- 클라이언트에 발급한 사진 ID
+				    member_id uuid REFERENCES members(id) ON DELETE SET NULL, -- 발급 회원 ID(탈퇴 뒤 파기 재시도용 NULL 허용)
+				    trip_id uuid NOT NULL, -- 발급 당시 여행 ID
+				    mission_id uuid NOT NULL, -- 발급 당시 사진 미션 ID
+				    object_key text NOT NULL UNIQUE CHECK (object_key LIKE 'private/%'), -- 비공개 스토리지 객체 키
+				    content_type text NOT NULL CHECK (content_type IN ('image/jpeg', 'image/png', 'image/webp')), -- 서명한 MIME 타입
+				    file_size_bytes bigint NOT NULL CHECK (file_size_bytes > 0), -- 서명한 파일 크기
+				    created_at timestamptz NOT NULL, -- 발급 시각
+				    presigned_expires_at timestamptz NOT NULL, -- 업로드 URL 만료 시각
+				    cleanup_due_at timestamptz NOT NULL, -- 미제출 객체 파기 대상 시각
+				    CHECK (presigned_expires_at > created_at),
+				    CHECK (cleanup_due_at = created_at + INTERVAL '24 hours')
+				);
+
+				CREATE INDEX mission_photo_upload_reservations_cleanup_idx
+				    ON mission_photo_upload_reservations (cleanup_due_at, photo_id);
+
+				CREATE INDEX mission_photo_upload_reservations_member_idx
+				    ON mission_photo_upload_reservations (member_id)
+				    WHERE member_id IS NOT NULL;
+				"""
+				.stripTrailing();
 		String publishedTermColumn = String.join("\n", "    required boolean NOT NULL, -- 필수 동의 여부",
 				"    published boolean NOT NULL DEFAULT true, -- 현재 앱에 공개할 버전 여부");
 		String publicImageKeySchema = baseline
@@ -200,7 +229,8 @@ class SchemaMappingTests {
 								"    ), -- UUID 형식의 시연용 바코드 값"))
 				.replace(legacyMemberLifecycle, currentMemberLifecycle)
 				.replace("object_key text NOT NULL UNIQUE, -- 스토리지 객체 키", privatePhotoObjectKey)
-				.replace(authSessionIndex, memberPurgeIndexes);
+				.replace(authSessionIndex, memberPurgeIndexes)
+				.replace(missionPhotoTableEnd, missionPhotoTableEnd + "\n\n" + photoUploadReservationSchema);
 
 		assertThat(baseline).contains(placeSourceColumns).contains(placeLocationIndex).contains(legacyMissionStatus)
 				.contains(legacyMissionConstraints).contains(legacyTermType);
@@ -222,6 +252,9 @@ class SchemaMappingTests {
 		assertThat(Files.readString(RELEASE_LEGAL_DOCUMENTS_MIGRATION, StandardCharsets.UTF_8))
 				.contains("ADD COLUMN published boolean NOT NULL DEFAULT true")
 				.contains("UPDATE terms SET published = false");
+		assertThat(Files.readString(PHOTO_UPLOAD_RESERVATION_MIGRATION, StandardCharsets.UTF_8))
+				.contains("CREATE TABLE mission_photo_upload_reservations")
+				.contains("cleanup_due_at = created_at + INTERVAL '24 hours'").contains("ON DELETE SET NULL");
 	}
 
 	/** 탈퇴 회원 파기 대상 조회를 위한 기존 호환 컬럼과 인덱스가 스키마에 남아 있는지 검증한다. */

@@ -70,6 +70,7 @@ class WithdrawnMemberDataPurgeIntegrationTests {
 		jdbcTemplate.update("DELETE FROM member_badges");
 		jdbcTemplate.update("DELETE FROM mission_submissions");
 		jdbcTemplate.update("DELETE FROM mission_photos");
+		jdbcTemplate.update("DELETE FROM mission_photo_upload_reservations");
 		jdbcTemplate.update("DELETE FROM trips");
 		jdbcTemplate.update("DELETE FROM notifications");
 		jdbcTemplate.update("DELETE FROM idempotency_requests");
@@ -186,6 +187,31 @@ class WithdrawnMemberDataPurgeIntegrationTests {
 	}
 
 	@Test
+	@DisplayName("탈퇴 회원의 미제출 사진을 즉시 지우고 지연 업로드 재파기를 위한 예약은 남긴다")
+	void withdrawalDeletesReservedPhotoAndLeavesCleanupTombstone() {
+		Fixture fixture = insertRichActiveMember("private/missions/submitted.webp");
+		UUID photoId = UUID.randomUUID();
+		String reservedKey = "private/missions/" + fixture.tripId() + "/" + PHOTO_MISSION_ID + "/" + photoId;
+		jdbcTemplate.update("""
+				INSERT INTO mission_photo_upload_reservations (
+				    photo_id, member_id, trip_id, mission_id, object_key, content_type,
+				    file_size_bytes, created_at, presigned_expires_at, cleanup_due_at
+				) VALUES (?, ?, ?, ?, ?, 'image/jpeg', 1024,
+				          CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '10 minutes',
+				          CURRENT_TIMESTAMP + INTERVAL '24 hours')
+				""", photoId, fixture.memberId(), fixture.tripId(), PHOTO_MISSION_ID, reservedKey);
+
+		withdrawalService.withdraw(fixture.memberId(), new KakaoSocialCredential("withdrawal-test-token"));
+		assertThat(purgeService.purgeDueMembers()).isEqualTo(1);
+
+		verify(objectStore).delete(fixture.objectKey());
+		verify(objectStore).delete(reservedKey);
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM mission_photo_upload_reservations WHERE photo_id = ? AND member_id IS NULL",
+				Integer.class, photoId)).isEqualTo(1);
+	}
+
+	@Test
 	@DisplayName("여러 사진 중 일부 삭제가 실패해도 키를 보존하고 다음 작업에서 전부 다시 삭제한다")
 	void partialPhotoDeletionRetainsKeysUntilRetrySucceeds() {
 		Fixture fixture = insertRichActiveMember("private/missions/partial-first.webp");
@@ -194,10 +220,11 @@ class WithdrawnMemberDataPurgeIntegrationTests {
 				INSERT INTO mission_photos (member_id, trip_id, mission_id, object_key, content_type, file_size_bytes)
 				VALUES (?, ?, ?, ?, 'image/jpeg', 1024)
 				""", fixture.memberId(), fixture.tripId(), PHOTO_MISSION_ID, secondKey);
-		var keys = jdbcTemplate.queryForList("SELECT object_key FROM mission_photos WHERE member_id = ? ORDER BY id",
-				String.class, fixture.memberId());
+		var keys = jdbcTemplate.queryForList(
+				"SELECT object_key FROM mission_photos WHERE member_id = ? ORDER BY object_key", String.class,
+				fixture.memberId());
 		doAnswer(invocation -> {
-			if (keys.getLast().equals(invocation.getArgument(0))) {
+			if (secondKey.equals(invocation.getArgument(0))) {
 				throw new IllegalStateException("forced second photo failure");
 			}
 			return null;

@@ -237,6 +237,29 @@ CREATE TABLE mission_photos (
     uploaded_at timestamptz NOT NULL DEFAULT now() -- 업로드 완료 시각
 );
 
+-- Presigned URL 발급 후 제출되지 않은 비공개 사진을 24시간 안에 파기하기 위한 예약이다.
+CREATE TABLE mission_photo_upload_reservations (
+    photo_id uuid PRIMARY KEY, -- 클라이언트에 발급한 사진 ID
+    member_id uuid REFERENCES members(id) ON DELETE SET NULL, -- 발급 회원 ID(탈퇴 뒤 파기 재시도용 NULL 허용)
+    trip_id uuid NOT NULL, -- 발급 당시 여행 ID
+    mission_id uuid NOT NULL, -- 발급 당시 사진 미션 ID
+    object_key text NOT NULL UNIQUE CHECK (object_key LIKE 'private/%'), -- 비공개 스토리지 객체 키
+    content_type text NOT NULL CHECK (content_type IN ('image/jpeg', 'image/png', 'image/webp')), -- 서명한 MIME 타입
+    file_size_bytes bigint NOT NULL CHECK (file_size_bytes > 0), -- 서명한 파일 크기
+    created_at timestamptz NOT NULL, -- 발급 시각
+    presigned_expires_at timestamptz NOT NULL, -- 업로드 URL 만료 시각
+    cleanup_due_at timestamptz NOT NULL, -- 미제출 객체 파기 대상 시각
+    CHECK (presigned_expires_at > created_at),
+    CHECK (cleanup_due_at = created_at + INTERVAL '24 hours')
+);
+
+CREATE INDEX mission_photo_upload_reservations_cleanup_idx
+    ON mission_photo_upload_reservations (cleanup_due_at, photo_id);
+
+CREATE INDEX mission_photo_upload_reservations_member_idx
+    ON mission_photo_upload_reservations (member_id)
+    WHERE member_id IS NOT NULL;
+
 -- 회원이 미션에 제출한 답이나 사진을 기록한다.
 CREATE TABLE mission_submissions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(), -- 제출 ID

@@ -112,6 +112,14 @@ public class MissionPhotoUploadUrlService {
 		String objectKey = MissionPhotoObjectKeys.key(command.tripId(), command.missionId(), photoId);
 		MissionPhotoUploadTarget target = presigner.presign(objectKey, memberId, command.contentType(),
 				command.fileSizeBytes());
+		jdbcOperations.update("""
+				INSERT INTO mission_photo_upload_reservations (
+				    photo_id, member_id, trip_id, mission_id, object_key, content_type,
+				    file_size_bytes, created_at, presigned_expires_at, cleanup_due_at
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				""", photoId, memberId, command.tripId(), command.missionId(), objectKey, command.contentType(),
+				command.fileSizeBytes(), Timestamp.from(occurredAt), Timestamp.from(target.expiresAt()),
+				Timestamp.from(occurredAt.plus(RETENTION)));
 
 		MissionPhotoUploadUrlView result = new MissionPhotoUploadUrlView(photoId, target.uploadUrl(), "PUT",
 				target.headers(), 200, target.expiresAt());
