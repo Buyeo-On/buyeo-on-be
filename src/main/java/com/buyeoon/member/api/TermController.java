@@ -5,6 +5,7 @@ import com.buyeoon.member.application.TermConsentService;
 import com.buyeoon.member.application.TermConsentService.ConsentDecision;
 import com.buyeoon.member.application.TermConsentService.TermConsentResult;
 import com.buyeoon.member.application.TermQueryService;
+import com.buyeoon.member.application.TermQueryService.TermConsentListView;
 import com.buyeoon.member.application.TermQueryService.TermListView;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,6 +35,12 @@ public class TermController {
 	@GetMapping("/terms")
 	public SuccessResponse<TermListView> getTerms() {
 		return SuccessResponse.of(termQueryService.getCurrentTerms());
+	}
+
+	@GetMapping("/members/me/term-consents")
+	public SuccessResponse<TermConsentListView> getMyTermConsents(@AuthenticationPrincipal Jwt jwt) {
+		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
+		return SuccessResponse.of(termQueryService.getMyCurrentConsents(memberId));
 	}
 
 	@PutMapping("/members/me/term-consents")

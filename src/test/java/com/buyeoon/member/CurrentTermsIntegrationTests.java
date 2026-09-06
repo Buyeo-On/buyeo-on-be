@@ -69,6 +69,9 @@ class CurrentTermsIntegrationTests {
 				Instant.parse("2026-06-01T00:00:00Z"));
 		UUID futureMarketingId = insertTerm("MARKETING", "2.0", false, "미래 마케팅 약관", "미래 본문",
 				Instant.parse("2099-01-01T00:00:00Z"));
+		UUID unpublishedServiceId = insertTerm("SERVICE", "3.0-draft", true, "비공개 서비스 약관", "비공개 본문",
+				Instant.parse("2026-09-01T00:00:00Z"));
+		jdbcTemplate.update("UPDATE terms SET published = false WHERE id = ?", unpublishedServiceId);
 
 		// 공개 HTTP seam에서 응답 계약과 DB 현재 시각 기준 필터링을 함께 검증한다.
 		mockMvc.perform(get("/terms")).andExpect(status().isOk())
@@ -88,6 +91,7 @@ class CurrentTermsIntegrationTests {
 				.andExpect(jsonPath("$.data.items[3].termId").value(currentMarketingId.toString()))
 				.andExpect(jsonPath("$.data.items[3].type").value("MARKETING"))
 				.andExpect(jsonPath("$.data.items[?(@.termId == '%s')]", oldServiceId).isEmpty())
+				.andExpect(jsonPath("$.data.items[?(@.termId == '%s')]", unpublishedServiceId).isEmpty())
 				.andExpect(jsonPath("$.data.items[?(@.termId == '%s')]", futureMarketingId).isEmpty());
 	}
 

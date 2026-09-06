@@ -15,6 +15,7 @@ API 계약의 원본은 [`docs/raw/openapi.yaml`](../../raw/openapi.yaml)이다.
 | `getMySettings` | GET | `/members/me/settings` |
 | `updateMySettings` | PATCH | `/members/me/settings` |
 | `getTerms` | GET | `/terms` |
+| `getMyTermConsents` | GET | `/members/me/term-consents` |
 | `updateTermConsents` | PUT | `/members/me/term-consents` |
 | `getCitizenCardOptions` | GET | `/citizen-cards/options` |
 | `createCitizenCard` | POST | `/citizen-cards` |

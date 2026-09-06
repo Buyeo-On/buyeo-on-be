@@ -32,9 +32,36 @@ public class TermQueryService {
 				       term.content,
 				       term.effective_at
 				FROM terms term
-				WHERE term.effective_at <= CURRENT_TIMESTAMP
+				WHERE term.published = true
+				  AND term.effective_at <= CURRENT_TIMESTAMP
 				ORDER BY term.type, term.effective_at DESC
 				""", this::mapTerm));
+	}
+
+	public TermConsentListView getMyCurrentConsents(UUID memberId) {
+		return new TermConsentListView(jdbcOperations.query("""
+				WITH current_terms AS (
+				    SELECT DISTINCT ON (term.type) term.id, term.type, term.version
+				    FROM terms term
+				    WHERE term.published = true
+				      AND term.effective_at <= CURRENT_TIMESTAMP
+				    ORDER BY term.type, term.effective_at DESC
+				)
+				SELECT current_term.id,
+				       current_term.type::text,
+				       current_term.version,
+				       COALESCE(consent.agreed, false) AS agreed,
+				       consent.agreed_at
+				FROM current_terms current_term
+				LEFT JOIN term_consents consent
+				  ON consent.term_id = current_term.id
+				 AND consent.member_id = ?
+				ORDER BY current_term.type
+				""", (resultSet, rowNumber) -> new TermConsentView(
+				resultSet.getObject("id", UUID.class), TermType.valueOf(resultSet.getString("type")),
+				resultSet.getString("version"), resultSet.getBoolean("agreed"),
+				resultSet.getTimestamp("agreed_at") == null ? null
+						: resultSet.getTimestamp("agreed_at").toInstant().atZone(ASIA_SEOUL)), memberId));
 	}
 
 	private TermView mapTerm(ResultSet resultSet, int rowNumber) throws SQLException {
@@ -51,5 +78,15 @@ public class TermQueryService {
 
 	public record TermView(UUID termId, TermType type, String version, boolean required, String title, String content,
 			ZonedDateTime effectiveAt) {
+	}
+
+	public record TermConsentListView(List<TermConsentView> items) {
+		public TermConsentListView {
+			items = List.copyOf(items);
+		}
+	}
+
+	public record TermConsentView(UUID termId, TermType type, String version, boolean agreed,
+			ZonedDateTime agreedAt) {
 	}
 }

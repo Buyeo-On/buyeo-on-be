@@ -60,14 +60,14 @@ class PostgresSchemaIntegrationTests {
 	private JdbcTemplate jdbcTemplate;
 
 	@Test
-	@DisplayName("V39는 기존 탈퇴 유예만 제거하고 사진 파기 전에 회원 행을 삭제하지 않는다")
+	@DisplayName("V40은 기존 탈퇴 유예만 제거하고 사진 파기 전에 회원 행을 삭제하지 않는다")
 	void withdrawalRetentionMigrationMakesExistingWithdrawalsDue() throws Exception {
 		String schema = "withdrawal_upgrade_" + UUID.randomUUID().toString().replace("-", "");
 		String url = POSTGIS.getJdbcUrl();
 		String username = POSTGIS.getUsername();
 		String password = POSTGIS.getPassword();
 		Flyway flyway = Flyway.configure().dataSource(url, username, password).schemas(schema).defaultSchema(schema)
-				.target(MigrationVersion.fromVersion("38")).cleanDisabled(false).load();
+				.target(MigrationVersion.fromVersion("39")).cleanDisabled(false).load();
 		try {
 			flyway.migrate();
 			try (Connection connection = DriverManager.getConnection(url, username, password);
@@ -85,7 +85,7 @@ class PostgresSchemaIntegrationTests {
 			}
 
 			Flyway.configure().dataSource(url, username, password).schemas(schema).defaultSchema(schema)
-					.target(MigrationVersion.fromVersion("39")).load().migrate();
+					.target(MigrationVersion.fromVersion("40")).load().migrate();
 
 			try (Connection connection = DriverManager.getConnection(url, username, password);
 					Statement statement = connection.createStatement()) {
@@ -111,27 +111,28 @@ class PostgresSchemaIntegrationTests {
 		}
 	}
 
-	/** V16 초안 4종과 참여 거리 30m LOCATION 후속 버전이 시딩되는지 검증한다. */
+	/** 초안 이력은 보존하고 출시 약관 3종만 공개되는지 검증한다. */
 	@Test
-	@DisplayName("개발 검증용 약관은 초안 버전과 LOCATION 30m 후속 버전으로 시딩된다")
+	@DisplayName("출시 약관 3종이 공개되고 과거 초안은 비공개 이력으로 남는다")
 	void draftTermsAreSeeded() {
 		assertThat(jdbcTemplate.queryForList("""
-				SELECT type::text || '|' || version || '|' || required || '|' || title
+				SELECT type::text || '|' || version || '|' || required || '|' || published || '|' || title
 				FROM terms
+				WHERE published = true
 				ORDER BY CASE type
 				    WHEN 'SERVICE' THEN 1
 				    WHEN 'PRIVACY' THEN 2
 				    WHEN 'LOCATION' THEN 3
 				    WHEN 'MARKETING' THEN 4
 				END, effective_at
-				""", String.class)).containsExactly("SERVICE|0.1-draft|true|서비스 이용약관",
-				"PRIVACY|0.1-draft|true|개인정보 수집·이용 동의", "LOCATION|0.1-draft|true|위치기반서비스 이용약관",
-				"LOCATION|0.2-draft|true|위치기반서비스 이용약관", "MARKETING|0.1-draft|false|마케팅 정보 수신 동의");
+				""", String.class)).containsExactly("SERVICE|1.0|true|true|부여ON 서비스 이용약관",
+				"PRIVACY|1.0|false|true|부여ON 개인정보 처리방침",
+				"LOCATION|1.0|false|true|부여ON 위치기반서비스 이용약관");
 		assertThat(jdbcTemplate.queryForObject("""
 				SELECT count(*)
 				FROM terms
-				WHERE content LIKE '%개발 검증용 초안(0.1-draft)%'
-				""", Long.class)).isEqualTo(4L);
+				WHERE version LIKE '%draft' AND published = false
+				""", Long.class)).isEqualTo(5L);
 		assertThat(jdbcTemplate.queryForObject("""
 				SELECT count(*)
 				FROM terms
