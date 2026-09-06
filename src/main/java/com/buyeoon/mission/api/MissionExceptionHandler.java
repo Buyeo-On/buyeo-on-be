@@ -9,6 +9,7 @@ import com.buyeoon.mission.application.MissionNotFoundException;
 import com.buyeoon.mission.application.MissionPhotoNotFoundException;
 import com.buyeoon.mission.application.MissionPhotoTooLargeException;
 import com.buyeoon.mission.application.OutsideParticipationRadiusException;
+import com.buyeoon.mission.application.PhotoMissionConsentRequiredException;
 import com.buyeoon.mission.application.TripNotFoundException;
 import com.buyeoon.mission.application.TripNotInProgressException;
 import org.springframework.http.HttpStatus;
@@ -42,6 +43,12 @@ public class MissionExceptionHandler {
 	@ResponseStatus(HttpStatus.PAYLOAD_TOO_LARGE)
 	public ErrorResponse handlePayloadTooLarge() {
 		return ErrorResponse.payloadTooLarge();
+	}
+
+	@ExceptionHandler(PhotoMissionConsentRequiredException.class)
+	@ResponseStatus(HttpStatus.FORBIDDEN)
+	public ErrorResponse handlePhotoConsentRequired() {
+		return ErrorResponse.photoConsentRequired();
 	}
 
 	@ExceptionHandler(OutsideParticipationRadiusException.class)

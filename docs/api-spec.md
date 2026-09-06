@@ -71,8 +71,8 @@ Idempotency-Key: 7f5c6c12-3ee8-4aa5-8f32-682ef0ec35ad
 
 ## 사진 미션 업로드
 
-1. `POST /mission-photos/presigned-url`로 `photoId`, `uploadUrl`과 필수 헤더를 발급받는다.
-2. API 인증 헤더나 multipart 형식 없이 `uploadUrl`로 파일 원본 바이트를 S3에 직접 `PUT`한다.
+1. 사진 미션 개인정보 수집·이용 동의를 저장한 뒤 `POST /mission-photos/presigned-url`로 `photoId`, `uploadUrl`과 필수 헤더를 발급받는다.
+2. 사진 방향을 반영하고 EXIF 메타데이터를 제거한 JPEG 바이트를, API 인증 헤더나 multipart 형식 없이 `uploadUrl`로 S3에 직접 `PUT`한다.
 3. S3가 `200`을 반환하면 `POST /missions/{missionId}/submissions` 요청에 `photoId`를 넣는다.
 4. 서버가 S3 객체의 소유자, 실제 크기와 Content-Type을 확인하고 미션을 처리한다.
 

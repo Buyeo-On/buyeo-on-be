@@ -75,6 +75,10 @@ public record ErrorResponse(boolean success, ErrorData data) {
 		return new ErrorResponse(false, new ErrorData("PAYLOAD_TOO_LARGE", "서버에 설정된 최대 업로드 크기를 초과했습니다."));
 	}
 
+	public static ErrorResponse photoConsentRequired() {
+		return new ErrorResponse(false, new ErrorData("PHOTO_CONSENT_REQUIRED", "사진 미션 이용에 먼저 동의해 주세요."));
+	}
+
 	public static ErrorResponse missionChoiceInUse() {
 		return new ErrorResponse(false, new ErrorData("MISSION_CHOICE_IN_USE", "이미 제출 기록이 있는 보기는 수정할 수 없습니다."));
 	}

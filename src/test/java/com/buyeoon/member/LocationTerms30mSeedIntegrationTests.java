@@ -78,11 +78,12 @@ class LocationTerms30mSeedIntegrationTests {
 	@Test
 	@DisplayName("현재 LOCATION 약관은 출시 1.0 선택 동의이고 이전 버전은 유지된다")
 	void currentLocationTermIsReleaseOptionalConsent() throws Exception {
-		mockMvc.perform(get("/terms")).andExpect(status().isOk()).andExpect(jsonPath("$.data.items.length()").value(3))
+		mockMvc.perform(get("/terms")).andExpect(status().isOk()).andExpect(jsonPath("$.data.items.length()").value(4))
 				.andExpect(jsonPath("$.data.items[2].type").value("LOCATION"))
 				.andExpect(jsonPath("$.data.items[2].version").value("1.0"))
 				.andExpect(jsonPath("$.data.items[2].required").value(false))
 				.andExpect(jsonPath("$.data.items[2].termId").value(not(PREVIOUS_LOCATION_TERM_ID.toString())))
+				.andExpect(jsonPath("$.data.items[3].type").value("PHOTO"))
 				.andExpect(jsonPath("$.data.items[?(@.termId == '%s')]", PREVIOUS_LOCATION_TERM_ID).isEmpty());
 
 		assertThat(jdbcTemplate.queryForObject("""
