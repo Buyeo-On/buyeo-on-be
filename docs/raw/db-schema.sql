@@ -67,6 +67,7 @@ CREATE TABLE terms (
     type term_type NOT NULL, -- 약관 종류
     version text NOT NULL, -- 약관 버전
     required boolean NOT NULL, -- 필수 동의 여부
+    published boolean NOT NULL DEFAULT true, -- 현재 앱에 공개할 버전 여부
     title text NOT NULL, -- 약관 제목
     content text NOT NULL, -- 약관 본문
     effective_at timestamptz NOT NULL, -- 시행 시각

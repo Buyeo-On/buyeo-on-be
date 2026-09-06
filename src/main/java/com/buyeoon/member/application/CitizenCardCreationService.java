@@ -137,7 +137,8 @@ public final class CitizenCardCreationService implements CitizenCardCreator {
 				WITH current_required_terms AS (
 				    SELECT DISTINCT ON (term.type) term.id
 				    FROM terms term
-				    WHERE term.required = true
+				    WHERE term.published = true
+				      AND term.required = true
 				      AND term.effective_at <= clock_timestamp()
 				    ORDER BY term.type, term.effective_at DESC
 				)

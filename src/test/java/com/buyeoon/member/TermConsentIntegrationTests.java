@@ -112,22 +112,35 @@ class TermConsentIntegrationTests {
 				.andExpect(status().isOk()).andExpect(jsonPath("$.data.requiredTermsAgreed").value(true));
 	}
 
-	/** 약관 누락·중복과 필수 약관 거부는 400이며 어떤 상태도 만들지 않는다. */
+	/** 가입과 위치 기능은 각 화면에서 결정한 약관만 저장하고 중복·필수 거부는 거절한다. */
 	@Test
-	@DisplayName("불완전하거나 필수 약관을 거부한 요청은 전체를 거부한다")
-	void missingDuplicateAndRejectedRequiredTermsAreRejected() throws Exception {
+	@DisplayName("서비스와 위치 동의는 나눠 저장하고 잘못된 요청은 거부한다")
+	void scopedConsentsAreStoredAndInvalidRequestsAreRejected() throws Exception {
 		AuthenticatedMember member = insertAuthenticatedMember();
 		CurrentTerms terms = insertCurrentTerms();
-		String missing = requestWithoutMarketing(terms);
-		String duplicate = requestWithDuplicateService(terms);
-		String rejectedRequired = request(terms, false, true, true, false);
 
-		// 실패 요청은 성공 멱등성 기록이나 일부 동의를 남기지 않는다.
-		for (String body : new String[]{missing, duplicate, rejectedRequired}) {
+		performConsent(member, "service-key-0001", requestOnly(terms.serviceId(), true)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.requiredTermsAgreed").value(true));
+		mockMvc.perform(get("/members/me").header("Authorization", "Bearer " + member.accessToken()))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.data.locationTermsAgreed").value(false));
+		performConsent(member, "location-key-001", requestOnly(terms.locationId(), true)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.requiredTermsAgreed").value(true));
+		mockMvc.perform(get("/members/me").header("Authorization", "Bearer " + member.accessToken()))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.data.locationTermsAgreed").value(true));
+		mockMvc.perform(get("/members/me/term-consents").header("Authorization", "Bearer " + member.accessToken()))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.data.items.length()").value(4))
+				.andExpect(jsonPath("$.data.items[?(@.type == 'SERVICE')].agreed").value(true))
+				.andExpect(jsonPath("$.data.items[?(@.type == 'LOCATION')].agreed").value(true))
+				.andExpect(jsonPath("$.data.items[?(@.type == 'PRIVACY')].agreed").value(false));
+
+		String duplicate = requestWithDuplicateService(terms);
+		String rejectedRequired = requestOnly(terms.serviceId(), false);
+
+		for (String body : new String[]{duplicate, rejectedRequired}) {
 			performConsent(member, "invalid-key-0001", body).andExpect(status().isBadRequest())
 					.andExpect(jsonPath("$.data.code").value("INVALID_REQUEST"));
-			assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM term_consents", Long.class)).isZero();
-			assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM idempotency_requests", Long.class)).isZero();
+			assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM term_consents", Long.class)).isEqualTo(2L);
+			assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM idempotency_requests", Long.class)).isEqualTo(2L);
 		}
 	}
 
@@ -351,7 +364,7 @@ class TermConsentIntegrationTests {
 	private CurrentTerms insertCurrentTerms() {
 		Instant effectiveAt = Instant.parse("2026-08-01T00:00:00Z");
 		return new CurrentTerms(insertTerm("SERVICE", "1.0", true, effectiveAt),
-				insertTerm("PRIVACY", "1.0", true, effectiveAt), insertTerm("LOCATION", "1.0", true, effectiveAt),
+				insertTerm("PRIVACY", "1.0", false, effectiveAt), insertTerm("LOCATION", "1.0", false, effectiveAt),
 				insertTerm("MARKETING", "1.0", false, effectiveAt));
 	}
 
@@ -386,6 +399,11 @@ class TermConsentIntegrationTests {
 				+ "{\"termId\":\"%s\",\"version\":\"1.0\",\"agreed\":true},"
 				+ "{\"termId\":\"%s\",\"version\":\"1.0\",\"agreed\":true}]}")
 				.formatted(terms.serviceId(), terms.privacyId(), terms.locationId());
+	}
+
+	private String requestOnly(UUID termId, boolean agreed) {
+		return ("{\"consents\":[{\"termId\":\"%s\",\"version\":\"1.0\",\"agreed\":%s}]}")
+				.formatted(termId, agreed);
 	}
 
 	private String requestWithDuplicateService(CurrentTerms terms) {
