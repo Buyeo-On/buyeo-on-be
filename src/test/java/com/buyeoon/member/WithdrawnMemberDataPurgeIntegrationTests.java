@@ -10,6 +10,8 @@ import static org.mockito.Mockito.verify;
 import com.buyeoon.common.storage.PrivateImageObjectStore;
 import com.buyeoon.member.application.MemberWithdrawalService;
 import com.buyeoon.member.application.WithdrawnMemberDataPurgeService;
+import com.buyeoon.member.auth.social.KakaoAuthorizationUnlinker;
+import com.buyeoon.member.auth.social.KakaoSocialCredential;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -56,6 +58,9 @@ class WithdrawnMemberDataPurgeIntegrationTests {
 
 	@MockitoBean
 	private PrivateImageObjectStore objectStore;
+
+	@MockitoBean
+	private KakaoAuthorizationUnlinker kakaoAuthorizationUnlinker;
 
 	@BeforeEach
 	void cleanUp() {
@@ -169,7 +174,7 @@ class WithdrawnMemberDataPurgeIntegrationTests {
 		Fixture withdrawn = insertRichActiveMember("private/missions/newly-withdrawn.webp");
 		Fixture active = insertRichActiveMember("private/missions/still-active.webp");
 
-		withdrawalService.withdraw(withdrawn.memberId());
+		withdrawalService.withdraw(withdrawn.memberId(), new KakaoSocialCredential("withdrawal-test-token"));
 
 		assertThat(purgeService.purgeDueMembers()).isEqualTo(1);
 		assertPurged(withdrawn);
@@ -197,7 +202,7 @@ class WithdrawnMemberDataPurgeIntegrationTests {
 			}
 			return null;
 		}).when(objectStore).delete(anyString());
-		withdrawalService.withdraw(fixture.memberId());
+		withdrawalService.withdraw(fixture.memberId(), new KakaoSocialCredential("withdrawal-test-token"));
 
 		assertThat(purgeService.purgeDueMembers()).isZero();
 		assertThat(member(fixture.memberId()).get("status").toString()).isEqualTo("WITHDRAWN");
