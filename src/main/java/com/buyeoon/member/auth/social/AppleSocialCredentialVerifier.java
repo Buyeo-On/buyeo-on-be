@@ -22,11 +22,12 @@ import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
-public class AppleSocialCredentialVerifier implements SocialCredentialVerifier {
+public class AppleSocialCredentialVerifier implements SocialCredentialVerifier, AppleAuthorizationRevoker {
 
 	private static final String APPLE_ISSUER = "https://appleid.apple.com";
 	private static final String KEYS_PATH = "/auth/keys";
 	private static final String TOKEN_PATH = "/auth/token";
+	private static final String REVOKE_PATH = "/auth/revoke";
 
 	private final RestClient restClient;
 	private final String clientId;
@@ -68,6 +69,29 @@ public class AppleSocialCredentialVerifier implements SocialCredentialVerifier {
 		return new VerifiedSocialIdentity(SocialProvider.APPLE, identitySubject);
 	}
 
+	@Override
+	public void verifyAndRevoke(AppleSocialCredential credential, String expectedSubject) {
+		if (credential == null || isBlank(credential.authorizationCode()) || isBlank(credential.identityToken())
+				|| isBlank(credential.nonce()) || isBlank(expectedSubject)) {
+			throw new SocialAuthenticationFailedException();
+		}
+
+		JWKSet appleKeys = fetchAppleKeys();
+		String identitySubject = verifyIdentityToken(credential.identityToken(), credential.nonce(), appleKeys);
+		if (!constantTimeEquals(expectedSubject, identitySubject)) {
+			throw new SocialAuthenticationFailedException();
+		}
+		AppleTokenResponse tokenResponse = exchangeAuthorizationCode(credential.authorizationCode());
+		if (tokenResponse == null || isBlank(tokenResponse.idToken()) || isBlank(tokenResponse.refreshToken())) {
+			throw new SocialProviderUnavailableException();
+		}
+		String exchangedSubject = verifyIdentityToken(tokenResponse.idToken(), null, appleKeys);
+		if (!constantTimeEquals(expectedSubject, exchangedSubject)) {
+			throw new SocialAuthenticationFailedException();
+		}
+		revokeRefreshToken(tokenResponse.refreshToken());
+	}
+
 	private JWKSet fetchAppleKeys() {
 		String response;
 		try {
@@ -94,6 +118,24 @@ public class AppleSocialCredentialVerifier implements SocialCredentialVerifier {
 		try {
 			return restClient.post().uri(TOKEN_PATH).contentType(MediaType.APPLICATION_FORM_URLENCODED).body(form)
 					.retrieve().body(AppleTokenResponse.class);
+		} catch (HttpClientErrorException exception) {
+			throw new SocialAuthenticationFailedException();
+		} catch (HttpServerErrorException exception) {
+			throw new SocialProviderUnavailableException(exception);
+		} catch (RestClientException exception) {
+			throw new SocialProviderUnavailableException(exception);
+		}
+	}
+
+	private void revokeRefreshToken(String refreshToken) {
+		MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+		form.add("client_id", clientId);
+		form.add("client_secret", clientSecretProvider.generate());
+		form.add("token", refreshToken);
+		form.add("token_type_hint", "refresh_token");
+		try {
+			restClient.post().uri(REVOKE_PATH).contentType(MediaType.APPLICATION_FORM_URLENCODED).body(form).retrieve()
+					.toBodilessEntity();
 		} catch (HttpClientErrorException exception) {
 			throw new SocialAuthenticationFailedException();
 		} catch (HttpServerErrorException exception) {
@@ -143,10 +185,14 @@ public class AppleSocialCredentialVerifier implements SocialCredentialVerifier {
 		return value == null || value.isBlank();
 	}
 
-	private record AppleTokenResponse(String id_token) {
+	private record AppleTokenResponse(String id_token, String refresh_token) {
 
 		private String idToken() {
 			return id_token;
+		}
+
+		private String refreshToken() {
+			return refresh_token;
 		}
 	}
 }

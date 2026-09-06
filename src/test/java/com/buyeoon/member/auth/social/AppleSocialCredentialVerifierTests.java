@@ -51,9 +51,11 @@ class AppleSocialCredentialVerifierTests {
 	private static final Instant NOW = Instant.parse("2026-08-12T00:00:00Z");
 	private static final String KEYS_URL = APPLE_ISSUER + "/auth/keys";
 	private static final String TOKEN_URL = APPLE_ISSUER + "/auth/token";
+	private static final String REVOKE_URL = APPLE_ISSUER + "/auth/revoke";
+	private static final String REFRESH_TOKEN = "apple-refresh-token";
 
 	private MockRestServiceServer server;
-	private SocialCredentialVerifier verifier;
+	private AppleSocialCredentialVerifier verifier;
 	private RSAPublicKey applePublicKey;
 	private RSAPrivateKey applePrivateKey;
 
@@ -87,6 +89,51 @@ class AppleSocialCredentialVerifierTests {
 		assertEquals(SocialProvider.APPLE, verifier.provider());
 		assertEquals(SocialProvider.APPLE, identity.provider());
 		assertEquals(SUBJECT, identity.subject());
+		server.verify();
+	}
+
+	@Test
+	@DisplayName("탈퇴 재인증은 연결된 Apple subject를 확인하고 refresh token을 폐기한다")
+	void withdrawalReauthenticationRevokesRefreshToken() throws Exception {
+		String identityToken = identityToken(SUBJECT, APPLE_ISSUER, CLIENT_ID, NOW.plusSeconds(300), NONCE,
+				applePrivateKey);
+		expectKeys();
+		expectTokenExchange(AUTHORIZATION_CODE,
+				identityToken(SUBJECT, APPLE_ISSUER, CLIENT_ID, NOW.plusSeconds(300), null, applePrivateKey),
+				REFRESH_TOKEN);
+		server.expect(once(), requestTo(REVOKE_URL)).andExpect(method(POST))
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_FORM_URLENCODED))
+				.andExpect(content().string(containsString("token=" + REFRESH_TOKEN)))
+				.andExpect(content().string(containsString("token_type_hint=refresh_token"))).andRespond(withSuccess());
+
+		verifier.verifyAndRevoke(new AppleSocialCredential(AUTHORIZATION_CODE, identityToken, NONCE), SUBJECT);
+
+		server.verify();
+	}
+
+	@Test
+	@DisplayName("탈퇴 재인증의 Apple subject가 연결 계정과 다르면 폐기하지 않는다")
+	void withdrawalReauthenticationRejectsAnotherAppleSubject() throws Exception {
+		String identityToken = identityToken("another-subject", APPLE_ISSUER, CLIENT_ID, NOW.plusSeconds(300), NONCE,
+				applePrivateKey);
+		expectKeys();
+
+		assertThrows(SocialAuthenticationFailedException.class, () -> verifier
+				.verifyAndRevoke(new AppleSocialCredential(AUTHORIZATION_CODE, identityToken, NONCE), SUBJECT));
+		server.verify();
+	}
+
+	@Test
+	@DisplayName("탈퇴 재인증 토큰 응답에 refresh token이 없으면 제공자 장애로 처리한다")
+	void withdrawalReauthenticationRequiresRefreshToken() throws Exception {
+		String identityToken = identityToken(SUBJECT, APPLE_ISSUER, CLIENT_ID, NOW.plusSeconds(300), NONCE,
+				applePrivateKey);
+		expectKeys();
+		expectTokenExchange(AUTHORIZATION_CODE,
+				identityToken(SUBJECT, APPLE_ISSUER, CLIENT_ID, NOW.plusSeconds(300), null, applePrivateKey));
+
+		assertThrows(SocialProviderUnavailableException.class, () -> verifier
+				.verifyAndRevoke(new AppleSocialCredential(AUTHORIZATION_CODE, identityToken, NONCE), SUBJECT));
 		server.verify();
 	}
 
@@ -267,7 +314,13 @@ class AppleSocialCredentialVerifierTests {
 	}
 
 	private void expectTokenExchange(String authorizationCode, String exchangedIdentityToken) {
-		String response = "{\"id_token\":\"" + exchangedIdentityToken + "\"}";
+		expectTokenExchange(authorizationCode, exchangedIdentityToken, null);
+	}
+
+	private void expectTokenExchange(String authorizationCode, String exchangedIdentityToken, String refreshToken) {
+		String response = refreshToken == null
+				? "{\"id_token\":\"" + exchangedIdentityToken + "\"}"
+				: "{\"id_token\":\"" + exchangedIdentityToken + "\",\"refresh_token\":\"" + refreshToken + "\"}";
 		server.expect(once(), requestTo(TOKEN_URL)).andExpect(method(POST))
 				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_FORM_URLENCODED))
 				.andExpect(content().string(containsString("code=" + authorizationCode)))

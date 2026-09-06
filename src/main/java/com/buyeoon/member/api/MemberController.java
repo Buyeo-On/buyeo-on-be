@@ -12,6 +12,9 @@ import com.buyeoon.member.application.ProfileUpdateService.ProfileUpdateCommand;
 import com.buyeoon.member.application.PushTokenService;
 import com.buyeoon.member.application.WelcomeBackQueryService;
 import com.buyeoon.member.application.WelcomeBackQueryService.WelcomeBackView;
+import com.buyeoon.member.auth.social.AppleSocialCredential;
+import com.buyeoon.member.auth.social.KakaoSocialCredential;
+import com.buyeoon.member.auth.social.SocialCredential;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -66,9 +69,44 @@ public class MemberController {
 	}
 
 	@DeleteMapping("/me")
-	public SuccessResponse<Map<String, Object>> withdrawMyMember(@AuthenticationPrincipal Jwt jwt) {
-		memberWithdrawalService.withdraw(memberId(jwt));
+	public SuccessResponse<Map<String, Object>> withdrawMyMember(@AuthenticationPrincipal Jwt jwt,
+			@RequestBody(required = false) JsonNode request) {
+		memberWithdrawalService.withdraw(memberId(jwt), parseWithdrawalCredential(request));
 		return SuccessResponse.of(Map.of());
+	}
+
+	private SocialCredential parseWithdrawalCredential(JsonNode request) {
+		if (request == null || request.isNull()) {
+			return null;
+		}
+		String provider = requiredText(request, "provider");
+		return switch (provider) {
+			case "APPLE" -> {
+				requireProperties(request, Set.of("provider", "authorizationCode", "identityToken", "nonce"));
+				yield new AppleSocialCredential(requiredText(request, "authorizationCode"),
+						requiredText(request, "identityToken"), requiredText(request, "nonce"));
+			}
+			case "KAKAO" -> {
+				requireProperties(request, Set.of("provider", "accessToken"));
+				yield new KakaoSocialCredential(requiredText(request, "accessToken"));
+			}
+			default -> throw new InvalidWithdrawalRequestException();
+		};
+	}
+
+	private void requireProperties(JsonNode request, Set<String> fields) {
+		if (!request.isObject() || request.size() != fields.size()
+				|| request.properties().stream().anyMatch(property -> !fields.contains(property.getKey()))) {
+			throw new InvalidWithdrawalRequestException();
+		}
+	}
+
+	private String requiredText(JsonNode request, String field) {
+		JsonNode value = request.get(field);
+		if (value == null || !value.isString() || value.stringValue().isBlank()) {
+			throw new InvalidWithdrawalRequestException();
+		}
+		return value.stringValue();
 	}
 
 	@GetMapping("/me/settings")
