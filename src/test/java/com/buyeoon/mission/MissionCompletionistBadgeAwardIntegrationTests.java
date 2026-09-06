@@ -106,6 +106,7 @@ class MissionCompletionistBadgeAwardIntegrationTests {
 		jdbcTemplate.update("DELETE FROM visit_records");
 		jdbcTemplate.update("DELETE FROM mission_submissions");
 		jdbcTemplate.update("DELETE FROM mission_photos");
+		jdbcTemplate.update("DELETE FROM mission_photo_upload_reservations");
 		jdbcTemplate.update("DELETE FROM mission_participations");
 		jdbcTemplate.update("DELETE FROM trips");
 		jdbcTemplate.update(
@@ -164,6 +165,15 @@ class MissionCompletionistBadgeAwardIntegrationTests {
 	private void stubMatchingPhoto(UUID tripId, UUID missionId, UUID photoId, UUID ownerId, String contentType,
 			long fileSizeBytes) {
 		String objectKey = "private/missions/" + tripId + "/" + missionId + "/" + photoId;
+		Instant createdAt = Instant.now();
+		jdbcTemplate.update("""
+				INSERT INTO mission_photo_upload_reservations (
+				    photo_id, member_id, trip_id, mission_id, object_key, content_type,
+				    file_size_bytes, created_at, presigned_expires_at, cleanup_due_at
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				""", photoId, ownerId, tripId, missionId, objectKey, contentType, fileSizeBytes,
+				Timestamp.from(createdAt), Timestamp.from(createdAt.plusSeconds(600)),
+				Timestamp.from(createdAt.plus(24, ChronoUnit.HOURS)));
 		when(photoObjectStore.head(objectKey)).thenReturn(
 				Optional.of(new MissionPhotoObject(ownerId, contentType, fileSizeBytes, contentType, fileSizeBytes)));
 	}

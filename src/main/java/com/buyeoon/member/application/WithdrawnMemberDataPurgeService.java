@@ -98,8 +98,12 @@ public final class WithdrawnMemberDataPurgeService {
 				SELECT object_key
 				FROM mission_photos
 				WHERE member_id = ?
-				ORDER BY id
-				""", (resultSet, rowNumber) -> resultSet.getString("object_key"), memberId);
+				UNION
+				SELECT object_key
+				FROM mission_photo_upload_reservations
+				WHERE member_id = ?
+				ORDER BY object_key
+				""", (resultSet, rowNumber) -> resultSet.getString("object_key"), memberId, memberId);
 	}
 
 	private boolean purgeRelationalData(UUID memberId) {

@@ -237,20 +237,46 @@ public class MissionSubmissionService {
 		if (photoId == null) {
 			throw new InvalidMissionSubmissionException();
 		}
-		String objectKey = MissionPhotoObjectKeys.key(tripId, missionId, photoId);
+		List<PhotoUploadReservation> reservations = jdbcOperations.query("""
+				SELECT member_id, trip_id, mission_id, object_key, content_type, file_size_bytes
+				FROM mission_photo_upload_reservations
+				WHERE photo_id = ?
+				FOR UPDATE
+				""",
+				(resultSet, rowNumber) -> new PhotoUploadReservation(resultSet.getObject("member_id", UUID.class),
+						resultSet.getObject("trip_id", UUID.class), resultSet.getObject("mission_id", UUID.class),
+						resultSet.getString("object_key"), resultSet.getString("content_type"),
+						resultSet.getLong("file_size_bytes")),
+				photoId);
+		if (reservations.isEmpty()) {
+			throw new MissionPhotoNotFoundException();
+		}
+		PhotoUploadReservation reservation = reservations.getFirst();
+		if (!memberId.equals(reservation.memberId()) || !tripId.equals(reservation.tripId())
+				|| !missionId.equals(reservation.missionId())) {
+			throw new MissionPhotoNotFoundException();
+		}
+		String objectKey = reservation.objectKey();
 		MissionPhotoObject object = missionPhotoObjectStore.head(objectKey)
 				.orElseThrow(MissionPhotoNotFoundException::new);
 		if (!object.ownerId().equals(memberId)) {
 			throw new MissionPhotoNotFoundException();
 		}
-		if (object.fileSizeBytes() != object.declaredFileSizeBytes()
+		if (object.fileSizeBytes() != reservation.fileSizeBytes()
+				|| !object.contentType().equals(reservation.contentType())
+				|| object.fileSizeBytes() != object.declaredFileSizeBytes()
 				|| !object.contentType().equals(object.declaredContentType())
 				|| !ALLOWED_PHOTO_CONTENT_TYPES.contains(object.contentType())) {
 			throw new InvalidMissionSubmissionException();
 		}
 		MissionPhotoEntity photo = missionPhotos.save(MissionPhotoEntity.create(memberId, tripId, missionId, objectKey,
 				object.contentType(), object.fileSizeBytes()));
+		jdbcOperations.update("DELETE FROM mission_photo_upload_reservations WHERE photo_id = ?", photoId);
 		return photo.getId();
+	}
+
+	private record PhotoUploadReservation(UUID memberId, UUID tripId, UUID missionId, String objectKey,
+			String contentType, long fileSizeBytes) {
 	}
 
 	private boolean isCorrectChoice(UUID missionId, String choiceId) {

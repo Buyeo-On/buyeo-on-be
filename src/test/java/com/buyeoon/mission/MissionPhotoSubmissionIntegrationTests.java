@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -13,8 +16,10 @@ import com.buyeoon.common.storage.MissionPhotoObjectStore;
 import com.buyeoon.common.storage.MissionPhotoObjectStore.MissionPhotoObject;
 import com.buyeoon.common.storage.MissionPhotoUploadPresigner;
 import com.buyeoon.common.storage.MissionPhotoUploadPresigner.MissionPhotoUploadTarget;
+import com.buyeoon.common.storage.PrivateImageObjectStore;
 import com.buyeoon.member.auth.AccessTokenService;
 import com.buyeoon.mission.application.MissionCompleted;
+import com.buyeoon.mission.application.MissionPhotoUploadCleanupService;
 import com.buyeoon.trip.VisitRecorded;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -76,16 +81,23 @@ class MissionPhotoSubmissionIntegrationTests {
 	@Autowired
 	private ApplicationEvents applicationEvents;
 
+	@Autowired
+	private MissionPhotoUploadCleanupService photoUploadCleanupService;
+
 	@MockitoBean
 	private MissionPhotoUploadPresigner photoUploadPresigner;
 
 	@MockitoBean
 	private MissionPhotoObjectStore photoObjectStore;
 
+	@MockitoBean
+	private PrivateImageObjectStore privateImageObjectStore;
+
 	private AuthenticatedMember member;
 
 	@BeforeEach
 	void setUpMember() {
+		reset(privateImageObjectStore);
 		member = insertAuthenticatedMember();
 		when(photoUploadPresigner.presign(anyString(), any(), anyString(), anyLong()))
 				.thenReturn(new MissionPhotoUploadTarget("https://example-bucket.s3.amazonaws.com/upload",
@@ -99,6 +111,7 @@ class MissionPhotoSubmissionIntegrationTests {
 		jdbcTemplate.update("DELETE FROM visit_records");
 		jdbcTemplate.update("DELETE FROM mission_submissions");
 		jdbcTemplate.update("DELETE FROM mission_photos");
+		jdbcTemplate.update("DELETE FROM mission_photo_upload_reservations");
 		jdbcTemplate.update("DELETE FROM mission_participations");
 		jdbcTemplate.update("DELETE FROM trips");
 		jdbcTemplate.update(
@@ -128,6 +141,8 @@ class MissionPhotoSubmissionIntegrationTests {
 				.andExpect(jsonPath("$.data.expiresAt").isNotEmpty());
 
 		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM mission_photos", Integer.class)).isZero();
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM mission_photo_upload_reservations", Integer.class))
+				.isEqualTo(1);
 	}
 
 	/** PHOTO가 아닌 미션에 대한 발급 요청은 400을 받는다. */
@@ -194,6 +209,50 @@ class MissionPhotoSubmissionIntegrationTests {
 				.andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
 
 		assertThat(retried).isEqualTo(first);
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM mission_photo_upload_reservations", Integer.class))
+				.isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("24시간이 지난 미제출 사진은 스토리지와 예약에서 파기한다")
+	void purgesUnsubmittedPhotoAfter24Hours() {
+		UUID tripId = startTrip(member.memberId());
+		UUID place = insertProjectedPlace("파기 사진 장소", 20);
+		UUID missionId = insertPhotoMission(place, "파기 사진 미션", 150);
+		UUID photoId = UUID.randomUUID();
+		Instant createdAt = Instant.now().minus(25, ChronoUnit.HOURS);
+		insertPhotoReservation(member.memberId(), tripId, missionId, photoId, "image/jpeg", 1024, createdAt);
+
+		assertThat(photoUploadCleanupService.purgeDueUploads()).isEqualTo(1);
+
+		verify(privateImageObjectStore).delete("private/missions/" + tripId + "/" + missionId + "/" + photoId);
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM mission_photo_upload_reservations", Integer.class))
+				.isZero();
+	}
+
+	@Test
+	@DisplayName("한 미제출 사진 파기가 실패해도 다른 예약을 처리하고 실패 예약은 재시도한다")
+	void retainsReservationWhenUnsubmittedPhotoDeletionFails() {
+		UUID tripId = startTrip(member.memberId());
+		UUID place = insertProjectedPlace("재시도 사진 장소", 20);
+		UUID missionId = insertPhotoMission(place, "재시도 사진 미션", 150);
+		UUID photoId = UUID.randomUUID();
+		String objectKey = "private/missions/" + tripId + "/" + missionId + "/" + photoId;
+		insertPhotoReservation(member.memberId(), tripId, missionId, photoId, "image/jpeg", 1024,
+				Instant.now().minus(26, ChronoUnit.HOURS));
+		UUID successfulPhotoId = UUID.randomUUID();
+		insertPhotoReservation(member.memberId(), tripId, missionId, successfulPhotoId, "image/jpeg", 1024,
+				Instant.now().minus(25, ChronoUnit.HOURS));
+		doThrow(new IllegalStateException("forced deletion failure")).when(privateImageObjectStore).delete(objectKey);
+
+		assertThat(photoUploadCleanupService.purgeDueUploads()).isEqualTo(1);
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM mission_photo_upload_reservations", Integer.class))
+				.isEqualTo(1);
+
+		reset(privateImageObjectStore);
+		assertThat(photoUploadCleanupService.purgeDueUploads()).isEqualTo(1);
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM mission_photo_upload_reservations", Integer.class))
+				.isZero();
 	}
 
 	/** 같은 키를 다른 본문에 재사용하면 409를 받는다. */
@@ -271,7 +330,10 @@ class MissionPhotoSubmissionIntegrationTests {
 		UUID place = insertProjectedPlace("사진 장소", 20);
 		UUID missionId = insertPhotoMission(place, "사진 미션", 150);
 		UUID photoId = UUID.randomUUID();
-		stubMatchingPhoto(tripId, missionId, photoId, UUID.randomUUID(), "image/jpeg", 1024);
+		String objectKey = "private/missions/" + tripId + "/" + missionId + "/" + photoId;
+		insertPhotoReservation(member.memberId(), tripId, missionId, photoId, "image/jpeg", 1024);
+		when(photoObjectStore.head(objectKey)).thenReturn(
+				Optional.of(new MissionPhotoObject(UUID.randomUUID(), "image/jpeg", 1024, "image/jpeg", 1024)));
 
 		mockMvc.perform(submit(missionId, "photo-other-owner", photoRequest(tripId, photoId)))
 				.andExpect(status().isNotFound()).andExpect(jsonPath("$.data.code").value("RESOURCE_NOT_FOUND"));
@@ -287,6 +349,7 @@ class MissionPhotoSubmissionIntegrationTests {
 		UUID photoId = UUID.randomUUID();
 		when(photoObjectStore.head(anyString())).thenReturn(
 				Optional.of(new MissionPhotoObject(member.memberId(), "image/jpeg", 2048, "image/jpeg", 1024)));
+		insertPhotoReservation(member.memberId(), tripId, missionId, photoId, "image/jpeg", 1024);
 
 		mockMvc.perform(submit(missionId, "photo-size-mismatch", photoRequest(tripId, photoId)))
 				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.data.code").value("INVALID_REQUEST"));
@@ -307,6 +370,7 @@ class MissionPhotoSubmissionIntegrationTests {
 		UUID photoId = UUID.randomUUID();
 		when(photoObjectStore.head(anyString())).thenReturn(
 				Optional.of(new MissionPhotoObject(member.memberId(), "image/png", 1024, "image/jpeg", 1024)));
+		insertPhotoReservation(member.memberId(), tripId, missionId, photoId, "image/jpeg", 1024);
 
 		mockMvc.perform(submit(missionId, "photo-type-mismatch", photoRequest(tripId, photoId)))
 				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.data.code").value("INVALID_REQUEST"));
@@ -391,8 +455,27 @@ class MissionPhotoSubmissionIntegrationTests {
 	private void stubMatchingPhoto(UUID tripId, UUID missionId, UUID photoId, UUID ownerId, String contentType,
 			long fileSizeBytes) {
 		String objectKey = "private/missions/" + tripId + "/" + missionId + "/" + photoId;
+		insertPhotoReservation(ownerId, tripId, missionId, photoId, contentType, fileSizeBytes);
 		when(photoObjectStore.head(objectKey)).thenReturn(
 				Optional.of(new MissionPhotoObject(ownerId, contentType, fileSizeBytes, contentType, fileSizeBytes)));
+	}
+
+	private void insertPhotoReservation(UUID ownerId, UUID tripId, UUID missionId, UUID photoId, String contentType,
+			long fileSizeBytes) {
+		insertPhotoReservation(ownerId, tripId, missionId, photoId, contentType, fileSizeBytes, Instant.now());
+	}
+
+	private void insertPhotoReservation(UUID ownerId, UUID tripId, UUID missionId, UUID photoId, String contentType,
+			long fileSizeBytes, Instant createdAt) {
+		jdbcTemplate.update("""
+				INSERT INTO mission_photo_upload_reservations (
+				    photo_id, member_id, trip_id, mission_id, object_key, content_type,
+				    file_size_bytes, created_at, presigned_expires_at, cleanup_due_at
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				""", photoId, ownerId, tripId, missionId,
+				"private/missions/" + tripId + "/" + missionId + "/" + photoId, contentType, fileSizeBytes,
+				Timestamp.from(createdAt), Timestamp.from(createdAt.plusSeconds(600)),
+				Timestamp.from(createdAt.plus(24, ChronoUnit.HOURS)));
 	}
 
 	private MockHttpServletRequestBuilder submit(UUID missionId, String idempotencyKey, String body) {
