@@ -1052,7 +1052,9 @@ components:
                 displayName: null
                 characterId: null
                 requiredTermsAgreed: false
+                locationTermsAgreed: false
                 citizenCardIssued: false
+                appReviewMode: false
                 createdAt: '2026-08-06T15:30:00+09:00'
     AuthRefreshSuccess:
       description: 인증 토큰 갱신 성공
@@ -1073,7 +1075,9 @@ components:
                 displayName: 부여여행자
                 characterId: 550e8400-e29b-41d4-a716-446655440001
                 requiredTermsAgreed: true
+                locationTermsAgreed: true
                 citizenCardIssued: true
+                appReviewMode: false
                 createdAt: '2026-08-01T09:00:00+09:00'
     MemberSuccess:
       description: 회원 정보
@@ -2025,7 +2029,7 @@ components:
       enum: [ACTIVE, WITHDRAWN]
     Member:
       type: object
-      required: [memberId, status, requiredTermsAgreed, locationTermsAgreed, citizenCardIssued, createdAt]
+      required: [memberId, status, requiredTermsAgreed, locationTermsAgreed, citizenCardIssued, appReviewMode, createdAt]
       properties:
         memberId:
           type: string
@@ -2045,6 +2049,9 @@ components:
           description: 공개된 현재 위치기반서비스 이용약관에 동의했는지 여부
         citizenCardIssued:
           type: boolean
+        appReviewMode:
+          type: boolean
+          description: App Store 심사 전용 계정에만 부여되는 위치 시뮬레이션 권한
         createdAt:
           type: string
           format: date-time

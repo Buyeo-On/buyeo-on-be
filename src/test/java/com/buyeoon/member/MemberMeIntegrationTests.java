@@ -89,6 +89,7 @@ class MemberMeIntegrationTests {
 		UUID sessionId = UUID.randomUUID();
 		Instant createdAt = Instant.parse("2026-08-11T03:00:00Z");
 		insertMember(memberId, "ACTIVE", createdAt);
+		jdbcTemplate.update("UPDATE members SET app_review_mode = true WHERE id = ?", memberId);
 		insertSession(sessionId, memberId, Instant.now().plus(30, ChronoUnit.DAYS), null);
 
 		mockMvc.perform(
@@ -101,6 +102,7 @@ class MemberMeIntegrationTests {
 				.andExpect(jsonPath("$.data.characterId").value((Object) null))
 				.andExpect(jsonPath("$.data.requiredTermsAgreed").value(false))
 				.andExpect(jsonPath("$.data.citizenCardIssued").value(false))
+				.andExpect(jsonPath("$.data.appReviewMode").value(true))
 				.andExpect(jsonPath("$.data.createdAt").value("2026-08-11T12:00:00+09:00"));
 	}
 
