@@ -43,6 +43,8 @@ class SchemaMappingTests {
 			.of("src/main/resources/db/migration/V14__align_point_settlement_constraints.sql");
 	private static final Path PLACE_IMAGE_LICENSE_MIGRATION = Path
 			.of("src/main/resources/db/migration/V35__add_place_image_license_type.sql");
+	private static final Path RELEASE_LEGAL_DOCUMENTS_MIGRATION = Path
+			.of("src/main/resources/db/migration/V39__publish_release_legal_documents.sql");
 	private static final Pattern CREATE_TABLE = Pattern.compile("CREATE TABLE ([a-z_]+) ");
 
 	/** 초기 스키마에 후속 마이그레이션을 적용한 정의가 기준 DB 스키마와 같음을 보장한다. */
@@ -166,6 +168,8 @@ class SchemaMappingTests {
 				"    WHERE choice = 'CARRY_OVER' AND expired_at IS NULL;");
 		String privatePhotoObjectKey = "object_key text NOT NULL UNIQUE CHECK (object_key LIKE 'private/%'),"
 				+ " -- 비공개 스토리지 객체 키";
+		String publishedTermColumn = String.join("\n", "    required boolean NOT NULL, -- 필수 동의 여부",
+				"    published boolean NOT NULL DEFAULT true, -- 현재 앱에 공개할 버전 여부");
 		String publicImageKeySchema = baseline
 				.replace("expires_at timestamptz NOT NULL, -- 키 보관 만료 시각",
 						"expires_at timestamptz NOT NULL, -- 최초 성공 확정 시각부터 24시간인 키 보관 만료 시각")
@@ -200,6 +204,7 @@ class SchemaMappingTests {
 		assertThat(publicImageKeySchema.replace(placeSourceColumns, placeExternalIdentityColumns)
 				.replace(placeLocationIndex, placeIndexes).replace(legacyMissionStatus, currentMissionStatus)
 				.replace(legacyMissionConstraints, currentMissionConstraints).replace(legacyTermType, currentTermType)
+				.replace("    required boolean NOT NULL, -- 필수 동의 여부", publishedTermColumn)
 				.replace(placeExternalIdentityColumns, placeOperatingInfoColumns)
 				.replace(placeOperatingInfoColumns, placeImageLicenseColumns)
 				.replace(legacySettlementChoice, currentSettlementChoice)
@@ -209,6 +214,9 @@ class SchemaMappingTests {
 				.contains("ALTER TYPE term_type ADD VALUE 'LOCATION' AFTER 'PRIVACY'");
 		assertThat(Files.readString(PLACE_IMAGE_LICENSE_MIGRATION, StandardCharsets.UTF_8))
 				.contains("ADD COLUMN source_image_license_type text").contains("'KOGL_TYPE_1', 'KOGL_TYPE_3'");
+		assertThat(Files.readString(RELEASE_LEGAL_DOCUMENTS_MIGRATION, StandardCharsets.UTF_8))
+				.contains("ADD COLUMN published boolean NOT NULL DEFAULT true")
+				.contains("UPDATE terms SET published = false");
 	}
 
 	/** 탈퇴 회원 파기 대상 조회를 위한 기존 호환 컬럼과 인덱스가 스키마에 남아 있는지 검증한다. */

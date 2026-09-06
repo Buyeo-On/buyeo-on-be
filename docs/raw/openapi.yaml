@@ -202,10 +202,20 @@ paths:
         '200':
           $ref: '#/components/responses/TermListSuccess'
   /members/me/term-consents:
+    get:
+      tags: [Terms]
+      summary: 내 현재 약관 동의 조회
+      description: 공개된 현재 약관별 로그인 회원의 동의 여부와 동의 시각을 반환한다.
+      operationId: getMyTermConsents
+      responses:
+        '200':
+          $ref: '#/components/responses/CurrentTermConsentListSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
     put:
       tags: [Terms]
       summary: 약관 동의 저장
-      description: 현재 약관 전체의 동의 상태를 원자적으로 저장한다. 필수 약관은 모두 동의해야 한다.
+      description: 요청에 포함된 공개 현재 약관의 동의 상태를 원자적으로 저장한다. 필수 약관은 거부할 수 없다.
       operationId: updateTermConsents
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -1112,6 +1122,12 @@ components:
             data:
               requiredTermsAgreed: true
               agreedAt: '2026-08-12T10:00:00+09:00'
+    CurrentTermConsentListSuccess:
+      description: 내 현재 약관 동의 목록
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CurrentTermConsentListEnvelope'
     TermConsentConflict:
       description: 멱등성 키를 재사용했거나 제출 중 현재 약관 버전이 변경됨
       content:
@@ -2024,7 +2040,7 @@ components:
       enum: [ACTIVE, WITHDRAWN]
     Member:
       type: object
-      required: [memberId, status, requiredTermsAgreed, citizenCardIssued, createdAt]
+      required: [memberId, status, requiredTermsAgreed, locationTermsAgreed, citizenCardIssued, createdAt]
       properties:
         memberId:
           type: string
@@ -2039,6 +2055,9 @@ components:
           format: uuid
         requiredTermsAgreed:
           type: boolean
+        locationTermsAgreed:
+          type: boolean
+          description: 공개된 현재 위치기반서비스 이용약관에 동의했는지 여부
         citizenCardIssued:
           type: boolean
         createdAt:
@@ -2107,7 +2126,7 @@ components:
           minimum: 0
     TermType:
       type: string
-      enum: [SERVICE, PRIVACY, MARKETING]
+      enum: [SERVICE, PRIVACY, LOCATION, MARKETING]
     Term:
       type: object
       description: 약관 종류별로 시행 시각이 현재 시각 이하인 버전 중 가장 최근 버전이다.
@@ -2133,13 +2152,13 @@ components:
     TermConsentRequest:
       type: object
       additionalProperties: false
-      description: 요청 시점의 현재 약관 전체에 대한 동의 결정이며 같은 termId를 중복할 수 없다.
+      description: 이번 화면에서 결정한 공개 현재 약관의 동의이며 같은 termId를 중복할 수 없다.
       required: [consents]
       properties:
         consents:
           type: array
           minItems: 1
-          maxItems: 3
+          maxItems: 4
           items:
             $ref: '#/components/schemas/TermConsentItem'
     TermConsentItem:
@@ -2168,6 +2187,30 @@ components:
           type: string
           format: date-time
           description: 요청에 포함된 전체 약관 동의가 한 트랜잭션으로 확정된 시각
+    CurrentTermConsent:
+      type: object
+      required: [termId, type, version, agreed]
+      properties:
+        termId:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/TermType'
+        version:
+          type: string
+        agreed:
+          type: boolean
+        agreedAt:
+          type: [string, 'null']
+          format: date-time
+    CurrentTermConsentListData:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CurrentTermConsent'
     CardOption:
       type: object
       required: [id, name, imageUrl]
@@ -3067,6 +3110,13 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/TermConsentData'
+    CurrentTermConsentListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/CurrentTermConsentListData'
     CitizenCardOptionsData:
       type: object
       required: [characters, themes]

@@ -68,7 +68,8 @@ public class TermConsentService {
 				if (!Integer.valueOf(200).equals(existingRequest.responseStatus())) {
 					throw new IllegalStateException("완료되지 않은 멱등성 요청이 남아 있습니다.");
 				}
-				return new TermConsentResult(true, existingRequest.createdAt().atZone(ASIA_SEOUL));
+				return new TermConsentResult(existingRequest.requiredTermsAgreed(),
+						existingRequest.createdAt().atZone(ASIA_SEOUL));
 			}
 		}
 		List<CurrentTerm> currentTerms = getCurrentTerms();
@@ -83,8 +84,10 @@ public class TermConsentService {
 					""", memberId, decision.termId(), decision.agreed(), Timestamp.from(agreedAt));
 		}
 
+		boolean requiredTermsAgreed = hasAgreedToCurrentRequiredTerms(memberId);
 		ZonedDateTime responseTime = agreedAt.atZone(ASIA_SEOUL);
-		String responseBody = "{\"success\":true,\"data\":{\"requiredTermsAgreed\":true,\"agreedAt\":\""
+		String responseBody = "{\"success\":true,\"data\":{\"requiredTermsAgreed\":" + requiredTermsAgreed
+				+ ",\"agreedAt\":\""
 				+ responseTime.toOffsetDateTime() + "\"}}";
 		jdbcOperations.update("""
 				INSERT INTO idempotency_requests
@@ -93,7 +96,7 @@ public class TermConsentService {
 				VALUES (?, ?, ?, ?, 200, ?::jsonb, ?, ?)
 				""", memberId, idempotencyKey, OPERATION, requestHash, responseBody, Timestamp.from(agreedAt),
 				Timestamp.from(agreedAt.plus(RETENTION)));
-		return new TermConsentResult(true, responseTime);
+		return new TermConsentResult(requiredTermsAgreed, responseTime);
 	}
 
 	private void lockMember(UUID memberId) {
@@ -103,7 +106,9 @@ public class TermConsentService {
 
 	private IdempotencyState findIdempotencyRequest(UUID memberId, String idempotencyKey) {
 		return jdbcOperations.query("""
-				SELECT operation, request_hash, response_status, created_at, expires_at
+				SELECT operation, request_hash, response_status,
+				       COALESCE((response_body->'data'->>'requiredTermsAgreed')::boolean, false) AS required_terms_agreed,
+				       created_at, expires_at
 				FROM idempotency_requests
 				WHERE member_id = ? AND idempotency_key = ?
 				FOR UPDATE
@@ -112,7 +117,8 @@ public class TermConsentService {
 
 	private IdempotencyState mapIdempotencyState(ResultSet resultSet, int rowNumber) throws SQLException {
 		return new IdempotencyState(resultSet.getString("operation"), resultSet.getString("request_hash"),
-				resultSet.getObject("response_status", Integer.class), resultSet.getTimestamp("created_at").toInstant(),
+				resultSet.getObject("response_status", Integer.class), resultSet.getBoolean("required_terms_agreed"),
+				resultSet.getTimestamp("created_at").toInstant(),
 				resultSet.getTimestamp("expires_at").toInstant());
 	}
 
@@ -120,7 +126,8 @@ public class TermConsentService {
 		return jdbcOperations.query("""
 				SELECT DISTINCT ON (term.type) term.id, term.version, term.required
 				FROM terms term
-				WHERE term.effective_at <= clock_timestamp()
+				WHERE term.published = true
+				  AND term.effective_at <= clock_timestamp()
 				ORDER BY term.type, term.effective_at DESC
 				""", this::mapCurrentTerm);
 	}
@@ -132,12 +139,11 @@ public class TermConsentService {
 
 	private void validate(List<ConsentDecision> decisions, List<CurrentTerm> currentTerms) {
 		Set<UUID> decisionIds = new HashSet<>();
-		if (decisions.size() != currentTerms.size()
-				|| decisions.stream().anyMatch(decision -> !decisionIds.add(decision.termId()))) {
+		if (decisions.isEmpty() || decisions.stream().anyMatch(decision -> !decisionIds.add(decision.termId()))) {
 			throw new InvalidTermConsentRequestException();
 		}
-		for (CurrentTerm term : currentTerms) {
-			ConsentDecision decision = decisions.stream().filter(item -> item.termId().equals(term.termId()))
+		for (ConsentDecision decision : decisions) {
+			CurrentTerm term = currentTerms.stream().filter(item -> item.termId().equals(decision.termId()))
 					.findFirst().orElseThrow(TermVersionOutdatedException::new);
 			if (!term.version().equals(decision.version())) {
 				throw new TermVersionOutdatedException();
@@ -146,6 +152,29 @@ public class TermConsentService {
 				throw new InvalidTermConsentRequestException();
 			}
 		}
+	}
+
+	private boolean hasAgreedToCurrentRequiredTerms(UUID memberId) {
+		Boolean agreed = jdbcOperations.queryForObject("""
+				WITH current_required_terms AS (
+				    SELECT DISTINCT ON (term.type) term.id
+				    FROM terms term
+				    WHERE term.published = true
+				      AND term.required = true
+				      AND term.effective_at <= clock_timestamp()
+				    ORDER BY term.type, term.effective_at DESC
+				)
+				SELECT EXISTS (SELECT 1 FROM current_required_terms)
+				   AND NOT EXISTS (
+				       SELECT 1
+				       FROM current_required_terms current_term
+				       LEFT JOIN term_consents consent
+				         ON consent.term_id = current_term.id
+				        AND consent.member_id = ?
+				       WHERE COALESCE(consent.agreed, false) = false
+				   )
+				""", Boolean.class, memberId);
+		return Boolean.TRUE.equals(agreed);
 	}
 
 	private String hash(List<ConsentDecision> decisions) {
@@ -173,7 +202,7 @@ public class TermConsentService {
 	private record CurrentTerm(UUID termId, String version, boolean required) {
 	}
 
-	private record IdempotencyState(String operation, String requestHash, Integer responseStatus, Instant createdAt,
-			Instant expiresAt) {
+	private record IdempotencyState(String operation, String requestHash, Integer responseStatus,
+			boolean requiredTermsAgreed, Instant createdAt, Instant expiresAt) {
 	}
 }

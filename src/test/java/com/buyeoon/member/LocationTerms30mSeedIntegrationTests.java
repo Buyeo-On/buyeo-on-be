@@ -2,7 +2,6 @@ package com.buyeoon.member;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -35,8 +34,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Flyway가 시드한 LOCATION 약관이 참여 거리 30m 버전을 현재 약관으로 노출하고, 이전 버전 동의만으로는 필수 약관이 충족되지
- * 않는지 공개 API에서 검증한다.
+ * Flyway가 출시 LOCATION 약관을 선택 동의로 공개하고 과거 초안 이력을 보존하는지 검증한다.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -75,16 +73,16 @@ class LocationTerms30mSeedIntegrationTests {
 	}
 
 	/**
-	 * GET /terms의 현재 LOCATION 본문은 30m를 말하고, V16의 100m 이전 버전 행은 목록에 나오지 않고 DB에 남는다.
+	 * GET /terms는 출시 LOCATION 1.0만 노출하고 이전 초안은 DB에 남긴다.
 	 */
 	@Test
-	@DisplayName("현재 LOCATION 약관은 참여 거리 30m이고 이전 버전 행은 유지된다")
-	void currentLocationTermDescribesThirtyMeterParticipationDistance() throws Exception {
-		mockMvc.perform(get("/terms")).andExpect(status().isOk()).andExpect(jsonPath("$.data.items.length()").value(4))
+	@DisplayName("현재 LOCATION 약관은 출시 1.0 선택 동의이고 이전 버전은 유지된다")
+	void currentLocationTermIsReleaseOptionalConsent() throws Exception {
+		mockMvc.perform(get("/terms")).andExpect(status().isOk()).andExpect(jsonPath("$.data.items.length()").value(3))
 				.andExpect(jsonPath("$.data.items[2].type").value("LOCATION"))
+				.andExpect(jsonPath("$.data.items[2].version").value("1.0"))
+				.andExpect(jsonPath("$.data.items[2].required").value(false))
 				.andExpect(jsonPath("$.data.items[2].termId").value(not(PREVIOUS_LOCATION_TERM_ID.toString())))
-				.andExpect(jsonPath("$.data.items[2].content", containsString("30m")))
-				.andExpect(jsonPath("$.data.items[2].content", not(containsString("100m"))))
 				.andExpect(jsonPath("$.data.items[?(@.termId == '%s')]", PREVIOUS_LOCATION_TERM_ID).isEmpty());
 
 		assertThat(jdbcTemplate.queryForObject("""
@@ -93,15 +91,15 @@ class LocationTerms30mSeedIntegrationTests {
 				WHERE id = ?
 				""", String.class, PREVIOUS_LOCATION_TERM_ID)).contains("100m 이내");
 		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM terms WHERE type = 'LOCATION'", Long.class))
-				.isEqualTo(2L);
+				.isEqualTo(3L);
 	}
 
 	/**
-	 * 이전 LOCATION에만 동의한 회원은 필수 약관 미동의이고, 현재 약관 전체에 다시 동의하면 동의 완료가 된다.
+	 * 과거 초안 동의는 출시 서비스 약관 동의를 대신하지 않으며 선택 LOCATION 거부는 가입을 막지 않는다.
 	 */
 	@Test
-	@DisplayName("이전 LOCATION 동의만으로는 재동의 전까지 필수 약관 미동의다")
-	void previousLocationConsentRequiresCurrentVersionAgain() throws Exception {
+	@DisplayName("출시 서비스 약관 동의만으로 가입 필수 동의가 완료된다")
+	void releaseServiceConsentCompletesRequiredTerms() throws Exception {
 		AuthenticatedMember member = insertAuthenticatedMember();
 		consentToDraftTermsExceptCurrentLocation(member.memberId());
 
@@ -118,6 +116,9 @@ class LocationTerms30mSeedIntegrationTests {
 
 		mockMvc.perform(get("/members/me").header("Authorization", "Bearer " + member.accessToken()))
 				.andExpect(status().isOk()).andExpect(jsonPath("$.data.requiredTermsAgreed").value(true));
+		mockMvc.perform(get("/members/me/term-consents").header("Authorization", "Bearer " + member.accessToken()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.items[?(@.type == 'LOCATION')].agreed").value(false));
 	}
 
 	/** 시드된 LOCATION 버전들은 시행 시각이 다르며 같은 시행 시각을 다시 넣을 수 없다. */
