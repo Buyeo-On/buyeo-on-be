@@ -1,6 +1,8 @@
 package com.buyeoon.mission.api;
 
 import com.buyeoon.common.api.SuccessResponse;
+import com.buyeoon.location.LocationUsagePurpose;
+import com.buyeoon.location.LocationUsageRecorder;
 import com.buyeoon.mission.application.MissionPhotoUploadUrlService;
 import com.buyeoon.mission.application.MissionPhotoUploadUrlService.MissionPhotoUploadUrlCommand;
 import com.buyeoon.mission.application.MissionPhotoUploadUrlService.MissionPhotoUploadUrlView;
@@ -39,21 +41,25 @@ public class MissionController {
 	private final MissionQueryService missionQueryService;
 	private final MissionSubmissionService missionSubmissionService;
 	private final MissionPhotoUploadUrlService missionPhotoUploadUrlService;
+	private final LocationUsageRecorder locationUsageRecorder;
 
 	@SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring 싱글턴 빈을 그대로 주입받아 저장한다.")
 	public MissionController(MissionQueryService missionQueryService, MissionSubmissionService missionSubmissionService,
-			MissionPhotoUploadUrlService missionPhotoUploadUrlService) {
+			MissionPhotoUploadUrlService missionPhotoUploadUrlService, LocationUsageRecorder locationUsageRecorder) {
 		this.missionQueryService = missionQueryService;
 		this.missionSubmissionService = missionSubmissionService;
 		this.missionPhotoUploadUrlService = missionPhotoUploadUrlService;
+		this.locationUsageRecorder = locationUsageRecorder;
 	}
 
 	@GetMapping("/missions/nearby")
 	public SuccessResponse<MissionListView> getNearbyMissions(@AuthenticationPrincipal Jwt jwt,
 			@RequestParam String latitude, @RequestParam String longitude, @RequestParam UUID tripId) {
 		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
-		return SuccessResponse
-				.of(missionQueryService.listNearby(memberId, tripId, latitude(latitude), longitude(longitude)));
+		double parsedLatitude = latitude(latitude);
+		double parsedLongitude = longitude(longitude);
+		locationUsageRecorder.record(memberId, LocationUsagePurpose.MISSION_NEARBY);
+		return SuccessResponse.of(missionQueryService.listNearby(memberId, tripId, parsedLatitude, parsedLongitude));
 	}
 
 	/** 클라이언트가 지오펜스를 등록할 오늘의 스페셜 퀴즈 좌표 목록을 500m 반경 제한 없이 조회한다. */
@@ -68,8 +74,11 @@ public class MissionController {
 	public SuccessResponse<Object> getMission(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID missionId,
 			@RequestParam String latitude, @RequestParam String longitude, @RequestParam UUID tripId) {
 		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
-		return SuccessResponse.of(
-				missionQueryService.getMission(memberId, missionId, tripId, latitude(latitude), longitude(longitude)));
+		double parsedLatitude = latitude(latitude);
+		double parsedLongitude = longitude(longitude);
+		locationUsageRecorder.record(memberId, LocationUsagePurpose.MISSION_DETAIL);
+		return SuccessResponse
+				.of(missionQueryService.getMission(memberId, missionId, tripId, parsedLatitude, parsedLongitude));
 	}
 
 	@PostMapping("/missions/{missionId}/submissions")
@@ -79,6 +88,7 @@ public class MissionController {
 			@RequestBody JsonNode request) {
 		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
 		MissionSubmissionCommand command = parseSubmission(request);
+		locationUsageRecorder.record(memberId, LocationUsagePurpose.MISSION_SUBMISSION);
 		return SuccessResponse.of(missionSubmissionService.submit(memberId, missionId, idempotencyKey, command));
 	}
 

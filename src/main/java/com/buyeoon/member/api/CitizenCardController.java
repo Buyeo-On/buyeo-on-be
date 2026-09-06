@@ -1,6 +1,8 @@
 package com.buyeoon.member.api;
 
 import com.buyeoon.common.api.SuccessResponse;
+import com.buyeoon.location.LocationUsagePurpose;
+import com.buyeoon.location.LocationUsageRecorder;
 import com.buyeoon.member.application.CitizenCardCreationService.CitizenCardCommand;
 import com.buyeoon.member.application.CitizenCardCreationService.CitizenCardView;
 import com.buyeoon.member.application.CitizenCardCreationService.LocationCommand;
@@ -31,12 +33,14 @@ public class CitizenCardController {
 	private final CitizenCardQueryService citizenCards;
 	private final CitizenCardCreator citizenCardCreation;
 	private final CitizenCardLocationVerifier locationVerifier;
+	private final LocationUsageRecorder locationUsageRecorder;
 
 	public CitizenCardController(CitizenCardQueryService citizenCards, CitizenCardCreator citizenCardCreation,
-			CitizenCardLocationVerifier locationVerifier) {
+			CitizenCardLocationVerifier locationVerifier, LocationUsageRecorder locationUsageRecorder) {
 		this.citizenCards = citizenCards;
 		this.citizenCardCreation = citizenCardCreation;
 		this.locationVerifier = locationVerifier;
+		this.locationUsageRecorder = locationUsageRecorder;
 	}
 
 	@GetMapping("/citizen-cards/options")
@@ -45,8 +49,12 @@ public class CitizenCardController {
 	}
 
 	@PostMapping("/citizen-cards/location-verification")
-	public SuccessResponse<LocationVerificationView> verifyLocation(@RequestBody JsonNode request) {
-		locationVerifier.verify(location(request));
+	public SuccessResponse<LocationVerificationView> verifyLocation(@AuthenticationPrincipal Jwt jwt,
+			@RequestBody JsonNode request) {
+		UUID memberId = UUID.fromString(Objects.requireNonNull(jwt.getSubject()));
+		LocationCommand command = location(request);
+		locationUsageRecorder.record(memberId, LocationUsagePurpose.CITIZEN_CARD_LOCATION_VERIFICATION);
+		locationVerifier.verify(command);
 		return SuccessResponse.of(new LocationVerificationView(true));
 	}
 

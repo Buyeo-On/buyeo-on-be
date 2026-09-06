@@ -86,6 +86,11 @@ class TripStartIntegrationTests {
 				jdbcTemplate.queryForObject("SELECT count(*) FROM trips WHERE member_id = ? AND status = 'IN_PROGRESS'",
 						Long.class, member.memberId()))
 				.isEqualTo(1L);
+		assertThat(jdbcTemplate.queryForObject("""
+				SELECT count(*)
+				FROM location_usage_records
+				WHERE member_id = ? AND purpose = 'TRIP_START'
+				""", Long.class, member.memberId())).isEqualTo(1L);
 	}
 
 	/** 필수 약관에 동의하지 않은 회원은 여행을 시작할 수 없다. */

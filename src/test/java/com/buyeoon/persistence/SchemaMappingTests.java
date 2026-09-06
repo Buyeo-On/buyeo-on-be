@@ -45,6 +45,8 @@ class SchemaMappingTests {
 			.of("src/main/resources/db/migration/V35__add_place_image_license_type.sql");
 	private static final Path RELEASE_LEGAL_DOCUMENTS_MIGRATION = Path
 			.of("src/main/resources/db/migration/V39__publish_release_legal_documents.sql");
+	private static final Path LOCATION_USAGE_RECORDS_MIGRATION = Path
+			.of("src/main/resources/db/migration/V41__record_location_usage_facts.sql");
 	private static final Pattern CREATE_TABLE = Pattern.compile("CREATE TABLE ([a-z_]+) ");
 
 	/** 초기 스키마에 후속 마이그레이션을 적용한 정의가 기준 DB 스키마와 같음을 보장한다. */
@@ -202,7 +204,7 @@ class SchemaMappingTests {
 
 		assertThat(baseline).contains(placeSourceColumns).contains(placeLocationIndex).contains(legacyMissionStatus)
 				.contains(legacyMissionConstraints).contains(legacyTermType);
-		assertThat(publicImageKeySchema.replace(placeSourceColumns, placeExternalIdentityColumns)
+		String migratedSchema = publicImageKeySchema.replace(placeSourceColumns, placeExternalIdentityColumns)
 				.replace(placeLocationIndex, placeIndexes).replace(legacyMissionStatus, currentMissionStatus)
 				.replace(legacyMissionConstraints, currentMissionConstraints).replace(legacyTermType, currentTermType)
 				.replace("    required boolean NOT NULL, -- 필수 동의 여부", publishedTermColumn)
@@ -210,7 +212,9 @@ class SchemaMappingTests {
 				.replace(placeOperatingInfoColumns, placeImageLicenseColumns)
 				.replace(legacySettlementChoice, currentSettlementChoice)
 				.replace(legacyPointSettlement, currentPointSettlement).replace(pointTransactionIndex, pointIndexes)
-				.replace(legacyNotificationType, currentNotificationType)).isEqualTo(canonicalSchema);
+				.replace(legacyNotificationType, currentNotificationType);
+		String locationUsageRecords = Files.readString(LOCATION_USAGE_RECORDS_MIGRATION, StandardCharsets.UTF_8);
+		assertThat(migratedSchema + "\n" + locationUsageRecords).isEqualTo(canonicalSchema);
 		assertThat(Files.readString(LOCATION_TERM_MIGRATION, StandardCharsets.UTF_8))
 				.contains("ALTER TYPE term_type ADD VALUE 'LOCATION' AFTER 'PRIVACY'");
 		assertThat(Files.readString(PLACE_IMAGE_LICENSE_MIGRATION, StandardCharsets.UTF_8))

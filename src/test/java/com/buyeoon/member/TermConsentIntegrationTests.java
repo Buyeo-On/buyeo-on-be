@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.buyeoon.member.auth.AccessTokenService;
+import com.buyeoon.location.LocationUsagePurpose;
+import com.buyeoon.location.LocationUsageRecorder;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -61,6 +63,9 @@ class TermConsentIntegrationTests {
 
 	@Autowired
 	private ObjectMapper objectMapper;
+
+	@Autowired
+	private LocationUsageRecorder locationUsageRecorder;
 
 	@BeforeEach
 	void cleanUp() {
@@ -140,8 +145,23 @@ class TermConsentIntegrationTests {
 			performConsent(member, "invalid-key-0001", body).andExpect(status().isBadRequest())
 					.andExpect(jsonPath("$.data.code").value("INVALID_REQUEST"));
 			assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM term_consents", Long.class)).isEqualTo(2L);
-			assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM idempotency_requests", Long.class)).isEqualTo(2L);
+			assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM idempotency_requests", Long.class))
+					.isEqualTo(2L);
 		}
+	}
+
+	@Test
+	@DisplayName("위치 이용 동의를 철회하면 위치 이용 사실 확인자료를 즉시 삭제한다")
+	void withdrawingLocationConsentDeletesUsageRecords() throws Exception {
+		AuthenticatedMember member = insertAuthenticatedMember();
+		CurrentTerms terms = insertCurrentTerms();
+		performConsent(member, "location-agree-01", requestOnly(terms.locationId(), true)).andExpect(status().isOk());
+		locationUsageRecorder.record(member.memberId(), LocationUsagePurpose.TRIP_START);
+
+		performConsent(member, "location-revoke-1", requestOnly(terms.locationId(), false)).andExpect(status().isOk());
+
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM location_usage_records WHERE member_id = ?",
+				Long.class, member.memberId())).isZero();
 	}
 
 	/** 사용자가 본 뒤 새 버전이 시행된 약관 요청은 409이며 기존 상태를 변경하지 않는다. */
@@ -402,8 +422,7 @@ class TermConsentIntegrationTests {
 	}
 
 	private String requestOnly(UUID termId, boolean agreed) {
-		return ("{\"consents\":[{\"termId\":\"%s\",\"version\":\"1.0\",\"agreed\":%s}]}")
-				.formatted(termId, agreed);
+		return ("{\"consents\":[{\"termId\":\"%s\",\"version\":\"1.0\",\"agreed\":%s}]}").formatted(termId, agreed);
 	}
 
 	private String requestWithDuplicateService(CurrentTerms terms) {
