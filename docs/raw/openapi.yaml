@@ -667,7 +667,8 @@ paths:
       summary: 사진 인증 이미지 업로드 URL 발급
       description: |
         S3에 사진을 직접 업로드할 수 있는 Presigned PUT URL을 발급한다.
-        클라이언트는 API 인증 헤더나 multipart 형식 없이 응답의 uploadUrl로 파일 원본 바이트를 PUT한다.
+        클라이언트는 사진의 방향을 반영하고 EXIF 메타데이터를 제거한 JPEG 바이트를,
+        API 인증 헤더나 multipart 형식 없이 응답의 uploadUrl로 PUT한다.
         응답의 headers는 S3 요청에 그대로 포함해야 하며, 업로드 성공 상태 코드는 200이다.
         업로드 후 발급받은 photoId를 미션 제출 API에 전달한다.
       operationId: createMissionPhotoUploadUrl
@@ -686,6 +687,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/PhotoConsentRequired'
         '404':
           $ref: '#/components/responses/NotFound'
         '413':
@@ -1690,6 +1693,17 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
+    PhotoConsentRequired:
+      description: 현재 사진 미션 개인정보 수집·이용 동의가 없음
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            success: false
+            data:
+              code: PHOTO_CONSENT_REQUIRED
+              message: 사진 미션 이용에 먼저 동의해 주세요.
     NotFound:
       description: 대상을 찾을 수 없음
       content:
@@ -2097,7 +2111,7 @@ components:
           minimum: 0
     TermType:
       type: string
-      enum: [SERVICE, PRIVACY, LOCATION, MARKETING]
+      enum: [SERVICE, PRIVACY, LOCATION, MARKETING, PHOTO]
     Term:
       type: object
       description: 약관 종류별로 시행 시각이 현재 시각 이하인 버전 중 가장 최근 버전이다.

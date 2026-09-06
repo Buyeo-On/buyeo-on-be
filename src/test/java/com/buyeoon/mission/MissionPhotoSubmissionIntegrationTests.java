@@ -99,6 +99,7 @@ class MissionPhotoSubmissionIntegrationTests {
 	void setUpMember() {
 		reset(privateImageObjectStore);
 		member = insertAuthenticatedMember();
+		agreeToCurrentPhotoTerm(member.memberId());
 		when(photoUploadPresigner.presign(anyString(), any(), anyString(), anyLong()))
 				.thenReturn(new MissionPhotoUploadTarget("https://example-bucket.s3.amazonaws.com/upload",
 						Map.of("Content-Type", "image/jpeg"), Instant.now().plusSeconds(600)));
@@ -117,6 +118,7 @@ class MissionPhotoSubmissionIntegrationTests {
 		jdbcTemplate.update(
 				"DELETE FROM missions WHERE place_id IN (SELECT id FROM places WHERE ST_Y(location::geometry) < -70)");
 		jdbcTemplate.update("DELETE FROM places WHERE ST_Y(location::geometry) < -70");
+		jdbcTemplate.update("DELETE FROM term_consents");
 		jdbcTemplate.update("DELETE FROM auth_sessions");
 		jdbcTemplate.update("DELETE FROM members");
 	}
@@ -143,6 +145,21 @@ class MissionPhotoSubmissionIntegrationTests {
 		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM mission_photos", Integer.class)).isZero();
 		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM mission_photo_upload_reservations", Integer.class))
 				.isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("현재 사진 미션 동의가 없으면 업로드 URL을 발급하지 않는다")
+	void requiresCurrentPhotoMissionConsent() throws Exception {
+		UUID tripId = startTrip(member.memberId());
+		UUID place = insertProjectedPlace("사진 동의 장소", 20);
+		UUID missionId = insertPhotoMission(place, "사진 동의 미션", 150);
+		jdbcTemplate.update("DELETE FROM term_consents WHERE member_id = ?", member.memberId());
+
+		mockMvc.perform(presignRequest(tripId, missionId, "photo-consent-required")).andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.data.code").value("PHOTO_CONSENT_REQUIRED"));
+
+		assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM mission_photo_upload_reservations", Integer.class))
+				.isZero();
 	}
 
 	/** PHOTO가 아닌 미션에 대한 발급 요청은 400을 받는다. */
@@ -520,6 +537,19 @@ class MissionPhotoSubmissionIntegrationTests {
 				""", sessionId, memberId, UUID.randomUUID().toString(),
 				Timestamp.from(Instant.now().plus(30, ChronoUnit.DAYS)));
 		return new AuthenticatedMember(memberId, accessTokenService.issue(memberId, sessionId));
+	}
+
+	private void agreeToCurrentPhotoTerm(UUID memberId) {
+		jdbcTemplate.update("""
+				INSERT INTO term_consents (member_id, term_id, agreed)
+				SELECT ?, term.id, true
+				FROM terms term
+				WHERE term.type = 'PHOTO'
+				  AND term.published = true
+				  AND term.effective_at <= CURRENT_TIMESTAMP
+				ORDER BY term.effective_at DESC
+				LIMIT 1
+				""", memberId);
 	}
 
 	private UUID startTrip(UUID memberId) {

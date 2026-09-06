@@ -111,9 +111,9 @@ class PostgresSchemaIntegrationTests {
 		}
 	}
 
-	/** 초안 이력은 보존하고 출시 약관 3종만 공개되는지 검증한다. */
+	/** 초안 이력은 보존하고 출시 약관 4종만 공개되는지 검증한다. */
 	@Test
-	@DisplayName("출시 약관 3종이 공개되고 과거 초안은 비공개 이력으로 남는다")
+	@DisplayName("출시 약관 4종이 공개되고 과거 초안은 비공개 이력으로 남는다")
 	void draftTermsAreSeeded() {
 		assertThat(jdbcTemplate.queryForList("""
 				SELECT type::text || '|' || version || '|' || required || '|' || published || '|' || title
@@ -124,10 +124,11 @@ class PostgresSchemaIntegrationTests {
 				    WHEN 'PRIVACY' THEN 2
 				    WHEN 'LOCATION' THEN 3
 				    WHEN 'MARKETING' THEN 4
+				    WHEN 'PHOTO' THEN 5
 				END, effective_at
 				""", String.class)).containsExactly("SERVICE|1.0|true|true|부여ON 서비스 이용약관",
-				"PRIVACY|1.0|false|true|부여ON 개인정보 처리방침",
-				"LOCATION|1.0|false|true|부여ON 위치기반서비스 이용약관");
+				"PRIVACY|1.0|false|true|부여ON 개인정보 처리방침", "LOCATION|1.0|false|true|부여ON 위치기반서비스 이용약관",
+				"PHOTO|1.0|false|true|사진 미션을 위한 개인정보 수집·이용 동의");
 		assertThat(jdbcTemplate.queryForObject("""
 				SELECT count(*)
 				FROM terms

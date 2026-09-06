@@ -80,6 +80,10 @@ public class MissionPhotoUploadUrlService {
 
 	private MissionPhotoUploadUrlView createInTransaction(UUID memberId, String idempotencyKey, String requestHash,
 			MissionPhotoUploadUrlCommand command) {
+		if (!hasCurrentPhotoConsent(memberId)) {
+			throw new PhotoMissionConsentRequiredException();
+		}
+
 		TripStatus tripStatus = tripQueryService.findOwnedTripStatus(memberId, command.tripId())
 				.orElseThrow(TripNotFoundException::new);
 		if (tripStatus != TripStatus.IN_PROGRESS) {
@@ -130,6 +134,29 @@ public class MissionPhotoUploadUrlService {
 		idempotencyRequest.complete(SUCCESS_STATUS, responseBody);
 		idempotencyRequests.save(idempotencyRequest);
 		return result;
+	}
+
+	private boolean hasCurrentPhotoConsent(UUID memberId) {
+		return Boolean.TRUE.equals(jdbcOperations.queryForObject("""
+				SELECT EXISTS (
+				    SELECT 1
+				    FROM terms term
+				    JOIN term_consents consent
+				      ON consent.term_id = term.id
+				     AND consent.member_id = ?
+				     AND consent.agreed = true
+				    WHERE term.type = 'PHOTO'
+				      AND term.published = true
+				      AND term.effective_at <= CURRENT_TIMESTAMP
+				      AND term.effective_at = (
+				          SELECT MAX(current_term.effective_at)
+				          FROM terms current_term
+				          WHERE current_term.type = 'PHOTO'
+				            AND current_term.published = true
+				            AND current_term.effective_at <= CURRENT_TIMESTAMP
+				      )
+				)
+				""", Boolean.class, memberId));
 	}
 
 	private MissionPhotoUploadUrlView replay(IdempotencyRequestEntity request, String requestHash) {

@@ -49,6 +49,10 @@ class SchemaMappingTests {
 			.of("src/main/resources/db/migration/V41__record_location_usage_facts.sql");
 	private static final Path PHOTO_UPLOAD_RESERVATION_MIGRATION = Path
 			.of("src/main/resources/db/migration/V42__track_mission_photo_upload_reservations.sql");
+	private static final Path PHOTO_TERM_TYPE_MIGRATION = Path
+			.of("src/main/resources/db/migration/V43__add_photo_term_type.sql");
+	private static final Path PHOTO_CONSENT_MIGRATION = Path
+			.of("src/main/resources/db/migration/V44__publish_photo_mission_consent.sql");
 	private static final Pattern CREATE_TABLE = Pattern.compile("CREATE TABLE ([a-z_]+) ");
 
 	/** 초기 스키마에 후속 마이그레이션을 적용한 정의가 기준 DB 스키마와 같음을 보장한다. */
@@ -58,7 +62,7 @@ class SchemaMappingTests {
 		String baseline = Files.readString(INITIAL_MIGRATION, StandardCharsets.UTF_8);
 		String canonicalSchema = Files.readString(SCHEMA_SOURCE, StandardCharsets.UTF_8);
 		String legacyTermType = "CREATE TYPE term_type AS ENUM ('SERVICE', 'PRIVACY', 'MARKETING');";
-		String currentTermType = "CREATE TYPE term_type AS ENUM ('SERVICE', 'PRIVACY', 'LOCATION', 'MARKETING');";
+		String currentTermType = "CREATE TYPE term_type AS ENUM ('SERVICE', 'PRIVACY', 'LOCATION', 'MARKETING', 'PHOTO');";
 		String legacySettlementChoice = "CREATE TYPE settlement_choice AS ENUM ('LEAVE_TO_BUYEO', 'CARRY_OVER');";
 		String currentSettlementChoice = "CREATE TYPE settlement_choice AS ENUM ('LEAVE_TO_BUYEO', 'CARRY_OVER', 'NO_POINTS');";
 		String legacyNotificationType = "CREATE TYPE notification_type AS ENUM "
@@ -255,6 +259,10 @@ class SchemaMappingTests {
 		assertThat(Files.readString(PHOTO_UPLOAD_RESERVATION_MIGRATION, StandardCharsets.UTF_8))
 				.contains("CREATE TABLE mission_photo_upload_reservations")
 				.contains("cleanup_due_at = created_at + INTERVAL '24 hours'").contains("ON DELETE SET NULL");
+		assertThat(Files.readString(PHOTO_TERM_TYPE_MIGRATION, StandardCharsets.UTF_8))
+				.contains("ALTER TYPE term_type ADD VALUE IF NOT EXISTS 'PHOTO'");
+		assertThat(Files.readString(PHOTO_CONSENT_MIGRATION, StandardCharsets.UTF_8)).contains("'PHOTO'")
+				.contains("사진 미션을 위한 개인정보 수집·이용 동의");
 	}
 
 	/** 탈퇴 회원 파기 대상 조회를 위한 기존 호환 컬럼과 인덱스가 스키마에 남아 있는지 검증한다. */
