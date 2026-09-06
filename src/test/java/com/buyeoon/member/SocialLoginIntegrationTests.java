@@ -6,11 +6,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.buyeoon.member.application.WithdrawnMemberDataPurgeService;
 import com.buyeoon.member.auth.social.AppleSocialCredential;
 import com.buyeoon.member.auth.social.KakaoSocialCredential;
 import com.buyeoon.member.auth.social.SocialAuthenticationFailedException;
@@ -55,7 +57,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
-@SpringBootTest
+@SpringBootTest(properties = "member.purge.initial-delay=PT24H")
 @AutoConfigureMockMvc
 @Testcontainers
 class SocialLoginIntegrationTests {
@@ -75,6 +77,9 @@ class SocialLoginIntegrationTests {
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
+
+	@Autowired
+	private WithdrawnMemberDataPurgeService purgeService;
 
 	@Autowired
 	private JwtDecoder jwtDecoder;
@@ -287,10 +292,17 @@ class SocialLoginIntegrationTests {
 
 		assertThat(newMemberId).isNotEqualTo(withdrawnMemberId);
 		assertThat(count("members")).isEqualTo(2);
+		assertThat(purgeService.purgeDueMembers()).isEqualTo(1);
+		assertThat(count("members")).isEqualTo(1);
 		assertThat(count("social_accounts")).isEqualTo(1);
 		assertThat(jdbcTemplate.queryForObject(
 				"SELECT count(*) FROM auth_sessions WHERE member_id = ? AND revoked_at IS NULL", Long.class,
 				newMemberId)).isEqualTo(1);
+		String newAccessToken = JsonPath.read(response(rejoin), "$.data.accessToken");
+		mockMvc.perform(get("/members/me").header("Authorization", "Bearer " + newAccessToken))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.data.memberId").value(newMemberId.toString()));
+		mockMvc.perform(get("/members/me").header("Authorization", "Bearer " + accessToken))
+				.andExpect(status().isUnauthorized());
 	}
 
 	/** 제공자 장애가 발생하면 회원이나 세션을 생성하지 않고 502를 반환하는지 검증한다. */

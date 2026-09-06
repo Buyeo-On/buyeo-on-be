@@ -13,7 +13,6 @@ import com.buyeoon.member.auth.AccessTokenService;
 import com.buyeoon.member.auth.RefreshTokenService;
 import com.buyeoon.member.auth.RefreshTokenService.IssuedRefreshToken;
 import java.sql.Timestamp;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -42,7 +41,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
-@SpringBootTest
+@SpringBootTest(properties = "member.purge.initial-delay=PT24H")
 @AutoConfigureMockMvc
 @Testcontainers
 class MemberWithdrawalIntegrationTests {
@@ -95,7 +94,7 @@ class MemberWithdrawalIntegrationTests {
 		Instant withdrawnAt = ((Timestamp) member.get("withdrawn_at")).toInstant();
 		Instant purgeAfter = ((Timestamp) member.get("purge_after")).toInstant();
 		assertThat(member.get("status").toString()).isEqualTo("WITHDRAWN");
-		assertThat(Duration.between(withdrawnAt, purgeAfter)).isEqualTo(Duration.ofDays(30));
+		assertThat(purgeAfter).isEqualTo(withdrawnAt);
 		assertThat(activeSessionCount(memberId)).isZero();
 		assertThat(pushTokenCount(memberId)).isZero();
 		assertThat(socialAccountCount(memberId)).isZero();

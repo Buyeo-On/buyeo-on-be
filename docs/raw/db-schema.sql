@@ -19,7 +19,7 @@ CREATE TABLE members (
     status member_status NOT NULL DEFAULT 'ACTIVE', -- 회원 상태
     created_at timestamptz NOT NULL DEFAULT now(), -- 가입 시각
     withdrawn_at timestamptz, -- 탈퇴 확정 시각
-    purge_after timestamptz, -- 개인정보 파기 기한
+    purge_after timestamptz, -- 개인정보 파기 대상 시각(탈퇴 확정 시각과 동일, 보관 유예 없음)
     purged_at timestamptz, -- 이전 파기 완료 이력 호환용(현재 정책은 파기 완료 시 회원 행 삭제)
     CHECK (
         (status = 'ACTIVE' AND withdrawn_at IS NULL AND purge_after IS NULL AND purged_at IS NULL)

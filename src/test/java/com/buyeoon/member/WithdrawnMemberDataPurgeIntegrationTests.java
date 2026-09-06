@@ -8,6 +8,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.buyeoon.common.storage.PrivateImageObjectStore;
+import com.buyeoon.member.application.MemberWithdrawalService;
 import com.buyeoon.member.application.WithdrawnMemberDataPurgeService;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -46,6 +47,9 @@ class WithdrawnMemberDataPurgeIntegrationTests {
 
 	@Autowired
 	private WithdrawnMemberDataPurgeService purgeService;
+
+	@Autowired
+	private MemberWithdrawalService withdrawalService;
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
@@ -157,6 +161,64 @@ class WithdrawnMemberDataPurgeIntegrationTests {
 		assertThat(count("members", "id", memberId)).isZero();
 		assertThat(count("member_settings", "member_id", memberId)).isZero();
 		verify(objectStore, times(0)).delete(anyString());
+	}
+
+	@Test
+	@DisplayName("방금 탈퇴한 회원은 시간 조작 없이 다음 작업에서 파기하고 활성 회원은 보존한다")
+	void newlyWithdrawnMemberIsImmediatelyEligibleWithoutAffectingActiveMember() {
+		Fixture withdrawn = insertRichActiveMember("private/missions/newly-withdrawn.webp");
+		Fixture active = insertRichActiveMember("private/missions/still-active.webp");
+
+		withdrawalService.withdraw(withdrawn.memberId());
+
+		assertThat(purgeService.purgeDueMembers()).isEqualTo(1);
+		assertPurged(withdrawn);
+		assertThat(member(active.memberId()).get("status").toString()).isEqualTo("ACTIVE");
+		assertThat(count("mission_photos", "member_id", active.memberId())).isEqualTo(1);
+		assertThat(count("member_profiles", "member_id", active.memberId())).isEqualTo(1);
+		verify(objectStore).delete(withdrawn.objectKey());
+		verify(objectStore, times(0)).delete(active.objectKey());
+	}
+
+	@Test
+	@DisplayName("여러 사진 중 일부 삭제가 실패해도 키를 보존하고 다음 작업에서 전부 다시 삭제한다")
+	void partialPhotoDeletionRetainsKeysUntilRetrySucceeds() {
+		Fixture fixture = insertRichActiveMember("private/missions/partial-first.webp");
+		String secondKey = "private/missions/partial-second.webp";
+		jdbcTemplate.update("""
+				INSERT INTO mission_photos (member_id, trip_id, mission_id, object_key, content_type, file_size_bytes)
+				VALUES (?, ?, ?, ?, 'image/jpeg', 1024)
+				""", fixture.memberId(), fixture.tripId(), PHOTO_MISSION_ID, secondKey);
+		var keys = jdbcTemplate.queryForList("SELECT object_key FROM mission_photos WHERE member_id = ? ORDER BY id",
+				String.class, fixture.memberId());
+		doAnswer(invocation -> {
+			if (keys.getLast().equals(invocation.getArgument(0))) {
+				throw new IllegalStateException("forced second photo failure");
+			}
+			return null;
+		}).when(objectStore).delete(anyString());
+		withdrawalService.withdraw(fixture.memberId());
+
+		assertThat(purgeService.purgeDueMembers()).isZero();
+		assertThat(member(fixture.memberId()).get("status").toString()).isEqualTo("WITHDRAWN");
+		assertThat(count("mission_photos", "member_id", fixture.memberId())).isEqualTo(2);
+		assertThat(count("push_tokens", "auth_session_id", fixture.sessionId())).isZero();
+		assertThat(count("social_accounts", "member_id", fixture.memberId())).isZero();
+		keys.forEach(key -> verify(objectStore).delete(key));
+
+		reset(objectStore);
+		assertThat(purgeService.purgeDueMembers()).isEqualTo(1);
+		assertPurged(fixture);
+		keys.forEach(key -> verify(objectStore).delete(key));
+	}
+
+	private Fixture insertRichActiveMember(String objectKey) {
+		Fixture fixture = insertRichWithdrawnMember(objectKey, Instant.now().plus(1, ChronoUnit.DAYS));
+		jdbcTemplate.update("""
+				UPDATE members SET status = 'ACTIVE', withdrawn_at = NULL, purge_after = NULL WHERE id = ?
+				""", fixture.memberId());
+		jdbcTemplate.update("UPDATE auth_sessions SET revoked_at = NULL WHERE member_id = ?", fixture.memberId());
+		return fixture;
 	}
 
 	private Fixture insertRichWithdrawnMember(String objectKey, Instant purgeAfter) {

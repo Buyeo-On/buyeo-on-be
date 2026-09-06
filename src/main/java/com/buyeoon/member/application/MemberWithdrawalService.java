@@ -31,7 +31,7 @@ public final class MemberWithdrawalService {
 				UPDATE members
 				SET status = 'WITHDRAWN',
 				    withdrawn_at = CURRENT_TIMESTAMP,
-				    purge_after = CURRENT_TIMESTAMP + INTERVAL '30 days'
+				    purge_after = CURRENT_TIMESTAMP
 				WHERE id = ? AND status = 'ACTIVE'
 				""", memberId);
 		if (updated != 1) {
