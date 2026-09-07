@@ -101,12 +101,12 @@ public class TripController {
 		return ResponseEntity.ok(SuccessResponse.of(TripPhotoListResponse.from(photos)));
 	}
 
-	/** 이동 거리·소모 칼로리는 MVP에서 계산하지 않으므로 항상 null이다. */
+	/** 이동 거리·소모 칼로리는 MVP에서 계산하지 않으므로 항상 null이다. earnedPoints는 해당 여행 EARN 합계다. */
 	private record TripStatisticsResponse(UUID tripId, Double distanceKm, long visitedPlaceCount, long durationMinutes,
-			Integer caloriesKcal) {
+			Integer caloriesKcal, long earnedPoints) {
 		static TripStatisticsResponse from(TripStatisticsView statistics) {
 			return new TripStatisticsResponse(statistics.tripId(), null, statistics.visitedPlaceCount(),
-					statistics.durationMinutes(), null);
+					statistics.durationMinutes(), null, statistics.earnedPoints());
 		}
 	}
 
@@ -114,8 +114,7 @@ public class TripController {
 			List<FootprintVisitResponse> visits, PointSummaryView points, List<FootprintBadgeResponse> badges,
 			List<FootprintPhotoResponse> photos) {
 		static FootprintResponse from(FootprintView footprint) {
-			TripStatisticsResponse statistics = new TripStatisticsResponse(footprint.statistics().tripId(), null,
-					footprint.statistics().visitedPlaceCount(), footprint.statistics().durationMinutes(), null);
+			TripStatisticsResponse statistics = TripStatisticsResponse.from(footprint.statistics());
 			List<FootprintVisitResponse> visits = footprint.visits().stream().map(FootprintVisitResponse::from)
 					.toList();
 			List<FootprintBadgeResponse> badges = footprint.badges().stream().map(FootprintBadgeResponse::from)

@@ -2,6 +2,7 @@ package com.buyeoon.trip;
 
 import com.buyeoon.common.storage.PrivateImageGetUrlService;
 import com.buyeoon.member.application.ResourceNotFoundException;
+import com.buyeoon.point.TripEarnedPointsQuery;
 import com.buyeoon.trip.entity.TripEntity;
 import com.buyeoon.trip.entity.TripStatus;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -28,14 +29,17 @@ public class TripQueryService {
 	private final VisitRecordRepository visitRecordRepository;
 	private final FootprintPhotoRepository photoRepository;
 	private final PrivateImageGetUrlService privateImageUrls;
+	private final TripEarnedPointsQuery tripEarnedPointsQuery;
 
 	@SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Spring 싱글턴 빈을 그대로 주입받아 저장한다.")
 	public TripQueryService(TripRepository tripRepository, VisitRecordRepository visitRecordRepository,
-			FootprintPhotoRepository photoRepository, PrivateImageGetUrlService privateImageUrls) {
+			FootprintPhotoRepository photoRepository, PrivateImageGetUrlService privateImageUrls,
+			TripEarnedPointsQuery tripEarnedPointsQuery) {
 		this.tripRepository = tripRepository;
 		this.visitRecordRepository = visitRecordRepository;
 		this.photoRepository = photoRepository;
 		this.privateImageUrls = privateImageUrls;
+		this.tripEarnedPointsQuery = tripEarnedPointsQuery;
 	}
 
 	public boolean hasActiveTrip(UUID memberId) {
@@ -72,10 +76,12 @@ public class TripQueryService {
 		Instant until = trip.getStatus() == TripStatus.IN_PROGRESS ? Instant.now() : trip.getEndedAt();
 		long durationMinutes = Duration.between(trip.getStartedAt(), until).toMinutes();
 		long visitedPlaceCount = visitRecordRepository.countByTripId(tripId);
-		return new TripStatisticsView(tripId, visitedPlaceCount, durationMinutes);
+		long earnedPoints = tripEarnedPointsQuery.sumByTripId(tripId);
+		return new TripStatisticsView(tripId, visitedPlaceCount, durationMinutes, earnedPoints);
 	}
 
-	public record TripStatisticsView(UUID tripId, long visitedPlaceCount, long durationMinutes) {
+	/** 여행 통계 조회 결과다. earnedPoints는 해당 여행의 EARN 내역 합계이며 없으면 0이다. */
+	public record TripStatisticsView(UUID tripId, long visitedPlaceCount, long durationMinutes, long earnedPoints) {
 	}
 
 	/**
