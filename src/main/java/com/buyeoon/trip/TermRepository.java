@@ -12,10 +12,11 @@ public interface TermRepository extends JpaRepository<TermEntity, UUID> {
 	@Query("""
 			SELECT count(currentTerm) = 0
 			FROM TermEntity currentTerm
-			WHERE currentTerm.required = true
+			WHERE currentTerm.published = true
+			  AND currentTerm.required = true
 			  AND currentTerm.effectiveAt = (
 			      SELECT max(latest.effectiveAt) FROM TermEntity latest
-			      WHERE latest.type = currentTerm.type AND latest.required = true
+			      WHERE latest.type = currentTerm.type AND latest.published = true AND latest.required = true
 			        AND latest.effectiveAt <= function('clock_timestamp')
 			  )
 			  AND currentTerm.id NOT IN (

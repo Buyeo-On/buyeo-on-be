@@ -43,12 +43,10 @@ public class TermEntity {
 	@Column(name = "effective_at", nullable = false)
 	private Instant effectiveAt;
 
-	public static TermEntity create(
-			TermType type,
-			String version,
-			boolean required,
-			String title,
-			String content,
+	@Column(name = "published", nullable = false)
+	private boolean published;
+
+	public static TermEntity create(TermType type, String version, boolean required, String title, String content,
 			Instant effectiveAt) {
 		TermEntity term = new TermEntity();
 		term.type = type;
@@ -57,6 +55,7 @@ public class TermEntity {
 		term.title = title;
 		term.content = content;
 		term.effectiveAt = effectiveAt;
+		term.published = true;
 		return term;
 	}
 }
