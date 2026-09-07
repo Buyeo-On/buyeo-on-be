@@ -106,6 +106,18 @@ class TripStartIntegrationTests {
 		assertNoTrip(member.memberId());
 	}
 
+	@Test
+	@DisplayName("공개되지 않은 과거 필수 약관은 여행 시작을 막지 않는다")
+	void unpublishedRequiredTermsAreIgnored() throws Exception {
+		AuthenticatedMember member = readyMember();
+		jdbcTemplate.update("""
+				INSERT INTO terms (type, version, required, title, content, effective_at, published)
+				VALUES ('LOCATION', 'draft', true, '비공개 약관', '비공개 본문', clock_timestamp(), false)
+				""");
+
+		performStart(member, "published-terms-key", request(36.27, 126.91)).andExpect(status().isCreated());
+	}
+
 	/** 군민증을 발급받지 않은 회원은 여행을 시작할 수 없다. */
 	@Test
 	@DisplayName("군민증 미발급은 여행 시작을 거부한다")
