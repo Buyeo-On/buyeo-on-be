@@ -94,6 +94,7 @@ class FootprintIntegrationTests {
 				.andExpect(jsonPath("$.data.trip.status").value("SETTLED"))
 				.andExpect(jsonPath("$.data.statistics.visitedPlaceCount").value(1))
 				.andExpect(jsonPath("$.data.statistics.durationMinutes").value(50))
+				.andExpect(jsonPath("$.data.statistics.earnedPoints").value(100))
 				.andExpect(jsonPath("$.data.visits.length()").value(1))
 				.andExpect(jsonPath("$.data.visits[0].missionId").value(missionId.toString()))
 				.andExpect(jsonPath("$.data.visits[0].place.placeId").value(placeId.toString()))
@@ -220,6 +221,27 @@ class FootprintIntegrationTests {
 				.andExpect(jsonPath("$.data.photos[0].url").value("https://signed-url.example.com/only-mine"));
 	}
 
+	/** 발자취 data.statistics.earnedPoints는 같은 tripId의 통계 API 값과 같다. */
+	@Test
+	@DisplayName("발자취 statistics.earnedPoints는 같은 여행 통계 API 값과 같다")
+	void footprintEarnedPointsMatchStatisticsApi() throws Exception {
+		AuthenticatedMember member = insertAuthenticatedMember();
+		Instant startedAt = Instant.now().minus(2, ChronoUnit.HOURS);
+		Instant endedAt = startedAt.plus(40, ChronoUnit.MINUTES);
+		UUID tripId = insertTrip(member.memberId(), "SETTLED", startedAt, endedAt);
+		insertPointTransaction(member.memberId(), tripId, 200);
+		insertPointTransaction(member.memberId(), tripId, 100);
+		insertTransaction(member.memberId(), tripId, "LEAVE_TO_BUYEO", -300, "부여에 남기기");
+		insertLeaveToBuyeoSettlement(tripId, 300);
+
+		mockMvc.perform(
+				get("/trips/" + tripId + "/statistics").header("Authorization", "Bearer " + member.accessToken()))
+				.andExpect(status().isOk()).andExpect(jsonPath("$.data.earnedPoints").value(300));
+
+		performGet(member, tripId).andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.statistics.earnedPoints").value(300));
+	}
+
 	private ResultActions performGet(AuthenticatedMember member, UUID tripId) throws Exception {
 		return mockMvc.perform(
 				get("/trips/" + tripId + "/footprint").header("Authorization", "Bearer " + member.accessToken()));
@@ -258,11 +280,9 @@ class FootprintIntegrationTests {
 
 	private UUID insertMission(UUID placeId, String title) {
 		UUID id = UUID.randomUUID();
-		jdbcTemplate.update(
-				"INSERT INTO missions (id, place_id, location, type, title, description, reward_points, "
-						+ "ox_correct_answer) VALUES (?, ?, (SELECT location FROM places WHERE id = ?), "
-						+ "'OX'::mission_type, ?, '설명', 10, true)",
-				id, placeId, placeId, title);
+		jdbcTemplate.update("INSERT INTO missions (id, place_id, location, type, title, description, reward_points, "
+				+ "ox_correct_answer) VALUES (?, ?, (SELECT location FROM places WHERE id = ?), "
+				+ "'OX'::mission_type, ?, '설명', 10, true)", id, placeId, placeId, title);
 		return id;
 	}
 
@@ -276,10 +296,19 @@ class FootprintIntegrationTests {
 	}
 
 	private void insertPointTransaction(UUID memberId, UUID tripId, long amount) {
+		insertTransaction(memberId, tripId, "EARN", amount, "적립");
+	}
+
+	private void insertTransaction(UUID memberId, UUID tripId, String type, long amount, String description) {
 		jdbcTemplate.update(
 				"INSERT INTO point_transactions (id, member_id, trip_id, type, amount, description) "
-						+ "VALUES (?, ?, ?, 'EARN'::point_transaction_type, ?, '적립')",
-				UUID.randomUUID(), memberId, tripId, amount);
+						+ "VALUES (?, ?, ?, ?::point_transaction_type, ?, ?)",
+				UUID.randomUUID(), memberId, tripId, type, amount, description);
+	}
+
+	private void insertLeaveToBuyeoSettlement(UUID tripId, long settledPoints) {
+		jdbcTemplate.update("INSERT INTO point_settlements (id, trip_id, choice, settled_points, expires_at) "
+				+ "VALUES (?, ?, 'LEAVE_TO_BUYEO', ?, NULL)", UUID.randomUUID(), tripId, settledPoints);
 	}
 
 	private UUID insertBadge(String name) {
