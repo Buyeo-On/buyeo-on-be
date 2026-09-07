@@ -72,12 +72,11 @@ class RequestCorrelationFilterTests {
 	}
 
 	@Test
-	@DisplayName("요청이 끝나면 메서드·경로·상태·처리 시간·회원 ID를 구조화 필드로 남긴 한 줄 로그를 쓴다")
+	@DisplayName("요청이 끝나면 메서드·경로·상태·처리 시간을 구조화 필드로 남긴 한 줄 로그를 쓴다")
 	void logsOneLinePerRequestWithStructuredFields() throws Exception {
 		MockHttpServletRequest request = new MockHttpServletRequest("GET", "/places");
 		request.setQueryString("latitude=36.28&longitude=126.91");
 		request.addHeader("X-Request-ID", "nginx-request-123");
-		request.setAttribute(RequestCorrelationFilter.MEMBER_ID_ATTRIBUTE, "550e8400-e29b-41d4-a716-446655440000");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 
 		filter.doFilter(request, response, (servletRequest, servletResponse) -> {
@@ -93,8 +92,8 @@ class RequestCorrelationFilterTests {
 				.containsEntry("http_method", "GET")
 				.containsEntry("http_path", "/places")
 				.containsEntry("http_status", "200")
-				.containsEntry("member_id", "550e8400-e29b-41d4-a716-446655440000")
-				.containsKey("duration_ms");
+				.containsKey("duration_ms")
+				.doesNotContainKey("member_id");
 		// 쿼리스트링은 개인정보(좌표)가 실릴 수 있어 남기지 않는다.
 		assertThat(event.getFormattedMessage()).doesNotContain("latitude");
 		assertThat(event.getMDCPropertyMap().values()).noneMatch(value -> value.contains("latitude"));
@@ -102,8 +101,8 @@ class RequestCorrelationFilterTests {
 	}
 
 	@Test
-	@DisplayName("4xx는 WARN, 5xx는 ERROR로 남기고 회원 ID가 없으면 필드를 비운다")
-	void usesLevelByStatusAndOmitsMemberIdWhenAnonymous() throws Exception {
+	@DisplayName("4xx는 WARN, 5xx는 ERROR로 남긴다")
+	void usesLevelByStatus() throws Exception {
 		filter.doFilter(new MockHttpServletRequest("POST", "/members/me/term-consents"), new MockHttpServletResponse(),
 				respondWith(HttpServletResponse.SC_UNAUTHORIZED));
 		filter.doFilter(new MockHttpServletRequest("GET", "/terms"), new MockHttpServletResponse(),
@@ -111,7 +110,6 @@ class RequestCorrelationFilterTests {
 
 		assertThat(logs.list).extracting(ILoggingEvent::getLevel).containsExactly(Level.WARN, Level.ERROR);
 		assertThat(logs.list.get(0).getFormattedMessage()).startsWith("POST /members/me/term-consents 401 ");
-		assertThat(logs.list.get(0).getMDCPropertyMap()).doesNotContainKey("member_id");
 	}
 
 	@Test

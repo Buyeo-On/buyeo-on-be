@@ -13,7 +13,7 @@ stateless EC2가 손실돼도 로그를 보존해야 한다. MVP에서는 별도
 - Spring·Nginx 로그를 CloudWatch Logs에 30일 보관한다.
 - 토큰, OAuth 코드, Presigned URL과 개인정보는 로그에서 제외한다.
 - 요청마다 메서드·경로·상태·처리 시간을 INFO 한 줄로 남긴다(4xx WARN, 5xx ERROR). 쿼리스트링과 본문은 남기지 않고, Actuator는 제외한다.
-- 인증된 요청에는 회원 ID(내부 UUID)를 구조화 필드로 남긴다. 사용자 문의를 추적하려면 필요하고, 내부 ID라 그 자체로는 개인을 식별하지 않는다. 개인정보 처리방침의 로그 항목에 회원 식별자 30일 보관을 명시한다.
+- 회원 ID는 요청 로그에 남기지 않는다. 사용자 문의 추적에는 유용하지만, 팀 논의 결과 개인정보 처리방침에 로그 보관 항목을 추가하지 않기로 했고 정책 근거 없이 식별자를 보관하지 않는다. 문의는 request_id와 시각으로 추적한다.
 - Docker HEALTHCHECK는 Actuator liveness를 확인한다.
 - GitHub Actions는 배포 후 Cloudflare부터 Spring까지 공개 health endpoint를 확인한다.
 ## 결과
