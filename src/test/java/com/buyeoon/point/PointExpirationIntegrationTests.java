@@ -84,6 +84,24 @@ class PointExpirationIntegrationTests {
 	}
 
 	@Test
+	@DisplayName("이월 포인트가 0인 정산은 EXPIRE 내역 없이 만료 확정만 기록한다")
+	void expiresZeroPointCarryOverWithoutTransaction() {
+		UUID memberId = insertActiveMember();
+		UUID tripId = insertTrip(memberId);
+		Instant settledAt = Instant.now().minus(241, ChronoUnit.HOURS);
+		jdbcTemplate.update("""
+				INSERT INTO point_settlements (trip_id, choice, settled_points, expires_at, settled_at)
+				VALUES (?, 'CARRY_OVER', 0, ?, ?)
+				""", tripId, Timestamp.from(settledAt.plus(240, ChronoUnit.HOURS)), Timestamp.from(settledAt));
+
+		int expired = expirationService.expireDueSettlements(memberId);
+
+		assertThat(expired).isEqualTo(1);
+		assertThat(expireTransactionCount(memberId)).isZero();
+		assertThat(settlementRow(tripId).get("expired_at")).isNotNull();
+	}
+
+	@Test
 	@DisplayName("아직 만료되지 않은 이월 정산은 변경하지 않는다")
 	void doesNotTouchNotYetDueCarryOver() {
 		UUID memberId = insertActiveMember();

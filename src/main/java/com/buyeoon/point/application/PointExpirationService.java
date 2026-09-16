@@ -113,11 +113,13 @@ public final class PointExpirationService {
 	}
 
 	private void confirmExpiration(UUID memberId, DueSettlement settlement, Instant processedAt) {
-		jdbcOperations.update("""
-				INSERT INTO point_transactions (member_id, trip_id, type, amount, description, occurred_at)
-				VALUES (?, ?, 'EXPIRE', ?, ?, ?)
-				""", memberId, settlement.tripId(), -settlement.settledPoints(), EXPIRE_DESCRIPTION,
-				Timestamp.from(settlement.expiresAt()));
+		if (settlement.settledPoints() > 0) {
+			jdbcOperations.update("""
+					INSERT INTO point_transactions (member_id, trip_id, type, amount, description, occurred_at)
+					VALUES (?, ?, 'EXPIRE', ?, ?, ?)
+					""", memberId, settlement.tripId(), -settlement.settledPoints(), EXPIRE_DESCRIPTION,
+					Timestamp.from(settlement.expiresAt()));
+		}
 		int updated = jdbcOperations.update("""
 				UPDATE point_settlements
 				SET expired_at = ?
