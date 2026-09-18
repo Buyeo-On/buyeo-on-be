@@ -20,6 +20,8 @@ class TourApiRestClientAttributionTests {
 
 	private static final String BASE_URL = "https://tourapi.test/KorService2";
 
+	private static final String WITH_BASE_URL = "https://tourapi.test/KorWithService2";
+
 	private MockRestServiceServer server;
 	private TourApiClient client;
 
@@ -27,7 +29,7 @@ class TourApiRestClientAttributionTests {
 	void setUp() {
 		RestClient.Builder builder = RestClient.builder();
 		server = MockRestServiceServer.bindTo(builder).build();
-		client = new TourApiRestClient(builder, BASE_URL, "test-key", "34", "6", "44", "760", "126.9098", "36.2754",
+		client = new TourApiRestClient(builder, BASE_URL, WITH_BASE_URL, "test-key", "34", "6", "44", "760", "126.9098", "36.2754",
 				"20000");
 	}
 
