@@ -3,7 +3,9 @@ package com.buyeoon.place.sync;
 import com.buyeoon.common.location.BuyeoBoundary;
 import com.buyeoon.place.entity.PlaceCategory;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -36,7 +38,8 @@ public class PlaceSyncService {
 			}
 			try {
 				TourApiPlaceDetail detail = tourApiClient.fetchPlaceDetail(item)
-						.withDetailInfo(tourApiClient.fetchPlaceInfo(item));
+						.withDetailInfo(mergeInfo(tourApiClient.fetchPlaceInfo(item),
+								tourApiClient.fetchAccessibility(item)));
 				placeUpsertService.upsert(category, detail);
 				successCount++;
 			} catch (RuntimeException exception) {
@@ -46,6 +49,19 @@ public class PlaceSyncService {
 		}
 
 		return new PlaceSyncResult(successCount, failedContentIds.size(), failedContentIds);
+	}
+
+	/**
+	 * 이용안내 뒤에 무장애 정보를 이어 붙인다. 순서를 지켜 이용안내가 먼저 보이게 하고, 이용안내에 같은 키가 있으면 원본을 남긴다
+	 * (무장애 키는 접두사가 있어 실제로 겹치지는 않는다).
+	 */
+	private static Map<String, String> mergeInfo(Map<String, String> info, Map<String, String> accessibility) {
+		if (accessibility == null || accessibility.isEmpty()) {
+			return info;
+		}
+		Map<String, String> merged = new LinkedHashMap<>(info);
+		accessibility.forEach(merged::putIfAbsent);
+		return merged;
 	}
 
 	/**

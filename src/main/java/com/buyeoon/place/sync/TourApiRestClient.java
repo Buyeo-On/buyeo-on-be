@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriBuilder;
@@ -14,10 +16,15 @@ import org.springframework.web.util.UriBuilder;
  * 공공데이터포털 TourAPI 2.0(areaBasedList2, detailCommon2, detailIntro2, detailInfo2)
  * 호출 구현체. 표준 JSON 응답 포맷 {@code response.body.items.item}과 표준 필드명(usetime,
  * usefee)을 따른다.
+ *
+ * <p>무장애 여행 정보(KorWithService2)는 같은 인증키를 쓰지만 base-url이 다르므로 RestClient를 따로 둔다.
  */
 class TourApiRestClient implements TourApiClient {
 
+	private static final Logger log = LoggerFactory.getLogger(TourApiRestClient.class);
+
 	private final RestClient restClient;
+	private final RestClient withRestClient;
 	private final String serviceKey;
 	private final String areaCode;
 	private final String signguCode;
@@ -27,10 +34,12 @@ class TourApiRestClient implements TourApiClient {
 	private final String centerLatitude;
 	private final String radiusMeters;
 
-	TourApiRestClient(RestClient.Builder restClientBuilder, String baseUrl, String serviceKey, String areaCode,
-			String signguCode, String lDongRegnCode, String lDongSignguCode, String centerLongitude,
+	TourApiRestClient(RestClient.Builder restClientBuilder, String baseUrl, String withBaseUrl, String serviceKey,
+			String areaCode, String signguCode, String lDongRegnCode, String lDongSignguCode, String centerLongitude,
 			String centerLatitude, String radiusMeters) {
 		this.restClient = restClientBuilder.baseUrl(baseUrl)
+				.messageConverters(converters -> converters.addFirst(jsonConverter())).build();
+		this.withRestClient = restClientBuilder.clone().baseUrl(withBaseUrl)
 				.messageConverters(converters -> converters.addFirst(jsonConverter())).build();
 		this.serviceKey = serviceKey;
 		this.areaCode = areaCode;
@@ -149,6 +158,34 @@ class TourApiRestClient implements TourApiClient {
 		return TourApiInfoSanitizer.sanitize(infoItems(response));
 	}
 
+	/**
+	 * 무장애 편의시설을 {@code 무장애:} 접두사를 붙인 맵으로 돌려준다. 접두사는 이용안내(detailInfo2)와 출처를 구분하고
+	 * 항목명 충돌을 막으며, 클라이언트가 개별 키 이름에 묶이지 않고 접두사만으로 판별할 수 있게 한다.
+	 *
+	 * <p>데이터가 없는 장소가 대부분이고 조회 실패도 정상 범위이므로 예외를 밖으로 던지지 않는다.
+	 */
+	@Override
+	public Map<String, String> fetchAccessibility(TourApiAreaItem item) {
+		try {
+			TourApiWithResponse response = withRestClient.get()
+					.uri(uriBuilder -> withCommonParams(uriBuilder.path("/detailWithTour2"))
+							.queryParam("contentId", item.contentId()).build())
+					.retrieve().body(TourApiWithResponse.class);
+			return TourApiAccessibilitySanitizer.sanitize(withItems(response).stream().findFirst().orElse(null));
+		} catch (RuntimeException exception) {
+			log.warn("무장애 정보 조회 실패, 건너뜁니다: contentId={}", item.contentId(), exception);
+			return Map.of();
+		}
+	}
+
+	private List<TourApiWithItem> withItems(TourApiWithResponse response) {
+		if (response == null || response.response() == null || response.response().body() == null
+				|| response.response().body().items() == null) {
+			return List.of();
+		}
+		return response.response().body().items().item();
+	}
+
 	private UriBuilder withCommonParams(UriBuilder uriBuilder) {
 		return uriBuilder.queryParam("serviceKey", serviceKey).queryParam("MobileOS", "ETC")
 				.queryParam("MobileApp", "BuyeoOn").queryParam("_type", "json");
@@ -239,6 +276,21 @@ class TourApiRestClient implements TourApiClient {
 
 		record TourApiInfoItems(List<TourApiInfoItem> item) {
 		}
+	}
+
+	private record TourApiWithResponse(TourApiWithResponseBody response) {
+		record TourApiWithResponseBody(TourApiWithBody body) {
+		}
+
+		record TourApiWithBody(TourApiWithItems items) {
+		}
+
+		record TourApiWithItems(List<TourApiWithItem> item) {
+		}
+	}
+
+	/** detailWithTour2 응답 중 화면에 쓰는 네 가지. 값이 빈 문자열인 항목은 정제 단계에서 제외한다. */
+	record TourApiWithItem(String route, String wheelchair, String restroom, String braileblock) {
 	}
 
 	/**

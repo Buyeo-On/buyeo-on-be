@@ -13,6 +13,7 @@ public class TourApiConfiguration {
 
 	@Bean
 	TourApiClient tourApiClient(@Value("${tourapi.base-url}") String baseUrl,
+			@Value("${tourapi.with-base-url}") String withBaseUrl,
 			@Value("${tourapi.service-key}") String serviceKey, @Value("${tourapi.area-code}") String areaCode,
 			@Value("${tourapi.signgu-code}") String signguCode,
 			@Value("${tourapi.ldong-regn-code}") String lDongRegnCode,
@@ -26,7 +27,7 @@ public class TourApiConfiguration {
 		JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
 		requestFactory.setReadTimeout(readTimeout);
 		RestClient.Builder restClientBuilder = RestClient.builder().requestFactory(requestFactory);
-		return new TourApiRestClient(restClientBuilder, baseUrl, serviceKey, areaCode, signguCode, lDongRegnCode,
-				lDongSignguCode, centerLongitude, centerLatitude, radiusMeters);
+		return new TourApiRestClient(restClientBuilder, baseUrl, withBaseUrl, serviceKey, areaCode, signguCode,
+				lDongRegnCode, lDongSignguCode, centerLongitude, centerLatitude, radiusMeters);
 	}
 }
