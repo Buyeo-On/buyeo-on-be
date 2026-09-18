@@ -17,3 +17,4 @@
 - [ADR-013: 장소 데이터는 관리자 API로 TourAPI를 동기화한다](./adr-013-tourapi-place-sync.md)
 - [ADR-014: detailImage2 도입을 보류하고 대표이미지 결측은 폴백·큐레이션으로 처리한다](./adr-014-tourapi-detail-image-deferred.md)
 - [ADR-015: TourAPI 대표이미지의 출처와 이용허락 유형을 보존한다](./adr-015-tourapi-image-attribution.md)
+- [ADR-016: 이월 포인트는 만료 시각을 두지 않는다](./adr-016-indefinite-carry-over-points.md)

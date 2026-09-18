@@ -1332,7 +1332,7 @@ components:
               tripId: 550e8400-e29b-41d4-a716-446655440000
               settleablePoints: 300
               currentBalance: 800
-              carryOverDurationHours: 240
+              carryOverDurationHours: 0
     TripSettlementSuccess:
       description: 여행 포인트 정산 결과
       content:
@@ -2366,8 +2366,8 @@ components:
           description: 만료 도래 이월분을 먼저 반영한 회원의 현재 전체 포인트 잔액
         carryOverDurationHours:
           type: integer
-          const: 240
-          description: CARRY_OVER 선택 시 정산 완료 시각부터 유지되는 시간
+          minimum: 0
+          description: CARRY_OVER 선택 시 정산 완료 시각부터 유지되는 시간. 0이면 이월 포인트는 만료되지 않는다.
     TripSettlementData:
       type: object
       required: [tripId, choice, settledPoints, remainingBalance, settledAt, newlyAwardedBadges]
@@ -2388,7 +2388,7 @@ components:
         expiresAt:
           type: [string, 'null']
           format: date-time
-          description: CARRY_OVER 선택 시 이번 여행 적립 포인트의 만료 시각이며 정산 완료 시각부터 10×24시간 뒤다. LEAVE_TO_BUYEO 또는 NO_POINTS이면 null이다.
+          description: CARRY_OVER 선택 시 이번 여행 적립 포인트의 만료 시각이다. 만료가 없거나 LEAVE_TO_BUYEO·NO_POINTS이면 null이다.
         settledAt:
           type: string
           format: date-time

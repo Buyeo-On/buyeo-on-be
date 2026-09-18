@@ -158,8 +158,13 @@ class SchemaMappingTests {
 				        OR (
 				            choice = 'CARRY_OVER'
 				            AND settled_points > 0
-				            AND expires_at = settled_at + INTERVAL '240 hours'
-				            AND (expired_at IS NULL OR expired_at >= expires_at)
+				            AND (
+				                (expires_at IS NULL AND expired_at IS NULL)
+				                OR (
+				                    expires_at IS NOT NULL
+				                    AND (expired_at IS NULL OR expired_at >= expires_at)
+				                )
+				            )
 				        )
 				        OR (
 				            choice = 'NO_POINTS'
